@@ -1,0 +1,16 @@
+index=<endpoint_process_index>
+| eval process_name=lower(coalesce(process_name, Processes.process_name, Image))
+| eval process_command_line=lower(coalesce(process_command_line, Processes.process, CommandLine))
+| eval parent_process_id=coalesce(parent_process_id, Processes.parent_process_id, ParentProcessId)
+| eval parent_process_name=lower(coalesce(parent_process_name, Processes.parent_process_name, ParentImage))
+| where match(process_command_line, "(whoami|systeminfo|uname -a|sw_vers|tasklist|ps aux|netstat|ss -tulpn|ipconfig|ifconfig|net user|dscl \\. list)")
+| eval discovery_family=case(
+    match(process_command_line, "whoami| net user|dscl \\. list /users"), "account",
+    match(process_command_line, "systeminfo|uname -a|sw_vers"), "system",
+    match(process_command_line, "tasklist|ps aux"), "process",
+    match(process_command_line, "netstat|ss -tulpn"), "connections",
+    match(process_command_line, "ipconfig|ifconfig"), "network_config",
+    true(), "other")
+| bin _time span=5s
+| stats dc(discovery_family) as distinct_discovery_families values(process_command_line) as commands by host parent_process_id parent_process_name _time
+| where distinct_discovery_families >= 4

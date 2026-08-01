@@ -1,0 +1,17 @@
+// Microsoft Defender XDR - DeviceProcessEvents
+// Tune the lookback, initiating-process allowlist, and time window before use.
+DeviceProcessEvents
+| where Timestamp > ago(1d)
+| where FileName in~ ("cmd.exe", "powershell.exe", "pwsh.exe")
+| summarize
+    CmdExecutions = countif(FileName =~ "cmd.exe"),
+    PowerShellExecutions = countif(FileName in~ ("powershell.exe", "pwsh.exe")),
+    Commands = make_set(ProcessCommandLine, 20)
+    by DeviceId,
+       DeviceName,
+       AccountName,
+       InitiatingProcessId,
+       InitiatingProcessFileName,
+       bin(Timestamp, 10s)
+| where CmdExecutions > 0 and PowerShellExecutions > 0
+| where InitiatingProcessFileName in~ ("python.exe", "python3.exe", "py.exe")

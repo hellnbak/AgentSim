@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.coverage
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+build/
+dist/
+agent_sim_layer.json
+.DS_Store

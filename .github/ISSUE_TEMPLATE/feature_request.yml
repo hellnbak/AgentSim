@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest a defensive simulation or project improvement
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Detection-engineering need
+      description: What defensive problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety and scope
+      description: Describe commands, data access, network use, and ATT&CK mappings.
+    validations:
+      required: true

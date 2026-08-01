@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.9", "3.12"]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: python -m pip install .
+      - name: Compile
+        run: python -m py_compile core.py tactics.py web_ui.py
+      - name: Test
+        run: python -m unittest discover -s tests -v
+      - name: Smoke test
+        run: python core.py --dry-run --iterations 3 --speed 0 --seed 42 --output smoke-layer.json

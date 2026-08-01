@@ -114,6 +114,20 @@ class AgentSimTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "total_iterations"):
             simulator.run_simulation(0)
 
+    def test_stop_callback_ends_run_and_exports_partial_layer(self):
+        messages = []
+        stop_callback = mock.Mock(side_effect=[False, True])
+        simulator = self.make_simulator(
+            stop_callback=stop_callback,
+            log_callback=messages.append,
+        )
+
+        exported = simulator.run_simulation(5)
+
+        self.assertEqual(exported, self.output_path)
+        self.assertTrue(self.output_path.exists())
+        self.assertTrue(any("STOP REQUESTED" in message for message in messages))
+
 
 if __name__ == "__main__":
     unittest.main()

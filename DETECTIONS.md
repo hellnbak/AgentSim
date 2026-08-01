@@ -19,6 +19,21 @@ Collect process-creation events with, where available:
 AgentSim does not forward events. Confirm that your EDR, audit policy, Sysmon,
 or equivalent sensor records child processes created by Python and the shell.
 
+## Platform coverage
+
+| Platform | Native content | Expected schema |
+| --- | --- | --- |
+| Sigma-compatible tools | Cross-OS command hallucination rule | Sigma process-creation fields |
+| Microsoft Defender XDR | Rapid cross-shell pivot hunt | `DeviceProcessEvents` |
+| Splunk | High-velocity discovery burst | CIM-style Endpoint.Processes aliases |
+| CrowdStrike Falcon LogScale / Next-Gen SIEM | High-velocity discovery burst | Falcon `ProcessRollup2` events |
+| Graylog | High-velocity discovery burst filter | Graylog Information Model process fields |
+| Panther | Thresholded Python detection | CrowdStrike Falcon Data Replicator process logs |
+
+These examples intentionally use each platform's native field names. Normalize
+or remap your source fields before evaluating a rule; changing only the query
+syntax is not enough to make detections portable.
+
 ## Included examples
 
 ### Cross-OS command hallucination (Sigma)
@@ -55,6 +70,63 @@ contains an explicit index placeholder.
 Tune the time bucket and distinct-command threshold for sensor batching and
 normal automation. A five-second search bucket is not the same as an exact
 sliding five-second window.
+
+### High-velocity discovery burst (CrowdStrike Falcon LogScale CQL)
+
+File: [`detections/crowdstrike/agent_discovery_burst.cql`](detections/crowdstrike/agent_discovery_burst.cql)
+
+Filters Falcon `ProcessRollup2` events to discovery commands whose immediate
+parent is a Python process, then finds four or more distinct commands in a
+five-second bucket. It uses Falcon-native `aid`, `ComputerName`,
+`ParentProcessId`, `ParentBaseFileName`, and `CommandLine` fields.
+
+Run it first as an Advanced Event Search over a short time range. Tune known
+Python automation, notebooks, software inventory, and diagnostic tooling. The
+query uses fixed buckets rather than an exact sliding window, and CrowdStrike's
+distinct count may be estimated at high cardinality. The syntax follows the
+[official CQL query language](https://library.humio.com/data-analysis/syntax.html)
+and [`ProcessRollup2` command-line examples](https://library.humio.com/examples/examples-regex-filter-commandline.html).
+
+### High-velocity discovery burst (Graylog)
+
+File: [`detections/graylog/agent_discovery_burst.query`](detections/graylog/agent_discovery_burst.query)
+
+This Graylog search filter targets normalized process-start events with a
+Python parent and an AgentSim discovery command. It expects the current Graylog
+Information Model fields `gim_event_type`, `process_parent_name`, and
+`process_command_line`; map vendor fields into those names before use.
+
+For an alert, create a **Filter & Aggregation** event definition with this
+query, group by the endpoint identifier and `process_parent_id`, use a short
+window appropriate for ingestion latency, and begin with a raw message-count
+threshold of six. Graylog can aggregate matches, but this portable query cannot
+derive AgentSim's distinct command families by itself, so review the backlog
+messages and tune the count for your source. See Graylog's
+[process field schema](https://go2docs.graylog.org/illuminate-current/schema/field_schema_entities/process.html),
+[search syntax](https://go2docs.graylog.org/current/making_sense_of_your_log_data/search_syntax_reference.htm),
+and [event-definition workflow](https://go2docs.graylog.org/current/interacting_with_your_log_data/event_definitions.html).
+
+### High-velocity discovery burst (Panther)
+
+Files:
+
+- [`detections/panther/agent_discovery_burst.py`](detections/panther/agent_discovery_burst.py)
+- [`detections/panther/agent_discovery_burst.yml`](detections/panther/agent_discovery_burst.yml)
+
+The Panther rule targets `Crowdstrike.CrowdstrikeProcessRollup2` logs. The
+Python rule accepts individual discovery process events, groups them by Falcon
+endpoint and parent process, and returns a normalized discovery family through
+`unique()`. Its disabled-by-default YAML metadata alerts when four distinct
+families occur in the five-minute deduplication period.
+
+The five-minute threshold is intentionally broader than the LogScale and
+Splunk hunts because Panther streaming rules evaluate one event at a time and
+apply alert thresholds across a deduplication period. Shorten or lengthen that
+period for your ingestion characteristics, run the included positive and
+negative tests with Panther Analysis Tool, and enable the rule only after
+tuning authorized Python automation. The files follow Panther's current
+[Python detection format](https://docs.panther.com/detections/rules/python)
+and [unique-value threshold behavior](https://docs.panther.com/detections/rules).
 
 ## Additional hunting ideas
 

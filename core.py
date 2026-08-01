@@ -26,6 +26,7 @@ NETWORK_PHASE = "Phase 3: Cloud Service Discovery"
 TECHNIQUE_ID_PATTERN = re.compile(r"\b(T\d{4}(?:\.\d{3})?)\b")
 
 LogCallback = Callable[[str], None]
+StopCallback = Callable[[], bool]
 Action = dict[str, object]
 
 
@@ -62,6 +63,7 @@ class AgentSim:
         seed: int | None = None,
         os_type: str | None = None,
         command_timeout: float = 5.0,
+        stop_callback: StopCallback | None = None,
     ) -> None:
         self.speed_ms = _validate_integer("speed_ms", speed_ms, 0)
         self.hallucination_rate = _validate_probability(
@@ -82,6 +84,7 @@ class AgentSim:
         self.output_path = Path(output_path)
         self.command_timeout = float(command_timeout)
         self.log_callback = log_callback or print
+        self.stop_callback = stop_callback or (lambda: False)
         self.random = random.Random(seed)
         self.executed_tactics: set[str] = set()
         self.recent_tactics: list[str] = []
@@ -229,8 +232,11 @@ class AgentSim:
         self._pause()
 
     def _pause(self) -> None:
-        if self.speed_ms:
-            time.sleep(self.speed_ms / 1000.0)
+        remaining = self.speed_ms / 1000.0
+        while remaining > 0 and not self.stop_callback():
+            interval = min(remaining, 0.1)
+            time.sleep(interval)
+            remaining -= interval
 
     @staticmethod
     def _looks_like_command_error(output: str) -> bool:
@@ -305,6 +311,11 @@ class AgentSim:
 
         previous_phase: str | None = None
         for index in range(total_iterations):
+            if self.stop_callback():
+                self.log_callback(
+                    "[!] STOP REQUESTED: Exporting the partial simulation layer."
+                )
+                break
             phase_index = min(index * len(phases) // total_iterations, len(phases) - 1)
             current_phase = phases[phase_index]
             if previous_phase is not None and current_phase != previous_phase:

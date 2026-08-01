@@ -1,0 +1,45 @@
+AnalysisType: rule
+DisplayName: AgentSim High-Velocity Discovery Burst
+Enabled: false
+Filename: agent_discovery_burst.py
+RuleID: AgentSim.HighVelocityDiscoveryBurst
+Severity: Medium
+LogTypes:
+  - Crowdstrike.CrowdstrikeProcessRollup2
+Threshold: 4
+DedupPeriodMinutes: 5
+Description: >
+  Detects four distinct discovery-command families launched by the same Python
+  parent process on one CrowdStrike endpoint within five minutes. This pattern
+  is produced by AgentSim and can also identify other automated reconnaissance.
+Runbook: >
+  Confirm the Python parent command line and owner, review all child processes
+  in the alert window, validate whether the host is an authorized test system,
+  and tune approved automation before enabling the rule.
+Reference: https://attack.mitre.org/tactics/TA0007/
+Reports:
+  MITRE ATT&CK:
+    - TA0007 - Discovery
+Tags:
+  - AgentSim
+  - CrowdStrike
+  - Discovery
+Tests:
+  - Name: Python launches discovery command
+    ExpectedResult: true
+    Log:
+      aid: endpoint-123
+      ComputerName: lab-host
+      ParentBaseFileName: python3
+      ParentProcessId: "4100"
+      ImageFileName: /bin/bash
+      CommandLine: /bin/bash -c uname -a
+  - Name: Administrative shell without Python parent
+    ExpectedResult: false
+    Log:
+      aid: endpoint-123
+      ComputerName: lab-host
+      ParentBaseFileName: terminal
+      ParentProcessId: "4200"
+      ImageFileName: /bin/bash
+      CommandLine: /bin/bash -c uname -a

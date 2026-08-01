@@ -1,0 +1,11 @@
+gim_event_type:"process started"
+AND process_parent_name:(python OR python3 OR python.exe OR python3.exe OR py.exe OR pythonw.exe)
+AND process_command_line:(
+  "whoami" OR "systeminfo" OR "hostname" OR "uname -a" OR "sw_vers"
+  OR "system_profiler" OR "net user" OR "get-localuser" OR "dscl . list /users"
+  OR "getent passwd" OR "cat /etc/passwd" OR "tasklist" OR "wmic process"
+  OR "get-process" OR "ps aux" OR "top -bn 1" OR "top -l 1" OR "netstat"
+  OR "get-nettcpconnection" OR "ss -tulpn" OR "ipconfig" OR "ifconfig"
+  OR "ip address show" OR "arp -a" OR "networksetup" OR "aws sts"
+  OR "aws ec2" OR "az resource list" OR "gcloud services list"
+)

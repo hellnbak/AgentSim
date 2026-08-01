@@ -77,8 +77,11 @@ On Windows PowerShell, activate the environment with:
 ```
 
 Open `http://127.0.0.1:5000`. The development server binds only to localhost.
-The dashboard lets you tune the simulation, choose a seed, enable dry-run mode,
-and explicitly opt in to cloud network actions.
+The dashboard includes behavior presets, advanced probability controls, seeded
+runs, dry-run mode, and an explicit opt-in for cloud network actions. During a
+run it shows phase progress, live metrics, and a structured event stream that
+can be filtered, searched, or copied. You can stop a run safely and download
+the completed or partial ATT&CK Navigator layer directly from the dashboard.
 
 You can also install the project and use console commands:
 
@@ -139,7 +142,8 @@ For vulnerabilities in AgentSim itself, follow [`SECURITY.md`](SECURITY.md).
 ## Detection content
 
 The [`detections/`](detections/) directory contains experimental examples for
-Sigma, Microsoft Defender XDR KQL, and Splunk SPL. See
+Sigma-compatible tools, Microsoft Defender XDR, Splunk, CrowdStrike Falcon
+LogScale, Graylog, and Panther. See
 [`DETECTIONS.md`](DETECTIONS.md) for data requirements, limitations, and tuning
 guidance. Validate the queries against your own schema before production use.
 

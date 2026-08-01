@@ -25,8 +25,10 @@ jobs:
       - name: Install
         run: python -m pip install .
       - name: Compile
-        run: python -m py_compile core.py tactics.py web_ui.py
+        run: python -m py_compile core.py scenarios.py tactics.py web_ui.py
       - name: Test
         run: python -m unittest discover -s tests -v
       - name: Smoke test
         run: python core.py --dry-run --iterations 3 --speed 0 --seed 42 --output smoke-layer.json
+      - name: Scenario smoke test
+        run: python core.py --scenario all --variant both --speed 0 --ground-truth-output smoke-events.jsonl --validation-output smoke-validation.json

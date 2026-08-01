@@ -18,22 +18,30 @@ class WebUiTests(unittest.TestCase):
         web_ui.app.config.update(TESTING=True)
         self.client = web_ui.app.test_client()
         self.original_layer_path = web_ui.LAYER_OUTPUT_PATH
+        self.original_ground_truth_path = web_ui.GROUND_TRUTH_OUTPUT_PATH
+        self.original_validation_path = web_ui.VALIDATION_OUTPUT_PATH
         with web_ui.state_lock:
             web_ui.is_running = False
             web_ui.log_queue.clear()
             web_ui.event_sequence = 0
             web_ui.last_layer_path = None
+            web_ui.last_ground_truth_path = None
+            web_ui.last_validation_path = None
             web_ui.run_started_at = None
             web_ui.run_finished_at = None
             web_ui.current_params = {}
+            web_ui.last_outcome = "ready"
             web_ui.stop_event.clear()
 
     def tearDown(self):
         web_ui.LAYER_OUTPUT_PATH = self.original_layer_path
+        web_ui.GROUND_TRUTH_OUTPUT_PATH = self.original_ground_truth_path
+        web_ui.VALIDATION_OUTPUT_PATH = self.original_validation_path
 
     def valid_form(self):
         return {
             "form_token": web_ui.form_token,
+            "run_mode": "behavior",
             "iterations": "3",
             "speed": "0",
             "hallucination_rate": "0.15",
@@ -54,7 +62,9 @@ class WebUiTests(unittest.TestCase):
             response.headers["Permissions-Policy"],
             "camera=(), microphone=(), geolocation=()",
         )
-        self.assertIn("Behavioral Telemetry Lab", page)
+        self.assertIn("Agent Detection Lab", page)
+        self.assertIn("Agentic attack scenarios", page)
+        self.assertIn("Indirect prompt injection", page)
         self.assertIn("message.textContent", page)
         self.assertNotIn(".innerHTML", page)
 
@@ -72,6 +82,20 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(cycle["cycle"], 4)
         self.assertEqual(cycle["phase"], "Phase 2: Privilege and Network Discovery")
         self.assertEqual(anomaly["category"], "anomaly")
+
+    def test_classifies_agentic_tool_and_policy_checkpoints(self):
+        tool = web_ui._classify_message(
+            "    [pre_tool] Agent proposes reading a decoy credential fixture."
+        )
+        blocked = web_ui._classify_message(
+            "    [policy] Policy blocked the sensitive tool request."
+        )
+
+        self.assertEqual(tool["kind"], "tool")
+        self.assertEqual(tool["category"], "anomaly")
+        self.assertEqual(tool["stage"], "pre_tool")
+        self.assertEqual(blocked["kind"], "blocked")
+        self.assertEqual(blocked["category"], "anomaly")
 
     def test_status_reports_host_and_run_state(self):
         with web_ui.state_lock:
@@ -118,11 +142,78 @@ class WebUiTests(unittest.TestCase):
         thread.start.assert_called_once_with()
         kwargs = thread_class.call_args.kwargs["kwargs"]
         self.assertEqual(kwargs["iterations"], 3)
+        self.assertEqual(kwargs["run_mode"], "behavior")
         self.assertEqual(kwargs["seed"], 42)
         self.assertTrue(kwargs["dry_run"])
         self.assertFalse(kwargs["allow_network"])
         self.assertEqual(web_ui.log_queue[0]["kind"], "start")
         self.assertEqual(web_ui.log_queue[0]["params"]["iterations"], 3)
+
+    @mock.patch("web_ui.threading.Thread")
+    def test_start_dispatches_safe_scenario_suite(self, thread_class):
+        form = {
+            "form_token": web_ui.form_token,
+            "run_mode": "scenario",
+            "scenario": "mcp-tool-poisoning",
+            "variant": "both",
+            "speed": "0",
+        }
+
+        response = self.client.post(
+            "/start", data=form, headers={"Accept": "application/json"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIs(
+            thread_class.call_args.kwargs["target"], web_ui.run_scenario_background
+        )
+        kwargs = thread_class.call_args.kwargs["kwargs"]
+        self.assertEqual(kwargs["run_mode"], "scenario")
+        self.assertEqual(kwargs["scenario"], "mcp-tool-poisoning")
+        self.assertEqual(kwargs["variant"], "both")
+        self.assertEqual(kwargs["checkpoints"], 6)
+        self.assertNotIn("allow_network", kwargs)
+
+    def test_start_rejects_unknown_scenario(self):
+        response = self.client.post(
+            "/start",
+            data={
+                "form_token": web_ui.form_token,
+                "run_mode": "scenario",
+                "scenario": "unknown",
+                "variant": "both",
+                "speed": "0",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_scenario_worker_generates_downloadable_validated_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            web_ui.GROUND_TRUTH_OUTPUT_PATH = Path(temp_dir) / "events.jsonl"
+            web_ui.VALIDATION_OUTPUT_PATH = Path(temp_dir) / "validation.json"
+            with web_ui.state_lock:
+                web_ui.is_running = True
+                web_ui.last_outcome = "running"
+
+            web_ui.run_scenario_background(
+                run_mode="scenario",
+                scenario="indirect-prompt-injection",
+                variant="both",
+                speed=0,
+                checkpoints=8,
+            )
+
+            self.assertFalse(web_ui.is_running)
+            self.assertEqual(web_ui.last_outcome, "complete")
+            self.assertTrue(web_ui.last_ground_truth_path.exists())
+            self.assertTrue(web_ui.last_validation_path.exists())
+            report = json.loads(
+                web_ui.last_validation_path.read_text(encoding="utf-8")
+            )
+            self.assertTrue(report["summary"]["all_passed"])
+            self.assertEqual(report["summary"]["checks"], 2)
+            self.assertEqual(web_ui.log_queue[-1]["kind"], "complete")
 
     def test_stop_sets_event_and_records_operator_action(self):
         with web_ui.state_lock:
@@ -178,6 +269,33 @@ class WebUiTests(unittest.TestCase):
     def test_download_returns_not_found_before_a_run(self):
         response = self.client.get("/download-layer")
         self.assertEqual(response.status_code, 404)
+        self.assertEqual(self.client.get("/download-ground-truth").status_code, 404)
+        self.assertEqual(self.client.get("/download-validation").status_code, 404)
+
+    def test_download_returns_scenario_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            events_path = Path(temp_dir) / "events.jsonl"
+            report_path = Path(temp_dir) / "report.json"
+            events_path.write_text('{"schema_version":"1.0"}\n', encoding="utf-8")
+            report_path.write_text('{"summary":{}}\n', encoding="utf-8")
+            with web_ui.state_lock:
+                web_ui.last_ground_truth_path = events_path
+                web_ui.last_validation_path = report_path
+
+            status = self.client.get("/api/status").get_json()
+            self.assertTrue(status["ground_truth_available"])
+            self.assertTrue(status["validation_available"])
+
+            ground_truth = self.client.get("/download-ground-truth")
+            validation = self.client.get("/download-validation")
+            self.assertEqual(ground_truth.status_code, 200)
+            self.assertEqual(ground_truth.mimetype, "application/x-ndjson")
+            self.assertIn("agent_sim_events.jsonl", ground_truth.headers["Content-Disposition"])
+            self.assertEqual(validation.status_code, 200)
+            self.assertEqual(validation.mimetype, "application/json")
+            self.assertIn("agent_sim_validation.json", validation.headers["Content-Disposition"])
+            ground_truth.close()
+            validation.close()
 
 
 if __name__ == "__main__":

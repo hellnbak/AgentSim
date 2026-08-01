@@ -15,10 +15,17 @@ import time
 from pathlib import Path
 from typing import Callable, Sequence
 
+from scenarios import (
+    DEFAULT_GROUND_TRUTH_PATH,
+    DEFAULT_VALIDATION_PATH,
+    SCENARIOS,
+    list_scenarios,
+    run_scenario_suite,
+)
 from tactics import SIMULATION_PHASES, LINUX_HALLUCINATIONS, WINDOWS_HALLUCINATIONS
 
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 ATTACK_VERSION = "19.1"
 NAVIGATOR_VERSION = "5.3.2"
 LAYER_VERSION = "4.5"
@@ -439,6 +446,35 @@ def build_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    scenario_group = parser.add_argument_group("safe agentic scenario lab")
+    scenario_group.add_argument(
+        "--list-scenarios",
+        action="store_true",
+        help="List the simulation-only agentic scenarios and exit.",
+    )
+    scenario_group.add_argument(
+        "--scenario",
+        choices=["all", *sorted(SCENARIOS)],
+        help="Run one safe agentic scenario, or all scenarios, instead of command simulation.",
+    )
+    scenario_group.add_argument(
+        "--variant",
+        choices=("malicious", "benign", "both"),
+        default="both",
+        help="Scenario variant to emit (default: both malicious and benign controls).",
+    )
+    scenario_group.add_argument(
+        "--ground-truth-output",
+        default=DEFAULT_GROUND_TRUTH_PATH,
+        metavar="PATH",
+        help=f"Scenario JSONL output path (default: {DEFAULT_GROUND_TRUTH_PATH}).",
+    )
+    scenario_group.add_argument(
+        "--validation-output",
+        default=DEFAULT_VALIDATION_PATH,
+        metavar="PATH",
+        help=f"Scenario validation report path (default: {DEFAULT_VALIDATION_PATH}).",
+    )
     parser.add_argument(
         "-i",
         "--iterations",
@@ -501,7 +537,30 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.list_scenarios:
+        for definition in list_scenarios():
+            print(f"{definition.scenario_id}\t{definition.name}")
+            print(f"  {definition.description}")
+        return 0
+
+    if args.scenario:
+        try:
+            result = run_scenario_suite(
+                args.scenario,
+                variant=args.variant,
+                ground_truth_path=args.ground_truth_output,
+                validation_path=args.validation_output,
+                speed_ms=args.speed,
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            parser.error(str(exc))
+        if result.stopped:
+            return 130
+        return 0 if result.passed else 1
+
     simulator = AgentSim(
         speed_ms=args.speed,
         hallucination_rate=args.hallucination_rate,

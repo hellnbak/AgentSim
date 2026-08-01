@@ -9,4 +9,6 @@ venv/
 build/
 dist/
 agent_sim_layer.json
+agent_sim_events.jsonl
+agent_sim_validation.json
 .DS_Store

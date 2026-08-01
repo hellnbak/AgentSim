@@ -1,4 +1,5 @@
 import json
+import io
 import subprocess
 import tempfile
 import unittest
@@ -127,6 +128,42 @@ class AgentSimTests(unittest.TestCase):
         self.assertEqual(exported, self.output_path)
         self.assertTrue(self.output_path.exists())
         self.assertTrue(any("STOP REQUESTED" in message for message in messages))
+
+    @mock.patch("sys.stdout", new_callable=io.StringIO)
+    def test_cli_lists_agentic_scenarios(self, stdout):
+        result = core.main(["--list-scenarios"])
+
+        self.assertEqual(result, 0)
+        self.assertIn("indirect-prompt-injection", stdout.getvalue())
+        self.assertIn("mcp-tool-poisoning", stdout.getvalue())
+
+    @mock.patch("core.run_scenario_suite")
+    def test_cli_dispatches_scenario_mode(self, run_suite):
+        run_suite.return_value = mock.Mock(passed=True, stopped=False)
+
+        result = core.main(
+            [
+                "--scenario",
+                "decoy-secret-exfiltration",
+                "--variant",
+                "both",
+                "--speed",
+                "0",
+                "--ground-truth-output",
+                str(Path(self.temp_dir.name) / "events.jsonl"),
+                "--validation-output",
+                str(Path(self.temp_dir.name) / "validation.json"),
+            ]
+        )
+
+        self.assertEqual(result, 0)
+        run_suite.assert_called_once_with(
+            "decoy-secret-exfiltration",
+            variant="both",
+            ground_truth_path=str(Path(self.temp_dir.name) / "events.jsonl"),
+            validation_path=str(Path(self.temp_dir.name) / "validation.json"),
+            speed_ms=0,
+        )
 
 
 if __name__ == "__main__":

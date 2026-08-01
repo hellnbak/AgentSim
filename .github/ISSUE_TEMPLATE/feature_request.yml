@@ -20,6 +20,6 @@ body:
     id: safety
     attributes:
       label: Safety and scope
-      description: Describe commands, data access, network use, and ATT&CK mappings.
+      description: Describe commands, synthetic fixtures, data access, network use, benign controls, and framework mappings.
     validations:
       required: true

@@ -7,7 +7,7 @@ on the default branch.
 
 | Version | Supported |
 | --- | --- |
-| Latest `0.1.x` | Yes |
+| Latest `0.2.x` | Yes |
 | Older snapshots | No |
 
 ## Reporting a vulnerability
@@ -30,3 +30,8 @@ AgentSim intentionally creates child processes and runs discovery commands.
 Unexpected command execution, bypass of the network opt-in, shell injection,
 exposure of captured command output, or remote access to the local Web UI should
 be treated as security issues.
+
+Agentic scenario mode has a stricter contract: it must never invoke a tool,
+read a real file or credential, or open a network connection. All resources,
+tool definitions, endpoints, results, and hashes in scenario artifacts must be
+synthetic. A regression that violates this contract is a security issue.

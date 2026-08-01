@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentsim"
-version = "0.1.0"
-description = "Defensive simulation of autonomous-agent command patterns"
+version = "0.2.0"
+description = "Defensive telemetry and ground-truth simulation for autonomous agents"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
-keywords = ["detection-engineering", "security", "simulation", "mitre-attack"]
+keywords = ["agentic-ai", "detection-engineering", "security", "simulation", "mitre-attack"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
@@ -23,4 +23,4 @@ agentsim = "core:main"
 agentsim-web = "web_ui:main"
 
 [tool.setuptools]
-py-modules = ["core", "tactics", "web_ui"]
+py-modules = ["core", "scenarios", "tactics", "web_ui"]

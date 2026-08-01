@@ -14,13 +14,13 @@ README = Path(__file__).with_name("README.md").read_text(encoding="utf-8")
 
 setup(
     name="agentsim",
-    version="0.1.0",
-    description="Defensive simulation of autonomous-agent command patterns",
+    version="0.2.0",
+    description="Defensive telemetry and ground-truth simulation for autonomous agents",
     long_description=README,
     long_description_content_type="text/markdown",
     python_requires=">=3.9",
     license="MIT",
-    py_modules=["core", "tactics", "web_ui"],
+    py_modules=["core", "scenarios", "tactics", "web_ui"],
     install_requires=["Flask>=3.1,<4.0"],
     entry_points={
         "console_scripts": [

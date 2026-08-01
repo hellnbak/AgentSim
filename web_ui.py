@@ -25,6 +25,7 @@ from flask import (
 )
 
 from core import AgentSim
+from scenarios import SCENARIOS, run_scenario_suite
 
 
 app = Flask(__name__)
@@ -37,10 +38,15 @@ event_sequence = 0
 form_token = secrets.token_urlsafe(32)
 stop_event = threading.Event()
 last_layer_path: Path | None = None
+last_ground_truth_path: Path | None = None
+last_validation_path: Path | None = None
 run_started_at: float | None = None
 run_finished_at: float | None = None
 current_params: dict[str, Any] = {}
+last_outcome = "ready"
 LAYER_OUTPUT_PATH = Path.cwd() / "agent_sim_layer.json"
+GROUND_TRUTH_OUTPUT_PATH = Path.cwd() / "agent_sim_events.jsonl"
+VALIDATION_OUTPUT_PATH = Path.cwd() / "agent_sim_validation.json"
 MAX_EVENTS = 2000
 
 
@@ -72,6 +78,33 @@ def _classify_message(message: str) -> dict[str, Any]:
     phase_match = re.search(r"PHASE TRANSITION: (.+?)\s*=*\]$", clean_message)
     if phase_match:
         event.update(kind="phase", category="system", phase=phase_match.group(1))
+        return event
+
+    if clean_message.startswith("[SCENARIO]"):
+        event.update(kind="scenario", category="system")
+        return event
+
+    checkpoint_match = re.match(
+        r"\[(input|decision|pre_tool|post_tool|tool_discovery|network|policy)\]\s+(.+)",
+        clean_message,
+    )
+    if checkpoint_match:
+        stage = checkpoint_match.group(1)
+        lower_message = clean_message.lower()
+        blocked = stage in {"policy", "network"} and "block" in lower_message
+        risky = any(
+            marker in lower_message
+            for marker in ("untrusted", "changed", "decoy", "goal drift", "block")
+        )
+        event.update(
+            kind="blocked" if blocked else (
+                "tool" if stage in {"pre_tool", "tool_discovery", "network"} else "checkpoint"
+            ),
+            category="anomaly" if risky else (
+                "command" if stage in {"pre_tool", "tool_discovery", "network"} else "system"
+            ),
+            stage=stage,
+        )
         return event
 
     command_match = re.search(
@@ -111,6 +144,14 @@ def _classify_message(message: str) -> dict[str, Any]:
         event.update(kind="stopped", category="anomaly")
     elif "Simulation failed" in clean_message:
         event.update(kind="error", category="anomaly")
+    elif "Scenario suite failed" in clean_message or "Scenario validation failed" in clean_message:
+        event.update(kind="error", category="anomaly")
+    elif "Scenario suite stopped" in clean_message:
+        event.update(kind="stopped", category="anomaly")
+    elif "Scenario suite complete" in clean_message or "Scenario validation passed" in clean_message:
+        event.update(kind="complete", category="system")
+    elif "Ground-truth JSONL exported" in clean_message or "Validation report exported" in clean_message:
+        event.update(kind="export", category="system")
     elif "Simulation finished" in clean_message:
         event.update(kind="complete", category="system")
     elif "Navigator layer exported" in clean_message:
@@ -164,15 +205,23 @@ def _status_snapshot() -> dict[str, Any]:
             "layer_available": bool(
                 last_layer_path is not None and last_layer_path.exists()
             ),
+            "ground_truth_available": bool(
+                last_ground_truth_path is not None and last_ground_truth_path.exists()
+            ),
+            "validation_available": bool(
+                last_validation_path is not None and last_validation_path.exists()
+            ),
             "started_at": run_started_at,
             "finished_at": run_finished_at,
             "params": dict(current_params),
+            "outcome": last_outcome,
         }
 
 
 def run_sim_background(**kwargs: Any) -> None:
-    global is_running, last_layer_path, run_finished_at
+    global is_running, last_layer_path, run_finished_at, last_outcome
     status_message = "[*] Simulation finished. Navigator layer is ready."
+    outcome = "error"
     exported_path: Path | None = None
     try:
         simulator = AgentSim(
@@ -191,14 +240,58 @@ def run_sim_background(**kwargs: Any) -> None:
         exported_path = simulator.run_simulation(kwargs["iterations"])
         if stop_event.is_set():
             status_message = "[!] Simulation stopped. Partial Navigator layer is ready."
+            outcome = "stopped"
+        else:
+            outcome = "complete"
     except Exception as exc:  # Keep a failed worker from wedging the UI.
         status_message = f"[!] Simulation failed: {exc}"
     finally:
         with state_changed:
             is_running = False
+            last_outcome = outcome
             run_finished_at = time.time()
             if exported_path is not None and exported_path.exists():
                 last_layer_path = exported_path
+            state_changed.notify_all()
+        log_callback(status_message)
+
+
+def run_scenario_background(**kwargs: Any) -> None:
+    global is_running, last_ground_truth_path, last_validation_path, run_finished_at
+    global last_outcome
+    status_message = "[*] Scenario suite failed before validation completed."
+    outcome = "error"
+    result = None
+    try:
+        result = run_scenario_suite(
+            kwargs["scenario"],
+            variant=kwargs["variant"],
+            ground_truth_path=GROUND_TRUTH_OUTPUT_PATH,
+            validation_path=VALIDATION_OUTPUT_PATH,
+            speed_ms=kwargs["speed"],
+            stop_callback=stop_event.is_set,
+            log_callback=log_callback,
+        )
+        if result.stopped:
+            status_message = "[!] Scenario suite stopped. Partial artifacts are ready."
+            outcome = "stopped"
+        elif result.passed:
+            status_message = "[*] Scenario suite complete. Ground truth and validation are ready."
+            outcome = "complete"
+        else:
+            status_message = "[!] Scenario suite failed validation. Review the report."
+    except Exception as exc:  # Keep a failed worker from wedging the UI.
+        status_message = f"[!] Scenario suite failed: {exc}"
+    finally:
+        with state_changed:
+            is_running = False
+            last_outcome = outcome
+            run_finished_at = time.time()
+            if result is not None:
+                if result.ground_truth_path.exists():
+                    last_ground_truth_path = result.ground_truth_path
+                if result.validation_path.exists():
+                    last_validation_path = result.validation_path
             state_changed.notify_all()
         log_callback(status_message)
 
@@ -210,7 +303,7 @@ HTML_TEMPLATE = """
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <title>AgentSim · Behavioral Telemetry Lab</title>
+    <title>AgentSim · Agent Detection Lab</title>
     <style>
         :root {
             --bg: #071017;
@@ -248,9 +341,9 @@ HTML_TEMPLATE = """
                 radial-gradient(circle at 82% -10%, rgba(66, 212, 181, 0.09), transparent 32rem),
                 linear-gradient(180deg, #08131b 0, var(--bg) 24rem);
         }
-        button, input { font: inherit; }
+        button, input, select { font: inherit; }
         button, a { -webkit-tap-highlight-color: transparent; }
-        button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible {
+        button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible {
             outline: 2px solid var(--accent);
             outline-offset: 2px;
         }
@@ -398,6 +491,33 @@ HTML_TEMPLATE = """
         .advanced-content { padding: 4px 0 2px; }
         .field-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; margin-bottom: 14px; }
         .field-row label { color: var(--muted); font-size: 12px; }
+        .mode-select, .scenario-select {
+            width: 100%;
+            height: 38px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 0 30px 0 10px;
+            color: var(--text);
+            background: rgba(7, 16, 23, 0.65);
+        }
+        .run-mode-control { margin-bottom: 18px; }
+        .run-mode-control label, .scenario-controls label {
+            display: block;
+            margin-bottom: 7px;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 650;
+        }
+        .scenario-controls {
+            margin-bottom: 17px;
+            padding: 13px;
+            border: 1px solid rgba(101, 174, 247, 0.25);
+            border-radius: 10px;
+            background: var(--blue-soft);
+        }
+        .scenario-controls .field-block + .field-block { margin-top: 12px; }
+        .scenario-copy { margin: 10px 0 0; color: var(--subtle); font-size: 10px; line-height: 1.5; }
+        .hidden { display: none !important; }
         .seed-input {
             width: 118px;
             height: 34px;
@@ -578,6 +698,7 @@ HTML_TEMPLATE = """
             font-weight: 750;
         }
         .download-button.disabled { opacity: 0.36; pointer-events: none; }
+        .artifact-actions { display: grid; gap: 7px; }
         .watch-list { margin: 17px 0 0; padding: 0; list-style: none; }
         .watch-list li { position: relative; padding: 0 0 10px 14px; color: var(--muted); font-size: 9.5px; line-height: 1.45; }
         .watch-list li::before { content: ""; position: absolute; left: 0; top: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
@@ -613,7 +734,7 @@ HTML_TEMPLATE = """
             .app-shell { padding: 16px 18px 26px; grid-template-columns: 1fr; }
             .config-panel { position: static; }
             .config-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
-            .profile-section, .control.iterations, details.advanced, .form-error, .action-row, .safety-note { grid-column: 1 / -1; }
+            .run-mode-control, .scenario-controls, .profile-section, .control.iterations, details.advanced, .form-error, .action-row, .safety-note { grid-column: 1 / -1; }
             .toggle-stack { grid-column: 1 / -1; }
         }
         @media (max-width: 620px) {
@@ -646,7 +767,7 @@ HTML_TEMPLATE = """
             <div class="brand-mark">A›</div>
             <div class="brand-copy">
                 <div class="brand-name">AgentSim</div>
-                <div class="brand-subtitle">Behavioral Telemetry Lab</div>
+                <div class="brand-subtitle">Agent Detection Lab</div>
             </div>
         </div>
         <div class="topbar-meta">
@@ -663,13 +784,42 @@ HTML_TEMPLATE = """
             <div class="panel-header">
                 <div class="eyebrow">Run configuration</div>
                 <h2>Shape the agent behavior</h2>
-                <p>Choose a profile, then tune the signals you want your endpoint controls to observe.</p>
+                <p>Generate endpoint telemetry or replay safe agentic attack scenarios with labeled controls.</p>
             </div>
 
             <form class="config-form" id="simulation-form" action="/start" method="post">
                 <input type="hidden" name="form_token" value="{{ form_token }}">
 
-                <section class="profile-section">
+                <div class="run-mode-control">
+                    <label for="run-mode">Lab mode</label>
+                    <select class="mode-select" id="run-mode" name="run_mode">
+                        <option value="behavior">Endpoint behavior</option>
+                        <option value="scenario">Agentic attack scenarios</option>
+                    </select>
+                </div>
+
+                <section class="scenario-controls hidden" id="scenario-controls">
+                    <div class="field-block">
+                        <label for="scenario">Scenario</label>
+                        <select class="scenario-select" id="scenario" name="scenario">
+                            <option value="all">All scenarios</option>
+                            {% for scenario in scenarios %}
+                            <option value="{{ scenario.scenario_id }}">{{ scenario.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="field-block">
+                        <label for="variant">Control set</label>
+                        <select class="scenario-select" id="variant" name="variant">
+                            <option value="both">Malicious + benign twins</option>
+                            <option value="malicious">Malicious only</option>
+                            <option value="benign">Benign controls only</option>
+                        </select>
+                    </div>
+                    <p class="scenario-copy">Simulation-only checkpoints. No tools, credentials, files, or network requests are executed.</p>
+                </section>
+
+                <section class="profile-section behavior-control">
                     <div class="section-label">Behavior profile <span id="profile-name">Balanced</span></div>
                     <div class="preset-grid" role="group" aria-label="Behavior presets">
                         <button class="preset active" type="button" data-preset="balanced">Balanced</button>
@@ -680,7 +830,7 @@ HTML_TEMPLATE = """
                     <p class="preset-description" id="preset-description">A representative run with moderate retries and occasional agent mistakes.</p>
                 </section>
 
-                <div class="control iterations">
+                <div class="control iterations behavior-control">
                     <div class="control-head">
                         <label for="iterations">Agent cycles</label>
                         <output id="iterations-output" for="iterations">30</output>
@@ -698,7 +848,7 @@ HTML_TEMPLATE = """
                     <div class="range-scale"><span>machine speed</span><span>1 second</span></div>
                 </div>
 
-                <details class="advanced">
+                <details class="advanced behavior-control">
                     <summary>Behavior probabilities</summary>
                     <div class="advanced-content">
                         <div class="control">
@@ -732,7 +882,7 @@ HTML_TEMPLATE = """
                     </div>
                 </details>
 
-                <div class="field-row">
+                <div class="field-row behavior-control">
                     <label for="seed">Reproducible seed</label>
                     <div class="seed-wrap">
                         <input class="seed-input" type="number" id="seed" name="seed" step="1" placeholder="Random">
@@ -740,7 +890,7 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
 
-                <div class="toggle-stack">
+                <div class="toggle-stack behavior-control">
                     <div class="toggle-row">
                         <div class="toggle-copy">
                             <strong>Dry run</strong>
@@ -771,7 +921,7 @@ HTML_TEMPLATE = """
                     </button>
                     <button class="danger-button" id="stop-button" type="button" {% if not is_running %}disabled{% endif %}>Stop</button>
                 </div>
-                <p class="safety-note">Local read-only discovery executes by default. Use Safe preview to inspect the run without creating child processes.</p>
+                <p class="safety-note" id="safety-note">Local read-only discovery executes by default. Use Safe preview to inspect the run without creating child processes.</p>
             </form>
         </aside>
 
@@ -794,39 +944,39 @@ HTML_TEMPLATE = """
                 <div class="phase-rail">
                     <div class="phase" data-phase-index="0">
                         <span class="phase-index">01</span>
-                        <span class="phase-name">Host discovery</span>
+                        <span class="phase-name" id="phase-name-0">Host discovery</span>
                     </div>
                     <div class="phase" data-phase-index="1">
                         <span class="phase-index">02</span>
-                        <span class="phase-name">Privilege &amp; network</span>
+                        <span class="phase-name" id="phase-name-1">Privilege &amp; network</span>
                     </div>
                     <div class="phase" data-phase-index="2">
                         <span class="phase-index">03</span>
-                        <span class="phase-name">Cloud services</span>
+                        <span class="phase-name" id="phase-name-2">Cloud services</span>
                     </div>
                 </div>
             </section>
 
-            <section class="metrics" aria-label="Simulation metrics">
+            <section class="metrics" aria-label="Run metrics">
                 <div class="metric cycles">
-                    <span class="metric-label">Cycles</span>
+                    <span class="metric-label" id="cycles-label">Cycles</span>
                     <strong class="metric-value" id="cycles-metric">0 / 30</strong>
-                    <span class="metric-foot">OODA loops observed</span>
+                    <span class="metric-foot" id="cycles-foot">OODA loops observed</span>
                 </div>
                 <div class="metric commands">
-                    <span class="metric-label">Commands</span>
+                    <span class="metric-label" id="commands-label">Commands</span>
                     <strong class="metric-value" id="commands-metric">0</strong>
-                    <span class="metric-foot">process actions selected</span>
+                    <span class="metric-foot" id="commands-foot">process actions selected</span>
                 </div>
                 <div class="metric anomalies">
-                    <span class="metric-label">Agent signals</span>
+                    <span class="metric-label" id="anomalies-label">Agent signals</span>
                     <strong class="metric-value" id="anomalies-metric">0</strong>
-                    <span class="metric-foot">mistakes, pivots, lineage</span>
+                    <span class="metric-foot" id="anomalies-foot">mistakes, pivots, lineage</span>
                 </div>
                 <div class="metric skipped">
-                    <span class="metric-label">Guarded</span>
+                    <span class="metric-label" id="skipped-label">Guarded</span>
                     <strong class="metric-value" id="skipped-metric">0</strong>
-                    <span class="metric-foot">network actions blocked</span>
+                    <span class="metric-foot" id="skipped-foot">network actions blocked</span>
                 </div>
             </section>
 
@@ -834,13 +984,13 @@ HTML_TEMPLATE = """
                 <section class="card events-card">
                     <div class="events-header">
                         <div class="events-title-row">
-                            <h2>Behavior event stream</h2>
+                            <h2 id="event-stream-heading">Behavior event stream</h2>
                             <span id="event-count">0 events</span>
                         </div>
                         <div class="toolbar">
                             <div class="filter-group" role="group" aria-label="Event filters">
                                 <button class="filter-button active" type="button" data-filter="all">All</button>
-                                <button class="filter-button" type="button" data-filter="command">Commands</button>
+                                <button class="filter-button" id="command-filter" type="button" data-filter="command">Commands</button>
                                 <button class="filter-button" type="button" data-filter="anomaly">Signals</button>
                                 <button class="filter-button" type="button" data-filter="system">System</button>
                             </div>
@@ -856,8 +1006,8 @@ HTML_TEMPLATE = """
                         <div class="empty-state" id="empty-state">
                             <div>
                                 <div class="empty-icon">_›</div>
-                                <h3>No telemetry yet</h3>
-                                <p>Start a run to see phase transitions, selected commands, context loss, retries, and safety-gate events as they happen.</p>
+                                <h3 id="empty-heading">No telemetry yet</h3>
+                                <p id="empty-copy">Start a run to see phase transitions, selected commands, context loss, retries, and safety-gate events as they happen.</p>
                             </div>
                         </div>
                     </div>
@@ -870,21 +1020,29 @@ HTML_TEMPLATE = """
                 <aside class="card run-details">
                     <h2>Run details</h2>
                     <dl class="detail-list">
-                        <div class="detail-row"><dt>Profile</dt><dd id="detail-profile">Balanced</dd></div>
+                        <div class="detail-row"><dt id="detail-profile-label">Profile</dt><dd id="detail-profile">Balanced</dd></div>
                         <div class="detail-row"><dt>Mode</dt><dd id="detail-mode">Execute local</dd></div>
-                        <div class="detail-row"><dt>Seed</dt><dd id="detail-seed">Random</dd></div>
+                        <div class="detail-row"><dt id="detail-seed-label">Seed</dt><dd id="detail-seed">Random</dd></div>
                         <div class="detail-row"><dt>Speed</dt><dd id="detail-speed">100 ms</dd></div>
                         <div class="detail-row"><dt>Cloud</dt><dd id="detail-cloud">Guarded</dd></div>
                     </dl>
-                    <div class="layer-box">
+                    <div class="layer-box" id="layer-artifact">
                         <strong>ATT&amp;CK Navigator layer</strong>
                         <p id="layer-status">Available after the run completes or is stopped.</p>
                         <a class="download-button disabled" id="download-layer" href="/download-layer" aria-disabled="true">Download layer JSON</a>
                     </div>
+                    <div class="layer-box hidden" id="scenario-artifacts">
+                        <strong>Scenario evidence</strong>
+                        <p id="scenario-artifact-status">Available after the scenario suite completes or is stopped.</p>
+                        <div class="artifact-actions">
+                            <a class="download-button disabled" id="download-ground-truth" href="/download-ground-truth" aria-disabled="true">Download ground truth JSONL</a>
+                            <a class="download-button disabled" id="download-validation" href="/download-validation" aria-disabled="true">Download validation report</a>
+                        </div>
+                    </div>
                     <ul class="watch-list">
-                        <li>Use Signals to isolate hallucinations, context loss, and retry behavior.</li>
-                        <li>Use Commands to compare process telemetry with your EDR or SIEM.</li>
-                        <li>Reuse a seed when validating detection changes against the same run.</li>
+                        <li id="watch-item-0">Use Signals to isolate hallucinations, context loss, and retry behavior.</li>
+                        <li id="watch-item-1">Use Commands to compare process telemetry with your EDR or SIEM.</li>
+                        <li id="watch-item-2">Reuse a seed when validating detection changes against the same run.</li>
                     </ul>
                 </aside>
             </section>
@@ -896,6 +1054,7 @@ HTML_TEMPLATE = """
     <script>
         const FORM_TOKEN = {{ form_token | tojson }};
         const INITIAL_RUNNING = {{ is_running | tojson }};
+        const SCENARIO_COUNTS = {{ scenario_counts | tojson }};
 
         const profiles = {
             balanced: {
@@ -944,8 +1103,21 @@ HTML_TEMPLATE = """
             networkWarning: document.getElementById("network-warning"),
             dryRun: document.getElementById("dry-run"),
             seed: document.getElementById("seed"),
+            runMode: document.getElementById("run-mode"),
+            scenario: document.getElementById("scenario"),
+            variant: document.getElementById("variant"),
+            scenarioControls: document.getElementById("scenario-controls"),
             download: document.getElementById("download-layer"),
             layerStatus: document.getElementById("layer-status"),
+            layerArtifact: document.getElementById("layer-artifact"),
+            scenarioArtifacts: document.getElementById("scenario-artifacts"),
+            groundTruthDownload: document.getElementById("download-ground-truth"),
+            validationDownload: document.getElementById("download-validation"),
+            scenarioArtifactStatus: document.getElementById("scenario-artifact-status"),
+            eventStreamHeading: document.getElementById("event-stream-heading"),
+            commandFilter: document.getElementById("command-filter"),
+            emptyHeading: document.getElementById("empty-heading"),
+            emptyCopy: document.getElementById("empty-copy"),
             toast: document.getElementById("toast")
         };
 
@@ -955,6 +1127,7 @@ HTML_TEMPLATE = """
             seenIds: new Set(),
             filter: "all",
             search: "",
+            mode: "behavior",
             profile: "balanced",
             totalIterations: Number(document.getElementById("iterations").value),
             currentCycle: 0,
@@ -978,8 +1151,70 @@ HTML_TEMPLATE = """
             hallucination: "Wrong OS", context_loss: "Context", evasion: "Lineage",
             retry: "Retry", skipped: "Guarded", stop_requested: "Stop",
             stopped: "Stopped", error: "Error", complete: "Complete", export: "Export",
+            scenario: "Scenario", checkpoint: "Check", tool: "Tool", blocked: "Blocked",
             start: "Start", environment: "Host", warning: "Notice", info: "System"
         };
+
+        function selectedScenarioCount() {
+            const counts = SCENARIO_COUNTS[elements.scenario.value] || SCENARIO_COUNTS.all;
+            return Number(counts[elements.variant.value] || counts.both || 1);
+        }
+
+        function setRunMode(mode) {
+            state.mode = mode === "scenario" ? "scenario" : "behavior";
+            elements.runMode.value = state.mode;
+            const scenarioMode = state.mode === "scenario";
+            elements.scenarioControls.classList.toggle("hidden", !scenarioMode);
+            document.querySelectorAll(".behavior-control").forEach(function (item) {
+                item.classList.toggle("hidden", scenarioMode);
+            });
+            elements.layerArtifact.classList.toggle("hidden", scenarioMode);
+            elements.scenarioArtifacts.classList.toggle("hidden", !scenarioMode);
+            document.getElementById("phase-name-0").textContent = scenarioMode ? "Agent input" : "Host discovery";
+            document.getElementById("phase-name-1").textContent = scenarioMode ? "Tool boundary" : "Privilege & network";
+            document.getElementById("phase-name-2").textContent = scenarioMode ? "Policy outcome" : "Cloud services";
+            document.getElementById("cycles-label").textContent = scenarioMode ? "Checkpoints" : "Cycles";
+            document.getElementById("cycles-foot").textContent = scenarioMode ? "labeled events emitted" : "OODA loops observed";
+            document.getElementById("commands-label").textContent = scenarioMode ? "Tool signals" : "Commands";
+            document.getElementById("commands-foot").textContent = scenarioMode ? "tool-boundary events" : "process actions selected";
+            document.getElementById("anomalies-label").textContent = scenarioMode ? "Risk signals" : "Agent signals";
+            document.getElementById("anomalies-foot").textContent = scenarioMode ? "untrusted or sensitive context" : "mistakes, pivots, lineage";
+            document.getElementById("skipped-label").textContent = scenarioMode ? "Blocked" : "Guarded";
+            document.getElementById("skipped-foot").textContent = scenarioMode ? "policy denials" : "network actions blocked";
+            elements.eventStreamHeading.textContent = scenarioMode ? "Agent workflow event stream" : "Behavior event stream";
+            elements.commandFilter.textContent = scenarioMode ? "Tools" : "Commands";
+            elements.search.placeholder = scenarioMode ? "Filter tool or checkpoint" : "Filter command or message";
+            elements.emptyHeading.textContent = scenarioMode ? "No scenario evidence yet" : "No telemetry yet";
+            elements.emptyCopy.textContent = scenarioMode
+                ? "Run a scenario to see trusted and untrusted input, tool-boundary, network-intent, and policy checkpoints."
+                : "Start a run to see phase transitions, selected commands, context loss, retries, and safety-gate events as they happen.";
+            document.getElementById("detail-profile-label").textContent = scenarioMode ? "Scenario" : "Profile";
+            document.getElementById("detail-seed-label").textContent = scenarioMode ? "Controls" : "Seed";
+            document.getElementById("watch-item-0").textContent = scenarioMode
+                ? "Use Signals to isolate untrusted input, definition changes, decoy data, and policy blocks."
+                : "Use Signals to isolate hallucinations, context loss, and retry behavior.";
+            document.getElementById("watch-item-1").textContent = scenarioMode
+                ? "Use Tools to inspect proposed calls without exposing arguments or results."
+                : "Use Commands to compare process telemetry with your EDR or SIEM.";
+            document.getElementById("watch-item-2").textContent = scenarioMode
+                ? "Score your SIEM against both malicious traces and their benign twins."
+                : "Reuse a seed when validating detection changes against the same run.";
+            document.getElementById("safety-note").textContent = scenarioMode
+                ? "Scenario mode only writes synthetic, redacted evidence. It never invokes a tool or opens a network connection."
+                : "Local read-only discovery executes by default. Use Safe preview to inspect the run without creating child processes.";
+            elements.start.textContent = state.running
+                ? (scenarioMode ? "Scenario suite running" : "Simulation running")
+                : (scenarioMode ? "Run scenario suite" : "Start simulation");
+            if (!state.running) {
+                state.totalIterations = scenarioMode ? selectedScenarioCount() : Number(document.getElementById("iterations").value);
+                elements.runHeading.textContent = scenarioMode ? "Ready for a scenario suite" : "Ready for a simulation";
+                elements.runSubtitle.textContent = scenarioMode
+                    ? "Select a scenario and run malicious plus benign control traces."
+                    : "Configure a behavior profile and start generating endpoint process telemetry.";
+            }
+            updateRunDetails();
+            updateMetrics();
+        }
 
         function showToast(message) {
             elements.toast.textContent = message;
@@ -995,13 +1230,17 @@ HTML_TEMPLATE = """
             elements.start.disabled = running;
             elements.stop.disabled = !running;
             elements.clear.disabled = running;
-            elements.start.textContent = running ? "Simulation running" : "Start simulation";
+            elements.start.textContent = running
+                ? (state.mode === "scenario" ? "Scenario suite running" : "Simulation running")
+                : (state.mode === "scenario" ? "Run scenario suite" : "Start simulation");
             elements.statusPill.classList.toggle("running", running);
             elements.statusPill.classList.toggle("error", Boolean(failed));
             elements.statusText.textContent = failed ? "Needs attention" : (running ? "Running" : "Ready");
             if (running) {
-                elements.runHeading.textContent = "Simulation in progress";
-                elements.runSubtitle.textContent = "Events are streaming from the local AgentSim worker.";
+                elements.runHeading.textContent = state.mode === "scenario" ? "Scenario suite in progress" : "Simulation in progress";
+                elements.runSubtitle.textContent = state.mode === "scenario"
+                    ? "Safe, labeled checkpoints are streaming from the scenario runner."
+                    : "Events are streaming from the local AgentSim worker.";
             }
         }
 
@@ -1017,11 +1256,13 @@ HTML_TEMPLATE = """
         }
 
         function updateRunDetails() {
-            document.getElementById("detail-profile").textContent = document.getElementById("profile-name").textContent;
-            document.getElementById("detail-mode").textContent = elements.dryRun.checked ? "Dry run" : "Execute local";
-            document.getElementById("detail-seed").textContent = elements.seed.value || "Random";
+            const scenarioMode = state.mode === "scenario";
+            const selectedScenario = elements.scenario.options[elements.scenario.selectedIndex];
+            document.getElementById("detail-profile").textContent = scenarioMode ? selectedScenario.textContent : document.getElementById("profile-name").textContent;
+            document.getElementById("detail-mode").textContent = scenarioMode ? "Simulation only" : (elements.dryRun.checked ? "Dry run" : "Execute local");
+            document.getElementById("detail-seed").textContent = scenarioMode ? elements.variant.options[elements.variant.selectedIndex].textContent : (elements.seed.value || "Random");
             document.getElementById("detail-speed").textContent = document.getElementById("speed").value + " ms";
-            document.getElementById("detail-cloud").textContent = elements.network.checked ? "Allowed" : "Guarded";
+            document.getElementById("detail-cloud").textContent = scenarioMode ? "Never executed" : (elements.network.checked ? "Allowed" : "Guarded");
         }
 
         function markCustomProfile() {
@@ -1088,6 +1329,13 @@ HTML_TEMPLATE = """
             return -1;
         }
 
+        function checkpointPhase(stage) {
+            if (stage === "input" || stage === "decision") return 0;
+            if (stage === "tool_discovery" || stage === "pre_tool" || stage === "post_tool") return 1;
+            if (stage === "network" || stage === "policy") return 2;
+            return -1;
+        }
+
         function updatePhase(index) {
             state.currentPhase = index;
             document.querySelectorAll(".phase").forEach(function (phase) {
@@ -1145,20 +1393,29 @@ HTML_TEMPLATE = """
                 updatePhase(phaseIndex(event.phase));
             }
             if (event.kind === "phase") updatePhase(phaseIndex(event.phase));
-            if (event.kind === "command" || event.kind === "dry_command" || event.kind === "hallucination") {
+            if (event.kind === "checkpoint" || event.kind === "tool" || event.kind === "blocked") {
+                state.currentCycle += 1;
+                updatePhase(checkpointPhase(event.stage));
+            }
+            if (event.kind === "command" || event.kind === "dry_command" || event.kind === "hallucination" || event.kind === "tool") {
                 state.commandCount += 1;
             }
             if (event.category === "anomaly" && event.kind !== "skipped" && event.kind !== "stopped") {
                 state.anomalyCount += 1;
             }
-            if (event.kind === "skipped") state.skippedCount += 1;
+            if (event.kind === "skipped" || event.kind === "blocked") state.skippedCount += 1;
             if (event.kind === "start" && event.params) {
-                state.totalIterations = Number(event.params.iterations || state.totalIterations);
+                setRunMode(event.params.run_mode || "behavior");
+                state.totalIterations = Number(event.params.iterations || event.params.checkpoints || state.totalIterations);
             }
             if (event.kind === "complete" || event.kind === "stopped") {
                 setRunning(false, false);
-                elements.runHeading.textContent = event.kind === "stopped" ? "Simulation stopped" : "Simulation complete";
-                elements.runSubtitle.textContent = "Review the event stream or download the generated Navigator layer.";
+                elements.runHeading.textContent = event.kind === "stopped"
+                    ? (state.mode === "scenario" ? "Scenario suite stopped" : "Simulation stopped")
+                    : (state.mode === "scenario" ? "Scenario suite complete" : "Simulation complete");
+                elements.runSubtitle.textContent = state.mode === "scenario"
+                    ? "Review the checkpoint stream, ground truth, and detection validation report."
+                    : "Review the event stream or download the generated Navigator layer.";
                 window.setTimeout(syncStatus, 100);
             }
             if (event.kind === "error") {
@@ -1194,9 +1451,10 @@ HTML_TEMPLATE = """
                 if (!response.ok) return;
                 const status = await response.json();
                 elements.hostOs.textContent = status.os + " host";
+                if (status.params && status.params.run_mode) setRunMode(status.params.run_mode);
                 setRunning(status.running, false);
-                if (status.params && status.params.iterations) {
-                    state.totalIterations = Number(status.params.iterations);
+                if (status.params && (status.params.iterations || status.params.checkpoints)) {
+                    state.totalIterations = Number(status.params.iterations || status.params.checkpoints);
                 }
                 state.startedAt = status.started_at ? status.started_at * 1000 : null;
                 state.finishedAt = status.finished_at ? status.finished_at * 1000 : null;
@@ -1205,6 +1463,26 @@ HTML_TEMPLATE = """
                 elements.layerStatus.textContent = status.layer_available
                     ? "Layer generated from this run and ready to import."
                     : "Available after the run completes or is stopped.";
+                elements.groundTruthDownload.classList.toggle("disabled", !status.ground_truth_available);
+                elements.groundTruthDownload.setAttribute("aria-disabled", String(!status.ground_truth_available));
+                elements.validationDownload.classList.toggle("disabled", !status.validation_available);
+                elements.validationDownload.setAttribute("aria-disabled", String(!status.validation_available));
+                elements.scenarioArtifactStatus.textContent = status.ground_truth_available && status.validation_available
+                    ? "Labeled events and validation checks are ready."
+                    : "Available after the scenario suite completes or is stopped.";
+                if (!status.running && status.outcome === "complete") {
+                    elements.runHeading.textContent = state.mode === "scenario" ? "Scenario suite complete" : "Simulation complete";
+                    elements.runSubtitle.textContent = state.mode === "scenario"
+                        ? "Review the checkpoint stream, ground truth, and detection validation report."
+                        : "Review the event stream or download the generated Navigator layer.";
+                } else if (!status.running && status.outcome === "stopped") {
+                    elements.runHeading.textContent = state.mode === "scenario" ? "Scenario suite stopped" : "Simulation stopped";
+                    elements.runSubtitle.textContent = "Partial artifacts contain the checkpoints completed before the stop request.";
+                } else if (!status.running && status.outcome === "error") {
+                    setRunning(false, true);
+                    elements.runHeading.textContent = state.mode === "scenario" ? "Scenario suite failed" : "Simulation failed";
+                    elements.runSubtitle.textContent = "Review the final event for details, adjust the run, and try again.";
+                }
                 updateMetrics();
                 updateElapsed();
             } catch (_error) {
@@ -1215,7 +1493,7 @@ HTML_TEMPLATE = """
         async function submitRun(event) {
             event.preventDefault();
             elements.error.textContent = "";
-            state.totalIterations = Number(document.getElementById("iterations").value);
+            state.totalIterations = state.mode === "scenario" ? 1 : Number(document.getElementById("iterations").value);
             resetRunMetrics(true);
             state.startedAt = Date.now();
             state.finishedAt = null;
@@ -1224,6 +1502,9 @@ HTML_TEMPLATE = """
             elements.download.classList.add("disabled");
             elements.download.setAttribute("aria-disabled", "true");
             elements.layerStatus.textContent = "Generating after the run completes…";
+            elements.groundTruthDownload.classList.add("disabled");
+            elements.validationDownload.classList.add("disabled");
+            elements.scenarioArtifactStatus.textContent = "Generating labeled evidence and validation checks…";
 
             try {
                 const response = await fetch("/start", {
@@ -1235,12 +1516,12 @@ HTML_TEMPLATE = """
                     const message = await response.text();
                     throw new Error(message.indexOf("already running") !== -1 ? "A simulation is already running." : "The run settings were rejected.");
                 }
-                showToast("Simulation started");
+                showToast(state.mode === "scenario" ? "Scenario suite started" : "Simulation started");
                 await syncStatus();
             } catch (error) {
                 setRunning(false, true);
                 elements.error.textContent = error.message;
-                elements.runHeading.textContent = "Unable to start simulation";
+                elements.runHeading.textContent = state.mode === "scenario" ? "Unable to start scenario suite" : "Unable to start simulation";
             }
         }
 
@@ -1274,8 +1555,10 @@ HTML_TEMPLATE = """
                 });
                 if (!response.ok) throw new Error();
                 resetRunMetrics(true);
-                elements.runHeading.textContent = "Ready for a simulation";
-                elements.runSubtitle.textContent = "Configure a behavior profile and start generating endpoint process telemetry.";
+                elements.runHeading.textContent = state.mode === "scenario" ? "Ready for a scenario suite" : "Ready for a simulation";
+                elements.runSubtitle.textContent = state.mode === "scenario"
+                    ? "Select a scenario and run malicious plus benign control traces."
+                    : "Configure a behavior profile and start generating endpoint process telemetry.";
                 state.startedAt = null;
                 state.finishedAt = null;
                 updateElapsed();
@@ -1318,6 +1601,17 @@ HTML_TEMPLATE = """
             if (elements.dryRun.checked) elements.network.checked = false;
             syncControlOutputs();
         });
+        elements.runMode.addEventListener("change", function () {
+            setRunMode(elements.runMode.value);
+            resetRunMetrics(false);
+        });
+        [elements.scenario, elements.variant].forEach(function (input) {
+            input.addEventListener("change", function () {
+                if (!state.running) state.totalIterations = selectedScenarioCount();
+                updateRunDetails();
+                updateMetrics();
+            });
+        });
         document.getElementById("seed-button").addEventListener("click", function () {
             elements.seed.value = Math.floor(Math.random() * 1000000);
             markCustomProfile();
@@ -1342,6 +1636,11 @@ HTML_TEMPLATE = """
         elements.download.addEventListener("click", function (event) {
             if (elements.download.classList.contains("disabled")) event.preventDefault();
         });
+        [elements.groundTruthDownload, elements.validationDownload].forEach(function (link) {
+            link.addEventListener("click", function (event) {
+                if (link.classList.contains("disabled")) event.preventDefault();
+            });
+        });
 
         const stream = new EventSource("/stream");
         stream.onopen = function () { elements.connection.textContent = "Live stream connected"; };
@@ -1351,6 +1650,7 @@ HTML_TEMPLATE = """
         };
 
         window.setInterval(updateElapsed, 1000);
+        setRunMode("behavior");
         syncControlOutputs();
         setRunning(INITIAL_RUNNING, false);
         syncStatus();
@@ -1407,10 +1707,24 @@ def set_security_headers(response: Response) -> Response:
 def index() -> str:
     with state_lock:
         running = is_running
+    scenario_counts = {
+        scenario_id: {
+            "malicious": len(definition.malicious_steps),
+            "benign": len(definition.benign_steps),
+            "both": len(definition.malicious_steps) + len(definition.benign_steps),
+        }
+        for scenario_id, definition in SCENARIOS.items()
+    }
+    scenario_counts["all"] = {
+        variant: sum(counts[variant] for counts in scenario_counts.values())
+        for variant in ("malicious", "benign", "both")
+    }
     return render_template_string(
         HTML_TEMPLATE,
         is_running=running,
         form_token=form_token,
+        scenarios=[SCENARIOS[scenario_id] for scenario_id in sorted(SCENARIOS)],
+        scenario_counts=scenario_counts,
     )
 
 
@@ -1422,26 +1736,54 @@ def api_status() -> Response:
 @app.route("/start", methods=["POST"])
 def start_sim() -> Response:
     global is_running, sim_thread, last_layer_path
-    global run_started_at, run_finished_at, current_params
+    global last_ground_truth_path, last_validation_path
+    global run_started_at, run_finished_at, current_params, last_outcome
     _validate_form_token()
 
-    seed_value = request.form.get("seed", "").strip()
-    try:
-        seed = int(seed_value) if seed_value else None
-    except ValueError:
-        abort(400, description="seed must be an integer")
-
-    params = {
-        "iterations": _parse_int("iterations", 20, 1, 100),
-        "speed": _parse_int("speed", 100, 0, 1000),
-        "hallucination_rate": _parse_rate("hallucination_rate", 0.15),
-        "context_loss_rate": _parse_rate("context_loss_rate", 0.05),
-        "retry_rate": _parse_rate("retry_rate", 0.30),
-        "evasion_rate": _parse_rate("evasion_rate", 0.10),
-        "allow_network": request.form.get("allow_network") == "on",
-        "dry_run": request.form.get("dry_run") == "on",
-        "seed": seed,
-    }
+    run_mode = request.form.get("run_mode", "behavior")
+    if run_mode == "scenario":
+        scenario_id = request.form.get("scenario", "all")
+        variant = request.form.get("variant", "both")
+        if scenario_id != "all" and scenario_id not in SCENARIOS:
+            abort(400, description="unknown scenario")
+        if variant not in {"malicious", "benign", "both"}:
+            abort(400, description="variant must be malicious, benign, or both")
+        selected = list(SCENARIOS) if scenario_id == "all" else [scenario_id]
+        selected_variants = ("malicious", "benign") if variant == "both" else (variant,)
+        checkpoints = sum(
+            len(SCENARIOS[selected_id].steps_for(selected_variant))
+            for selected_id in selected
+            for selected_variant in selected_variants
+        )
+        params = {
+            "run_mode": "scenario",
+            "scenario": scenario_id,
+            "variant": variant,
+            "speed": _parse_int("speed", 100, 0, 1000),
+            "checkpoints": checkpoints,
+        }
+        worker = run_scenario_background
+    elif run_mode == "behavior":
+        seed_value = request.form.get("seed", "").strip()
+        try:
+            seed = int(seed_value) if seed_value else None
+        except ValueError:
+            abort(400, description="seed must be an integer")
+        params = {
+            "run_mode": "behavior",
+            "iterations": _parse_int("iterations", 20, 1, 100),
+            "speed": _parse_int("speed", 100, 0, 1000),
+            "hallucination_rate": _parse_rate("hallucination_rate", 0.15),
+            "context_loss_rate": _parse_rate("context_loss_rate", 0.05),
+            "retry_rate": _parse_rate("retry_rate", 0.30),
+            "evasion_rate": _parse_rate("evasion_rate", 0.10),
+            "allow_network": request.form.get("allow_network") == "on",
+            "dry_run": request.form.get("dry_run") == "on",
+            "seed": seed,
+        }
+        worker = run_sim_background
+    else:
+        abort(400, description="run_mode must be behavior or scenario")
 
     with state_changed:
         if is_running:
@@ -1449,9 +1791,12 @@ def start_sim() -> Response:
                 return jsonify({"status": "already running"}), 409
             return redirect(url_for("index"))
         is_running = True
+        last_outcome = "running"
         stop_event.clear()
         log_queue.clear()
         last_layer_path = None
+        last_ground_truth_path = None
+        last_validation_path = None
         run_started_at = time.time()
         run_finished_at = None
         current_params = dict(params)
@@ -1464,7 +1809,7 @@ def start_sim() -> Response:
         params=dict(params),
     )
     sim_thread = threading.Thread(
-        target=run_sim_background,
+        target=worker,
         kwargs=params,
         daemon=True,
         name="agentsim-worker",
@@ -1493,6 +1838,7 @@ def stop_sim() -> Response:
 
 @app.route("/clear", methods=["POST"])
 def clear_events() -> Response:
+    global last_outcome
     _validate_form_token()
     with state_changed:
         if is_running:
@@ -1500,6 +1846,7 @@ def clear_events() -> Response:
                 return jsonify({"status": "running"}), 409
             return redirect(url_for("index"))
         log_queue.clear()
+        last_outcome = "ready"
         state_changed.notify_all()
     return _json_or_redirect({"status": "cleared"})
 
@@ -1515,6 +1862,36 @@ def download_layer() -> Response:
         mimetype="application/json",
         as_attachment=True,
         download_name="agent_sim_layer.json",
+        max_age=0,
+    )
+
+
+@app.route("/download-ground-truth")
+def download_ground_truth() -> Response:
+    with state_lock:
+        artifact_path = last_ground_truth_path
+    if artifact_path is None or not artifact_path.exists():
+        abort(404, description="no scenario ground truth is available")
+    return send_file(
+        artifact_path,
+        mimetype="application/x-ndjson",
+        as_attachment=True,
+        download_name="agent_sim_events.jsonl",
+        max_age=0,
+    )
+
+
+@app.route("/download-validation")
+def download_validation() -> Response:
+    with state_lock:
+        artifact_path = last_validation_path
+    if artifact_path is None or not artifact_path.exists():
+        abort(404, description="no scenario validation report is available")
+    return send_file(
+        artifact_path,
+        mimetype="application/json",
+        as_attachment=True,
+        download_name="agent_sim_validation.json",
         max_age=0,
     )
 

@@ -19,7 +19,23 @@ Collect process-creation events with, where available:
 AgentSim does not forward events. Confirm that your EDR, audit policy, Sysmon,
 or equivalent sensor records child processes created by Python and the shell.
 
-## Platform coverage
+### Agent-runtime data
+
+Scenario mode supplies a separate, vendor-neutral JSONL dataset for agent
+workflow detections. Preserve these fields when mapping it into a SIEM:
+
+- `timestamp`, `run_id`, `trace_id`, `sequence`, and `event_type`;
+- `input_trust`, `tool_name`, `tool_risk`, and `policy_decision`;
+- `scenario_variant` and `expected_detection` in a ground-truth-only table; and
+- relevant `attributes`, especially permission expansion, signature validity,
+  data classification, destination scope, and execution state.
+
+Do not let production analytics query `expected_detection`; it is the answer
+key. Use it only after evaluation to score the analytic. The built-in AgentSim
+validators follow this rule. See [`SCENARIOS.md`](SCENARIOS.md) for the full
+schema and privacy boundary.
+
+## Endpoint platform coverage
 
 | Platform | Native content | Expected schema |
 | --- | --- | --- |
@@ -130,6 +146,27 @@ and [unique-value threshold behavior](https://docs.panther.com/detections/rules)
 
 ## Additional hunting ideas
 
+### Agent trust-boundary correlations
+
+For indirect prompt injection, join an untrusted `agent.input.observed` event to
+a later high-risk `agent.tool.requested` event on `trace_id`, with increasing
+`sequence`. Goal drift is a useful intermediate signal but should not be
+required when the runtime cannot expose it safely.
+
+For MCP tool poisoning, baseline tool definition hashes, signatures, and
+capability sets. Alert when an unsigned permission expansion is followed by use
+of that same `tool_name`. Include version and server identity in a production
+baseline even though AgentSim uses one synthetic server.
+
+For decoy-secret access, correlate sensitive `agent.tool.result` classification
+with a later transform or `agent.network.requested` checkpoint. Keep the policy
+decision and execution state so a prevented attempt is distinguishable from an
+allowed request.
+
+Benign twins are essential tuning data. Trusted content, verified read-only
+tools, and public results intentionally resemble the malicious workflow without
+crossing the same trust boundary.
+
 ### Nested shell execution
 
 Look for Python spawning a shell that immediately launches a second shell with
@@ -152,6 +189,8 @@ the parent executable and service account.
 
 ## Validation workflow
 
+### Endpoint behavior rules
+
 1. Run `python core.py --dry-run --seed 42` to review the planned commands.
 2. Use an authorized test endpoint with the required process telemetry enabled.
 3. Run a short local simulation without `--allow-network`.
@@ -162,6 +201,19 @@ the parent executable and service account.
 Do not use `--allow-network` solely to test local process detections; dry-run
 shows cloud selections, and local cloud CLI process creation should be performed
 only with explicit authorization.
+
+### Agentic scenario rules
+
+1. Run `python core.py --scenario all --variant both --speed 0`.
+2. Ingest `agent_sim_events.jsonl` into a test-only dataset.
+3. Run the analytic without exposing `expected_detection` to its query.
+4. Join alert results to the ground-truth label by `trace_id`.
+5. Require each malicious trace to alert and each benign twin to remain quiet.
+6. Compare with `agent_sim_validation.json`, then record field mappings and
+   false-positive tuning with the detection change.
+
+The built-in report validates the reference correlations, not a vendor query.
+Your SIEM result must be scored separately after ingestion.
 
 ## ATT&CK references
 

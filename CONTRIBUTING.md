@@ -20,9 +20,10 @@ python -m pip install -r requirements.txt
 Run the automated checks:
 
 ```bash
-python -m py_compile core.py tactics.py web_ui.py
+python -m py_compile core.py scenarios.py tactics.py web_ui.py
 python -m unittest discover -s tests -v
 python core.py --dry-run --iterations 6 --speed 0 --seed 42
+python core.py --scenario all --variant both --speed 0
 ```
 
 Tests must not execute commands from the catalog. Mock process execution or use
@@ -46,6 +47,24 @@ Changes to `tactics.py` receive extra scrutiny. Every command must:
 Commands that contact a service must live in the cloud phase so the engine's
 explicit network opt-in applies. Explain what data the command reads and which
 credentials it may use in the pull request.
+
+## Agentic scenario safety policy
+
+Changes to `scenarios.py` must preserve simulation-only execution. Scenario
+fixtures may describe proposed file, tool, credential, or network activity,
+but they must not implement it. Every new malicious trace must:
+
+- use synthetic resources and redact prompt, argument, result, and payload data;
+- set execution metadata explicitly, including `executed: false` for proposed
+  sensitive or network actions;
+- include a benign twin that differs in the security-relevant context;
+- include deterministic validation that matches the malicious trace and rejects
+  its benign twin; and
+- document framework mappings as descriptive references, not claims of complete
+  coverage or certification.
+
+Tests for scenario changes must write artifacts only to a temporary directory
+and must not patch around the simulation-only boundary.
 
 ## Detection contributions
 

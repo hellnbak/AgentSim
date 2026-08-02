@@ -1,6 +1,6 @@
 # Detection validation engine
 
-AgentSim v1.3 validates defensive assumptions against exported telemetry or an
+AgentSim v1.4 validates defensive assumptions against exported telemetry or an
 explicitly authorized, read-only live query. Offline operation remains the
 default and requires no vendor credential.
 
@@ -9,6 +9,7 @@ default and requires no vendor credential.
 ```text
 vendor export OR bounded live query → normalized/redacted events
              → assurance and causal-integrity checks
+             → multi-agent graph and invariant investigation
              → lifecycle correlation → field/source coverage
              → detection AST → evidence → gaps/runbook/regression
              → candidate vendor renderers (human review required)
@@ -54,6 +55,24 @@ and accidental content-field exposure. Reports follow
 and return `healthy`, `degraded`, or `unusable` plus a 0–100 score and bounded
 remediation findings. `--fail-on degraded` is the strict CI mode.
 
+## Multi-agent investigation
+
+When agent, delegation, goal, or memory fields are present, reconstruct the
+causal graph before rule interpretation:
+
+```bash
+agentsim telemetry investigate agent-events.jsonl \
+  --collector agent_runtime \
+  --output investigation.json \
+  --fail-on elevated
+```
+
+The analyzer evaluates delegation endpoint/identity, principal continuity,
+goal fingerprint/integrity, and memory provenance/retention/lineage
+invariants. High and critical findings include bounded causal paths and
+operator remediation. See
+[`MULTI_AGENT_INVESTIGATION.md`](MULTI_AGENT_INVESTIGATION.md).
+
 ## Live query connectors
 
 Splunk, Elastic, CrowdStrike LogScale, Microsoft Sentinel, Panther, and Graylog
@@ -86,7 +105,11 @@ Supported expression nodes are:
 - `sequence` with `max_span_seconds`;
 - `threshold` with a time window and optional distinct field;
 - `parent_child` using normalized process IDs; and
-- `causal_graph` using record IDs and a configurable link field.
+- `causal_graph` using record IDs and a configurable link field;
+- `graph_path` for ordered expressions connected through one or more causal
+  link fields within a bounded depth; and
+- `graph_fanout` for a root reaching a required number of distinct descendant
+  entities.
 
 `group_by` evaluates a full expression independently for each host, user,
 agent, principal, session, or resource key. This prevents a sequence from
@@ -125,10 +148,11 @@ Evidence is bounded to 100 record references and excludes raw fields.
 ## Detection packs and sweeps
 
 A detection pack adds explicit `required_fields` and `expected_sources` to
-each AST rule. The built-in `agentsim.agent-security-core` pack contains ten
+each AST rule. The built-in `agentsim.agent-security-core` pack contains twelve
 content-safe investigative rules for untrusted/tainted high-risk tool requests,
 policy outcomes, MCP requests, authorization audience and consent failures,
-memory writes, and attribution gaps.
+memory writes, attribution gaps, a goal-to-memory-to-tool path, and invalid
+memory provenance fanning out across agent identities.
 
 ```bash
 agentsim detection sweep agent-events.jsonl --collector agent_runtime

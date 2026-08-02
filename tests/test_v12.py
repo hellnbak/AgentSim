@@ -306,7 +306,7 @@ class LiveConnectorTests(unittest.TestCase):
 
 class ReferenceAgentLabTests(unittest.TestCase):
     def test_v12_doubles_control_fixtures_and_all_pairs_pass(self):
-        self.assertEqual(len(list_fixtures()), 20)
+        self.assertEqual(len(list_fixtures()), 21)
         results = run_lab_suite()
         self.assertTrue(all(result.passed for result in results))
         self.assertTrue(all(not result.safety["network_opened"] for result in results))
@@ -324,8 +324,8 @@ class ReferenceAgentLabTests(unittest.TestCase):
         self.assertFalse(result.safety["external_tool_executed"])
 
     def test_reference_suite_and_v12_scenarios_cover_release_scope(self):
-        self.assertEqual(len(run_reference_suite()), 20)
-        self.assertEqual(len(SCENARIOS), 29)
+        self.assertEqual(len(run_reference_suite()), 21)
+        self.assertEqual(len(SCENARIOS), 33)
         self.assertIn("cross-turn-goal-hijack", SCENARIOS)
         self.assertIn("agent-task-id-replay", SCENARIOS)
 
@@ -336,8 +336,18 @@ class ReferenceAgentLabTests(unittest.TestCase):
     def test_container_definition_is_hardened_and_loopback_only(self):
         compose = Path("labs/reference-agent/compose.yaml").read_text(encoding="utf-8")
         dockerfile = Path("labs/reference-agent/Dockerfile").read_text(encoding="utf-8")
-        for value in ("read_only: true", "cap_drop:", "no-new-privileges:true", "internal: true", "127.0.0.1:8765:8765"):
+        for value in (
+            "read_only: true",
+            "cap_drop:",
+            "no-new-privileges:true",
+            'com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"',
+            "127.0.0.1:8765:8765",
+            "pids_limit: 64",
+            "mem_limit: 256m",
+            "cpus: 0.50",
+        ):
             self.assertIn(value, compose)
+        self.assertNotIn("0.0.0.0:8765", compose)
         self.assertIn("USER 65532:65532", dockerfile)
         self.assertNotIn("pip install", dockerfile)
 

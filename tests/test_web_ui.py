@@ -1,4 +1,7 @@
 import json
+import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -89,19 +92,38 @@ class WebUiTests(unittest.TestCase):
         self.assertIn("endpoint-discovery-baseline", page)
         self.assertIn("Detection debugger", page)
         self.assertIn("Check telemetry assurance", page)
+        self.assertIn("Multi-agent investigation workbench", page)
         self.assertIn("Agentic attack scenarios", page)
         self.assertIn("Indirect prompt injection", page)
         self.assertIn("message.textContent", page)
         self.assertNotIn(".innerHTML", page)
 
+    @unittest.skipUnless(shutil.which("node"), "Node.js is not installed")
+    def test_inline_javascript_parses(self):
+        page = self.client.get("/").get_data(as_text=True)
+        scripts = re.findall(r"<script(?: [^>]*)?>(.*?)</script>", page, re.DOTALL)
+
+        self.assertTrue(scripts)
+        for script in scripts:
+            result = subprocess.run(
+                [shutil.which("node"), "--check", "-"],
+                input=script,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_foundation_catalog_and_safe_campaign_api(self):
         catalog_response = self.client.get("/api/v1/catalog")
         self.assertEqual(catalog_response.status_code, 200)
         catalog = catalog_response.get_json()
-        self.assertEqual(catalog["version"], "1.3.0")
+        self.assertEqual(catalog["version"], "1.4.0")
         self.assertEqual(len(catalog["abilities"]), 8)
         self.assertEqual(len(catalog["campaigns"]), 2)
-        self.assertEqual(catalog["capabilities"]["agentic_fixtures"], 20)
+        self.assertEqual(catalog["capabilities"]["agentic_fixtures"], 21)
+        self.assertTrue(catalog["capabilities"]["multi_agent_investigation"])
+        self.assertEqual(catalog["capabilities"]["agent_trace_contract"], "1.1")
         self.assertTrue(catalog["capabilities"]["signed_builtin_content"])
         self.assertEqual(catalog["history"], [])
 
@@ -147,7 +169,7 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(lab.status_code, 200)
         lab_value = lab.get_json()
         self.assertTrue(lab_value["passed"])
-        self.assertEqual(len(lab_value["results"]), 20)
+        self.assertEqual(len(lab_value["results"]), 21)
         self.assertTrue(
             all(not result["safety"]["tool_executed"] for result in lab_value["results"])
         )
@@ -161,9 +183,22 @@ class WebUiTests(unittest.TestCase):
         assurance_value = assurance.get_json()
         self.assertEqual(assurance_value["assurance"]["status"], "healthy")
         self.assertEqual(assurance_value["assurance"]["score"], 100)
-        self.assertEqual(assurance_value["sweep"]["summary"]["detected"], 7)
+        self.assertEqual(assurance_value["sweep"]["summary"]["detected"], 9)
         self.assertEqual(assurance_value["sweep"]["summary"]["visibility_gap"], 0)
         self.assertFalse(assurance_value["sweep"]["ground_truth_used"])
+
+        investigation = self.client.post(
+            "/api/v1/telemetry/investigation",
+            json={"corpus": "reference-agent"},
+            headers=headers,
+        )
+        self.assertEqual(investigation.status_code, 200)
+        report = investigation.get_json()["report"]
+        self.assertEqual(report["kind"], "multi-agent-investigation-report")
+        self.assertEqual(report["status"], "critical")
+        self.assertGreaterEqual(report["summary"]["max_depth"], 7)
+        self.assertTrue(report["paths"])
+        self.assertFalse(report["content_values_recorded"])
 
     def test_classifies_command_cycle_and_anomaly_events(self):
         command = web_ui._classify_message("[*] EXECUTING: whoami (bash)")

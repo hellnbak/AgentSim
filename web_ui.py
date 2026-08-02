@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import os
 import platform
 import re
 import secrets
@@ -50,6 +51,7 @@ from agentsim.safety.authorization import AuthorizationManifest
 from agentsim.storage import RunStore
 from agentsim.telemetry.normalization import normalize_records
 from agentsim.telemetry.assurance import assess_telemetry
+from agentsim.telemetry.investigation import investigate_telemetry
 from scenarios import (
     DEFAULT_BUNDLE_PATH,
     DEFAULT_COVERAGE_PATH,
@@ -748,6 +750,50 @@ HTML_TEMPLATE = """
         .debug-event-stage { color: var(--blue); font-size: 9px; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .debug-event-copy { min-width: 0; color: var(--muted); font-size: 9.5px; line-height: 1.45; overflow-wrap: anywhere; }
 
+        .investigation-card { min-width: 0; overflow: hidden; }
+        .investigation-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 18px; border-bottom: 1px solid var(--line); }
+        .investigation-header h2 { margin: 5px 0 4px; font-size: 15px; }
+        .investigation-header p { max-width: 760px; margin: 0; color: var(--subtle); font-size: 10px; line-height: 1.5; }
+        .investigation-score { flex: 0 0 auto; text-align: right; }
+        .investigation-score strong { display: block; color: var(--amber); font: 700 18px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .investigation-score span { display: block; margin-top: 5px; color: var(--subtle); font-size: 8px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+        .investigation-toolbar { display: grid; grid-template-columns: minmax(240px, 1fr) 170px auto; gap: 8px; padding: 11px 13px; border-bottom: 1px solid var(--line); background: rgba(7, 16, 23, 0.28); }
+        .investigation-toolbar select { width: 100%; height: 34px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; color: var(--text); background: rgba(7, 16, 23, 0.62); font-size: 10px; }
+        .investigation-summary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; padding: 12px 13px; border-bottom: 1px solid var(--line); }
+        .investigation-stat { min-width: 0; padding: 8px 9px; border: 1px solid var(--line); border-radius: 8px; background: rgba(7, 16, 23, 0.42); }
+        .investigation-stat strong { display: block; color: var(--blue); font: 700 14px/1 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; }
+        .investigation-stat span { display: block; margin-top: 5px; color: var(--subtle); font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+        .investigation-grid { display: grid; grid-template-columns: 260px minmax(350px, 1fr) 300px; min-height: 440px; }
+        .investigation-findings, .investigation-graph, .investigation-detail { min-width: 0; padding: 12px; }
+        .investigation-findings { max-height: 560px; overflow: auto; border-right: 1px solid var(--line); }
+        .investigation-graph { max-height: 560px; overflow: auto; }
+        .investigation-detail { border-left: 1px solid var(--line); background: rgba(7, 16, 23, 0.2); }
+        .investigation-label { margin: 2px 0 9px; color: var(--subtle); font: 800 8px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.1em; text-transform: uppercase; }
+        .investigation-finding { width: 100%; display: grid; gap: 5px; margin-bottom: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: rgba(7, 16, 23, 0.28); cursor: pointer; text-align: left; }
+        .investigation-finding:hover { border-color: var(--line-strong); background: var(--panel-hover); }
+        .investigation-finding.active { border-color: rgba(242, 185, 95, 0.48); background: var(--amber-soft); }
+        .investigation-finding strong { color: var(--text); font-size: 10px; line-height: 1.35; }
+        .investigation-finding span { color: var(--subtle); font: 8.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .severity-critical { color: var(--red) !important; }
+        .severity-high { color: var(--amber) !important; }
+        .severity-medium, .severity-low { color: var(--blue) !important; }
+        .investigation-node { --depth: 0; display: grid; grid-template-columns: 72px minmax(118px, 0.7fr) minmax(160px, 1.3fr) auto; gap: 8px; align-items: center; margin: 0 0 6px; padding: 8px 9px; border: 1px solid var(--line); border-left: 3px solid var(--line-strong); border-radius: 8px; background: rgba(7, 16, 23, 0.34); }
+        .investigation-node.highlight { border-color: rgba(242, 185, 95, 0.5); border-left-color: var(--amber); background: var(--amber-soft); }
+        .investigation-node.untrusted { border-left-color: var(--red); }
+        .investigation-node-agent { color: var(--blue); font: 700 8.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+        .investigation-node-type { color: var(--text); font-size: 9.5px; font-weight: 700; overflow-wrap: anywhere; }
+        .investigation-node-link { color: var(--subtle); font: 8px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+        .investigation-node-flags { display: flex; justify-content: flex-end; gap: 4px; flex-wrap: wrap; }
+        .investigation-node-flags span { padding: 3px 5px; border-radius: 999px; color: var(--muted); background: rgba(143, 166, 175, 0.09); font-size: 7px; font-weight: 800; }
+        .investigation-detail h3 { margin: 0 0 7px; font-size: 13px; line-height: 1.35; }
+        .investigation-detail p { margin: 0 0 12px; color: var(--muted); font-size: 9.5px; line-height: 1.6; }
+        .investigation-evidence { display: grid; gap: 5px; margin-bottom: 13px; }
+        .investigation-evidence div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 8px; padding: 6px 7px; border: 1px solid rgba(32, 57, 71, 0.72); border-radius: 7px; }
+        .investigation-evidence strong { color: var(--subtle); font-size: 8px; overflow-wrap: anywhere; }
+        .investigation-evidence span { color: #bdcdd3; font: 8px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+        .investigation-remediation { margin: 0; padding-left: 17px; color: var(--muted); font-size: 9px; line-height: 1.55; }
+        .investigation-path { margin-top: 13px; padding: 9px; border: 1px solid rgba(101, 174, 247, 0.25); border-radius: 8px; color: var(--blue); background: var(--blue-soft); font: 8px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+
         .content-grid { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: stretch; }
         .events-card { min-width: 0; min-height: 510px; display: flex; flex-direction: column; overflow: hidden; }
         .events-header { padding: 16px 17px 13px; border-bottom: 1px solid var(--line); }
@@ -862,6 +908,8 @@ HTML_TEMPLATE = """
             .run-details h2 { grid-column: 1 / -1; }
             .layer-box { margin-top: 0; }
             .watch-list { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+            .investigation-grid { grid-template-columns: 230px minmax(330px, 1fr); }
+            .investigation-detail { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
         }
         @media (max-width: 860px) {
             .topbar { padding: 0 18px; }
@@ -876,6 +924,9 @@ HTML_TEMPLATE = """
             .campaign-run { grid-column: 1 / -1; }
             .campaign-body { grid-template-columns: 1fr; }
             .campaign-history { border-left: 0; border-top: 1px solid var(--line); }
+            .investigation-grid { grid-template-columns: 1fr; }
+            .investigation-findings { max-height: 240px; border-right: 0; border-bottom: 1px solid var(--line); }
+            .investigation-detail { grid-column: auto; }
         }
         @media (max-width: 620px) {
             .topbar { height: 64px; padding: 0 14px; }
@@ -899,6 +950,12 @@ HTML_TEMPLATE = """
             .campaign-controls { grid-template-columns: 1fr; }
             .campaign-run { grid-column: auto; }
             .campaign-summary { grid-template-columns: repeat(2, 1fr); }
+            .investigation-header { display: block; }
+            .investigation-score { margin-top: 12px; text-align: left; }
+            .investigation-toolbar { grid-template-columns: 1fr; }
+            .investigation-summary { grid-template-columns: repeat(3, 1fr); }
+            .investigation-node { grid-template-columns: 62px minmax(95px, 0.7fr) minmax(130px, 1.3fr); margin-left: 0; }
+            .investigation-node-flags { grid-column: 1 / -1; justify-content: flex-start; }
             .metric { min-height: 75px; }
             .event-row { grid-template-columns: 48px 70px minmax(0, 1fr); gap: 6px; padding: 8px 10px; }
             .events-header { padding: 14px 12px 12px; }
@@ -1151,7 +1208,7 @@ HTML_TEMPLATE = """
                         <h2>Authorized campaign foundation</h2>
                         <p>Run a directed campaign through authorization, provider preparation, lifecycle-v3 ground truth, cleanup verification, defense recommendations, and persistent history. The dashboard exposes simulation only.</p>
                     </div>
-                    <span class="campaign-version">v1.3.0</span>
+                    <span class="campaign-version">v1.4.0</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="campaign-select" aria-label="Campaign">
@@ -1180,9 +1237,9 @@ HTML_TEMPLATE = """
                     <div>
                         <div class="eyebrow">Detection validation engine</div>
                         <h2>Validate visibility and agent safeguards</h2>
-                        <p>Exercise a generated candidate against redacted synthetic telemetry, inspect field coverage and gaps, or run twenty instrumented malicious/benign agentic control pairs. Nothing here starts a host process or opens an external network connection.</p>
+                        <p>Exercise a generated candidate against redacted synthetic telemetry, inspect field coverage and gaps, or run twenty-one instrumented malicious/benign agentic control pairs. Nothing here starts a host process or opens an external network connection.</p>
                     </div>
-                    <span class="campaign-version">v1.3 stable</span>
+                    <span class="campaign-version">v1.4 graph-aware</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="v1-ability-select" aria-label="Detection validation ability">
@@ -1196,6 +1253,50 @@ HTML_TEMPLATE = """
                 </div>
                 <div class="campaign-result" id="v1-validation-result">
                     <div class="debug-placeholder">Choose an ability to inspect a candidate rule, evidence, field coverage, and defensive guidance.</div>
+                </div>
+            </section>
+
+            <section class="card investigation-card" id="multi-agent-investigation" aria-label="Multi-agent investigation workbench">
+                <div class="investigation-header">
+                    <div>
+                        <div class="eyebrow">Causal graph investigation</div>
+                        <h2>Multi-agent investigation workbench</h2>
+                        <p>Reconstruct agent handoffs, shared-memory lineage, goal fingerprints, and policy outcomes. Select a finding to highlight its causal evidence and operator remediation without exposing prompts, arguments, or tool results.</p>
+                    </div>
+                    <div class="investigation-score">
+                        <strong id="investigation-score">—</strong>
+                        <span id="investigation-status">Build the graph</span>
+                    </div>
+                </div>
+                <div class="investigation-toolbar">
+                    <select id="investigation-trace" aria-label="Investigation trace">
+                        <option value="">Build an investigation to select a trace</option>
+                    </select>
+                    <select id="investigation-severity" aria-label="Finding severity">
+                        <option value="all">All severities</option>
+                        <option value="critical">Critical only</option>
+                        <option value="high">High only</option>
+                    </select>
+                    <button class="primary-button campaign-run" id="investigation-run" type="button">Build investigation</button>
+                </div>
+                <div class="investigation-summary" id="investigation-summary">
+                    <div class="investigation-stat"><strong>—</strong><span>events</span></div>
+                    <div class="investigation-stat"><strong>—</strong><span>agents</span></div>
+                    <div class="investigation-stat"><strong>—</strong><span>delegations</span></div>
+                    <div class="investigation-stat"><strong>—</strong><span>graph depth</span></div>
+                    <div class="investigation-stat"><strong>—</strong><span>findings</span></div>
+                    <div class="investigation-stat"><strong>—</strong><span>attack paths</span></div>
+                </div>
+                <div class="investigation-grid">
+                    <div class="investigation-findings" id="investigation-findings">
+                        <div class="debug-placeholder">Build the reference graph to review invariant failures.</div>
+                    </div>
+                    <div class="investigation-graph" id="investigation-graph">
+                        <div class="debug-placeholder">Agent lanes and causal relationships will appear here.</div>
+                    </div>
+                    <div class="investigation-detail" id="investigation-detail">
+                        <div class="debug-placeholder">Select a finding to inspect evidence and remediation.</div>
+                    </div>
                 </div>
             </section>
 
@@ -1387,6 +1488,15 @@ HTML_TEMPLATE = """
             v1AssuranceRun: document.getElementById("v1-assurance-run"),
             v1LabRun: document.getElementById("v1-lab-run"),
             v1Result: document.getElementById("v1-validation-result"),
+            investigationRun: document.getElementById("investigation-run"),
+            investigationTrace: document.getElementById("investigation-trace"),
+            investigationSeverity: document.getElementById("investigation-severity"),
+            investigationScore: document.getElementById("investigation-score"),
+            investigationStatus: document.getElementById("investigation-status"),
+            investigationSummary: document.getElementById("investigation-summary"),
+            investigationFindings: document.getElementById("investigation-findings"),
+            investigationGraph: document.getElementById("investigation-graph"),
+            investigationDetail: document.getElementById("investigation-detail"),
             eventStreamHeading: document.getElementById("event-stream-heading"),
             commandFilter: document.getElementById("command-filter"),
             emptyHeading: document.getElementById("empty-heading"),
@@ -1414,7 +1524,11 @@ HTML_TEMPLATE = """
             debugRunId: null,
             selectedDebugTrace: null,
             debugLoading: false,
-            campaignLoading: false
+            campaignLoading: false,
+            investigationData: null,
+            selectedInvestigationTrace: null,
+            selectedInvestigationFinding: null,
+            investigationLoading: false
         };
 
         const rateControls = [
@@ -1641,7 +1755,7 @@ HTML_TEMPLATE = """
 
         async function runV1Lab() {
             elements.v1LabRun.disabled = true;
-            setCampaignPlaceholder(elements.v1Result, "Running twenty instrumented reference-agent fixtures…");
+            setCampaignPlaceholder(elements.v1Result, "Running twenty-one instrumented reference-agent fixtures…");
             try {
                 const response = await fetch("/api/v1/lab/reference", {
                     method: "POST",
@@ -1657,6 +1771,249 @@ HTML_TEMPLATE = """
                 setCampaignPlaceholder(elements.v1Result, "Agentic lab validation failed inside the disposable fixture boundary.");
             } finally {
                 elements.v1LabRun.disabled = false;
+            }
+        }
+
+        function setInvestigationPlaceholder(container, message) {
+            container.replaceChildren(textNode("div", "debug-placeholder", message));
+        }
+
+        function investigationTrace() {
+            if (!state.investigationData) return null;
+            return (state.investigationData.traces || []).find(function (trace) {
+                return trace.trace_id === state.selectedInvestigationTrace;
+            }) || null;
+        }
+
+        function investigationFinding() {
+            if (!state.investigationData) return null;
+            return (state.investigationData.findings || []).find(function (finding) {
+                return finding.finding_id === state.selectedInvestigationFinding;
+            }) || null;
+        }
+
+        function renderInvestigationSummary() {
+            const report = state.investigationData;
+            const trace = investigationTrace();
+            if (!report || !trace) return;
+            const nodes = report.nodes.filter(function (node) { return node.trace_id === trace.trace_id; });
+            const findings = report.findings.filter(function (finding) { return finding.trace_id === trace.trace_id; });
+            const paths = report.paths.filter(function (path) {
+                return findings.some(function (finding) { return finding.finding_id === path.finding_id; });
+            });
+            const values = [
+                [nodes.length, "trace events"],
+                [trace.agent_ids.length, "agents"],
+                [trace.delegation_ids.length, "delegations"],
+                [trace.max_depth, "graph depth"],
+                [findings.length, "findings"],
+                [paths.length, "attack paths"]
+            ];
+            const fragment = document.createDocumentFragment();
+            values.forEach(function (item) {
+                const stat = document.createElement("div");
+                stat.className = "investigation-stat";
+                stat.appendChild(textNode("strong", "", item[0]));
+                stat.appendChild(textNode("span", "", item[1]));
+                fragment.appendChild(stat);
+            });
+            elements.investigationSummary.replaceChildren(fragment);
+        }
+
+        function renderInvestigationTraceOptions() {
+            const report = state.investigationData;
+            if (!report) return;
+            const traces = report.traces.slice().sort(function (left, right) {
+                const preferredLeft = left.fixture_id === "multi-agent-delegation-cascade" && left.variant === "malicious" ? 1 : 0;
+                const preferredRight = right.fixture_id === "multi-agent-delegation-cascade" && right.variant === "malicious" ? 1 : 0;
+                return preferredRight - preferredLeft || right.finding_count - left.finding_count || right.max_depth - left.max_depth;
+            });
+            if (!traces.some(function (trace) { return trace.trace_id === state.selectedInvestigationTrace; })) {
+                state.selectedInvestigationTrace = traces.length ? traces[0].trace_id : null;
+            }
+            const fragment = document.createDocumentFragment();
+            traces.forEach(function (trace) {
+                const option = document.createElement("option");
+                option.value = trace.trace_id;
+                const identity = trace.fixture_id || trace.trace_id.slice(0, 12);
+                option.textContent = identity + " · " + (trace.variant || "observed") + " · " + trace.agent_ids.length + " agents · " + trace.finding_count + " findings";
+                option.selected = trace.trace_id === state.selectedInvestigationTrace;
+                fragment.appendChild(option);
+            });
+            elements.investigationTrace.replaceChildren(fragment);
+        }
+
+        function visibleInvestigationFindings() {
+            if (!state.investigationData || !state.selectedInvestigationTrace) return [];
+            const severity = elements.investigationSeverity.value;
+            return state.investigationData.findings.filter(function (finding) {
+                return finding.trace_id === state.selectedInvestigationTrace
+                    && (severity === "all" || finding.severity === severity);
+            });
+        }
+
+        function renderInvestigationFindings() {
+            const findings = visibleInvestigationFindings();
+            if (!findings.length) {
+                state.selectedInvestigationFinding = null;
+                setInvestigationPlaceholder(elements.investigationFindings, "No invariant failures match this trace and severity filter.");
+                return;
+            }
+            if (!findings.some(function (finding) { return finding.finding_id === state.selectedInvestigationFinding; })) {
+                state.selectedInvestigationFinding = findings[0].finding_id;
+            }
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(textNode("div", "investigation-label", findings.length + " invariant failures"));
+            findings.forEach(function (finding) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "investigation-finding" + (finding.finding_id === state.selectedInvestigationFinding ? " active" : "");
+                button.appendChild(textNode("span", "severity-" + finding.severity, finding.severity + " · " + finding.code));
+                button.appendChild(textNode("strong", "", finding.title));
+                button.appendChild(textNode("span", "", finding.event_ids.length + " evidence checkpoint" + (finding.event_ids.length === 1 ? "" : "s")));
+                button.addEventListener("click", function () {
+                    state.selectedInvestigationFinding = finding.finding_id;
+                    renderInvestigationFindings();
+                    renderInvestigationGraph();
+                    renderInvestigationDetail();
+                });
+                fragment.appendChild(button);
+            });
+            elements.investigationFindings.replaceChildren(fragment);
+        }
+
+        function renderInvestigationGraph() {
+            const report = state.investigationData;
+            const trace = investigationTrace();
+            if (!report || !trace) {
+                setInvestigationPlaceholder(elements.investigationGraph, "No trace graph is available.");
+                return;
+            }
+            const finding = investigationFinding();
+            const highlighted = new Set(finding ? finding.event_ids : []);
+            const incoming = {};
+            report.edges.filter(function (edge) { return edge.trace_id === trace.trace_id; }).forEach(function (edge) {
+                if (!incoming[edge.target_event_id]) incoming[edge.target_event_id] = [];
+                incoming[edge.target_event_id].push(edge.relationship);
+            });
+            const nodes = report.nodes.filter(function (node) { return node.trace_id === trace.trace_id; })
+                .sort(function (left, right) { return left.index - right.index; });
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(textNode("div", "investigation-label", "Causal checkpoints · indentation follows graph depth"));
+            nodes.forEach(function (node) {
+                const row = document.createElement("div");
+                const untrusted = (node.flags || []).includes("untrusted_input");
+                row.className = "investigation-node" + (highlighted.has(node.event_id) ? " highlight" : "") + (untrusted ? " untrusted" : "");
+                row.style.setProperty("--depth", String(Math.min(Number(node.depth) || 0, 8)));
+                if (window.innerWidth > 620) row.style.marginLeft = String(Math.min(Number(node.depth) || 0, 8) * 10) + "px";
+                row.appendChild(textNode("span", "investigation-node-agent", node.agent_id || "unknown-agent"));
+                row.appendChild(textNode("span", "investigation-node-type", node.event_type));
+                const relationships = incoming[node.event_id] || [];
+                row.appendChild(textNode("span", "investigation-node-link", "depth " + node.depth + (relationships.length ? " · " + relationships.join(" + ") : " · root")));
+                const flags = document.createElement("span");
+                flags.className = "investigation-node-flags";
+                (node.flags || []).slice(0, 3).forEach(function (flag) {
+                    flags.appendChild(textNode("span", "", flag.replaceAll("_", " ")));
+                });
+                if (!(node.flags || []).length && node.outcome) flags.appendChild(textNode("span", "", node.outcome));
+                row.appendChild(flags);
+                fragment.appendChild(row);
+            });
+            elements.investigationGraph.replaceChildren(fragment);
+        }
+
+        function renderInvestigationDetail() {
+            const report = state.investigationData;
+            const trace = investigationTrace();
+            const finding = investigationFinding();
+            if (!report || !trace) {
+                setInvestigationPlaceholder(elements.investigationDetail, "Select a trace to inspect its defensive context.");
+                return;
+            }
+            if (!finding) {
+                const container = document.createDocumentFragment();
+                container.appendChild(textNode("div", "investigation-label", "Trace assessment"));
+                container.appendChild(textNode("h3", "", trace.highest_severity === "none" ? "No invariant failures" : "Review the filtered findings"));
+                container.appendChild(textNode("p", "", trace.highest_severity === "none"
+                    ? "Agent identities, delegation envelopes, goal fingerprints, and memory lineage remained continuous in this synthetic control trace."
+                    : "Change the severity filter or select a finding to inspect its evidence."));
+                elements.investigationDetail.replaceChildren(container);
+                return;
+            }
+            const container = document.createDocumentFragment();
+            container.appendChild(textNode("div", "investigation-label severity-" + finding.severity, finding.severity + " · " + finding.finding_id));
+            container.appendChild(textNode("h3", "", finding.title));
+            container.appendChild(textNode("p", "", finding.description));
+            container.appendChild(textNode("div", "investigation-label", "Evidence"));
+            const evidence = document.createElement("div");
+            evidence.className = "investigation-evidence";
+            Object.keys(finding.evidence || {}).sort().forEach(function (key) {
+                const row = document.createElement("div");
+                row.appendChild(textNode("strong", "", key.replaceAll("_", " ")));
+                const value = finding.evidence[key];
+                row.appendChild(textNode("span", "", typeof value === "string" ? value : JSON.stringify(value)));
+                evidence.appendChild(row);
+            });
+            container.appendChild(evidence);
+            container.appendChild(textNode("div", "investigation-label", "Operator response"));
+            const remediation = document.createElement("ul");
+            remediation.className = "investigation-remediation";
+            (finding.remediation || []).forEach(function (item) {
+                remediation.appendChild(textNode("li", "", item));
+            });
+            container.appendChild(remediation);
+            const path = (report.paths || []).find(function (item) { return item.finding_id === finding.finding_id; });
+            if (path) {
+                const byId = new Map(report.nodes.map(function (node) { return [node.event_id, node]; }));
+                const labels = path.event_ids.map(function (eventId) {
+                    const node = byId.get(eventId);
+                    return node ? (node.agent_id || "agent") + " → " + node.event_type : eventId;
+                });
+                container.appendChild(textNode("div", "investigation-path", "Causal path\\n" + labels.join("\\n")));
+            }
+            elements.investigationDetail.replaceChildren(container);
+        }
+
+        function refreshInvestigation() {
+            renderInvestigationSummary();
+            renderInvestigationFindings();
+            renderInvestigationGraph();
+            renderInvestigationDetail();
+        }
+
+        async function runInvestigation() {
+            if (state.investigationLoading) return;
+            state.investigationLoading = true;
+            elements.investigationRun.disabled = true;
+            elements.investigationRun.textContent = "Building graph…";
+            setInvestigationPlaceholder(elements.investigationFindings, "Evaluating delegation, identity, goal, and memory invariants…");
+            setInvestigationPlaceholder(elements.investigationGraph, "Reconstructing causal paths from content-safe record identifiers…");
+            setInvestigationPlaceholder(elements.investigationDetail, "Preparing operator evidence and remediation…");
+            try {
+                const response = await fetch("/api/v1/telemetry/investigation", {
+                    method: "POST",
+                    headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                    body: JSON.stringify({corpus: "reference-agent"})
+                });
+                if (!response.ok) throw new Error();
+                const payload = await response.json();
+                state.investigationData = payload.report;
+                state.selectedInvestigationTrace = null;
+                state.selectedInvestigationFinding = null;
+                elements.investigationScore.textContent = String(payload.report.score) + " / 100";
+                elements.investigationStatus.textContent = payload.report.status + " · mixed malicious and benign corpus";
+                renderInvestigationTraceOptions();
+                refreshInvestigation();
+                showToast("Multi-agent investigation graph ready");
+            } catch (_error) {
+                state.investigationData = null;
+                elements.investigationScore.textContent = "—";
+                elements.investigationStatus.textContent = "Graph unavailable";
+                setInvestigationPlaceholder(elements.investigationGraph, "Unable to build the synthetic investigation graph.");
+            } finally {
+                state.investigationLoading = false;
+                elements.investigationRun.disabled = false;
+                elements.investigationRun.textContent = "Build investigation";
             }
         }
 
@@ -2302,6 +2659,16 @@ HTML_TEMPLATE = """
         elements.v1DetectionRun.addEventListener("click", runV1Detection);
         elements.v1AssuranceRun.addEventListener("click", runV1Assurance);
         elements.v1LabRun.addEventListener("click", runV1Lab);
+        elements.investigationRun.addEventListener("click", runInvestigation);
+        elements.investigationTrace.addEventListener("change", function () {
+            state.selectedInvestigationTrace = elements.investigationTrace.value;
+            state.selectedInvestigationFinding = null;
+            refreshInvestigation();
+        });
+        elements.investigationSeverity.addEventListener("change", function () {
+            state.selectedInvestigationFinding = null;
+            refreshInvestigation();
+        });
         elements.form.addEventListener("submit", submitRun);
         elements.stop.addEventListener("click", stopRun);
         elements.clear.addEventListener("click", clearEvents);
@@ -2422,12 +2789,12 @@ def api_foundation_catalog() -> Response:
     history = RunStore(CAMPAIGN_DATABASE_PATH).history(25) if CAMPAIGN_DATABASE_PATH.exists() else []
     return jsonify(
         {
-            "version": "1.3.0",
+            "version": "1.4.0",
             "workflow": ["emulate", "observe", "detect", "defend", "retest"],
             "capabilities": {
                 "offline_collectors": ["jsonl", "otel", "otel_genai", "sysmon", "auditd", "cloudtrail", "crowdstrike", "splunk", "elastic", "sentinel", "logscale", "panther", "graylog", "agent_runtime", "mcp_audit"],
                 "live_read_only_connectors": list(CONNECTOR_NAMES),
-                "agent_trace_contract": "1.0",
+                "agent_trace_contract": "1.1",
                 "detection_formats": ["sigma", "kql", "splunk", "crowdstrike", "elastic", "panther", "graylog"],
                 "agentic_fixtures": len(list_fixtures()),
                 "external_adapters": list(adapter_names()),
@@ -2436,6 +2803,8 @@ def api_foundation_catalog() -> Response:
                 "plugin_api_version": "1.0",
                 "reference_agent_lab": True,
                 "telemetry_assurance": True,
+                "multi_agent_investigation": True,
+                "graph_detection_primitives": ["graph_path", "graph_fanout"],
                 "detection_pack_rules": len(load_detection_pack().rules),
             },
             "abilities": [
@@ -2604,6 +2973,28 @@ def api_telemetry_assurance() -> Response:
     )
 
 
+@app.route("/api/v1/telemetry/investigation", methods=["POST"])
+def api_telemetry_investigation() -> Response:
+    """Build a bounded multi-agent investigation graph from the reference corpus."""
+
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400, description="JSON request body is required")
+    if payload.get("corpus", "reference-agent") != "reference-agent":
+        abort(400, description="unsupported investigation corpus")
+    runs = run_reference_suite()
+    events = tuple(event.to_normalized_event() for run in runs for event in run.events)
+    return jsonify(
+        {
+            "execution_mode": "synthetic_multi_agent_investigation",
+            "process_started": False,
+            "network_opened": False,
+            "report": investigate_telemetry(events).to_dict(),
+        }
+    )
+
+
 @app.route("/api/v1/lab/run", methods=["POST"])
 def api_v1_lab_run() -> Response:
     _validate_api_token()
@@ -2644,7 +3035,7 @@ def api_v1_reference_lab_run() -> Response:
         abort(400, description=str(exc))
     return jsonify(
         {
-            "version": "1.3.0",
+            "version": "1.4.0",
             "passed": all(result.passed for result in results),
             "results": [result.to_dict() for result in results],
         }
@@ -2968,8 +3359,15 @@ def stream() -> Response:
 
 
 def main() -> None:
-    print("[*] Starting Web UI on http://127.0.0.1:5000")
-    app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)
+    raw_port = os.environ.get("AGENTSIM_WEB_PORT", "5000")
+    try:
+        port = int(raw_port)
+    except ValueError as exc:
+        raise SystemExit("AGENTSIM_WEB_PORT must be an integer from 1 to 65535") from exc
+    if not 1 <= port <= 65535:
+        raise SystemExit("AGENTSIM_WEB_PORT must be an integer from 1 to 65535")
+    print(f"[*] Starting Web UI on http://127.0.0.1:{port}")
+    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

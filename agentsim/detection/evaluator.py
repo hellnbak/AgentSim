@@ -13,6 +13,8 @@ from agentsim.detection.ast import (
     CausalGraphNode,
     DetectionRule,
     Expression,
+    GraphFanoutNode,
+    GraphPathNode,
     MatchNode,
     NotNode,
     ParentChildNode,
@@ -60,6 +62,42 @@ def _timestamp(event: NormalizedEvent) -> float:
 
 def _many(value: object) -> tuple[object, ...]:
     return tuple(value) if isinstance(value, (list, tuple, set, frozenset)) else (value,)
+
+
+def _graph_children(
+    events: Sequence[NormalizedEvent], link_fields: Sequence[str]
+) -> Mapping[int, tuple[int, ...]]:
+    by_id = {
+        str(event.source_record_id): index
+        for index, event in enumerate(events)
+        if event.source_record_id is not None
+    }
+    children: dict[int, set[int]] = {}
+    for child_index, event in enumerate(events):
+        for field in link_fields:
+            for linked_id in _many(event.get(field)):
+                parent_index = by_id.get(str(linked_id))
+                if parent_index is not None and parent_index != child_index:
+                    children.setdefault(parent_index, set()).add(child_index)
+    return {index: tuple(sorted(values)) for index, values in children.items()}
+
+
+def _descendants(
+    root: int, children: Mapping[int, Sequence[int]], max_depth: int
+) -> set[int]:
+    observed: set[int] = set()
+    frontier = {root}
+    for _ in range(max_depth):
+        frontier = {
+            child
+            for parent in frontier
+            for child in children.get(parent, ())
+            if child not in observed
+        }
+        if not frontier:
+            break
+        observed.update(frontier)
+    return observed
 
 
 def _predicate_matches(event: NormalizedEvent, predicate: Predicate) -> bool:
@@ -191,6 +229,44 @@ def _matches(expression: Expression, events: Sequence[NormalizedEvent]) -> set[i
                 chain.append(child)
             if len(chain) == len(step_matches):
                 results.update(chain)
+        return results
+    if isinstance(expression, GraphPathNode):
+        step_matches = [_matches(step, events) for step in expression.steps]
+        if any(not matches for matches in step_matches):
+            return set()
+        children = _graph_children(events, expression.link_fields)
+        results: set[int] = set()
+        for root in sorted(step_matches[0]):
+            frontier = {root}
+            chain_matches = {root}
+            for candidates in step_matches[1:]:
+                next_frontier = {
+                    candidate
+                    for parent in frontier
+                    for candidate in (_descendants(parent, children, expression.max_depth) & candidates)
+                }
+                if not next_frontier:
+                    break
+                chain_matches.update(next_frontier)
+                frontier = next_frontier
+            else:
+                results.update(chain_matches)
+        return results
+    if isinstance(expression, GraphFanoutNode):
+        roots = _matches(expression.root, events)
+        candidates = _matches(expression.descendant, events)
+        children = _graph_children(events, expression.link_fields)
+        results: set[int] = set()
+        for root in roots:
+            reached = _descendants(root, children, expression.max_depth) & candidates
+            values = {
+                events[index].get(expression.distinct_field)
+                for index in reached
+                if events[index].get(expression.distinct_field) is not None
+            }
+            if len(values) >= expression.count:
+                results.add(root)
+                results.update(reached)
         return results
     raise TypeError(f"Unsupported expression: {type(expression).__name__}")
 

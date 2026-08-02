@@ -10,7 +10,7 @@ from typing import Mapping, Sequence
 from .telemetry import NormalizedEvent
 
 
-AGENT_TRACE_SCHEMA_VERSION = "1.0"
+AGENT_TRACE_SCHEMA_VERSION = "1.1"
 ALLOWED_EVENT_PREFIXES = ("agent.", "gen_ai.", "mcp.")
 _SENSITIVE_KEYS = (
     "argument",
@@ -121,8 +121,18 @@ class AgentTraceEvent:
     parent_event_id: str | None = None
     caused_by_event_ids: tuple[str, ...] = ()
     delegation_id: str | None = None
+    delegated_from_agent_id: str | None = None
+    delegated_to_agent_id: str | None = None
+    identity_binding_valid: bool | None = None
     data_lineage_id: str | None = None
     memory_id: str | None = None
+    memory_scope: str | None = None
+    memory_provenance_valid: bool | None = None
+    memory_retention_valid: bool | None = None
+    goal_id: str | None = None
+    goal_fingerprint: str | None = None
+    goal_integrity_valid: bool | None = None
+    goal_change_approved: bool | None = None
     model_id: str | None = None
     mcp_client_id: str | None = None
     mcp_server_id: str | None = None
@@ -157,8 +167,13 @@ class AgentTraceEvent:
             "tool_risk",
             "parent_event_id",
             "delegation_id",
+            "delegated_from_agent_id",
+            "delegated_to_agent_id",
             "data_lineage_id",
             "memory_id",
+            "memory_scope",
+            "goal_id",
+            "goal_fingerprint",
             "model_id",
             "mcp_client_id",
             "mcp_server_id",
@@ -176,7 +191,15 @@ class AgentTraceEvent:
         if not self.event_type.startswith(ALLOWED_EVENT_PREFIXES):
             raise ValueError("event_type must start with agent., gen_ai., or mcp.")
         _text(self.event_type, "event_type", required=True)
-        for name in ("auth_audience_valid", "consent_valid"):
+        for name in (
+            "auth_audience_valid",
+            "consent_valid",
+            "identity_binding_valid",
+            "memory_provenance_valid",
+            "memory_retention_valid",
+            "goal_integrity_valid",
+            "goal_change_approved",
+        ):
             value = getattr(self, name)
             if value is not None and not isinstance(value, bool):
                 raise ValueError(f"{name} must be a boolean or null")

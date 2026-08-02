@@ -30,6 +30,7 @@ python core.py --scenario all --variant both --mutations 1 --mutation-seed 42 --
 python core.py --mcp-lab
 python -m agentsim.cli campaign run endpoint-discovery-baseline --mode simulate --target synthetic://ci --authorization examples/authorization.simulate.json
 python -m agentsim.cli lab reference all
+python -m agentsim.cli telemetry investigate agent_sim_events.jsonl --collector agent_runtime --fail-on never
 python -m agentsim.cli telemetry query elastic --base-url https://elastic.example.test --dataset logs-test --target host-test --since 2026-08-02T00:00:00Z --until 2026-08-02T00:05:00Z
 ```
 
@@ -144,6 +145,13 @@ Detection-AST contributions must include malicious and benign normalized-event
 fixtures, group/time-boundary tests, required-field coverage, and renderer
 limitations. Generated rules must remain candidates until a human reviewer
 promotes them outside AgentSim.
+
+Graph-oriented AST contributions must additionally test multiple parents,
+non-adjacent descendants, distinct-entity fan-out, maximum depth, missing
+record IDs, and grouping isolation. Investigation invariants require a failing
+trace, a closely matched clean twin, evidence/remediation assertions, and a
+content-boundary test. Web changes must use text-safe DOM construction and be
+verified in the local browser at desktop and narrow viewport widths.
 
 ## Collectors, live connectors, external adapters, and plugins
 

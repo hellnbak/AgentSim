@@ -4,7 +4,7 @@ AgentSim produces safe, labeled traces for validating detections at AI-agent
 trust boundaries. It records what an agent observed, proposed, delegated, and
 was allowed or blocked from doing. It never invokes an AI model or tool.
 
-In v1.3, scenario packs remain a separate non-executing content contract.
+In v1.4, scenario packs remain a separate non-executing content contract.
 Gated endpoint or lab behavior belongs in ability packs and directed campaign
 packs documented in [`ABILITIES.md`](ABILITIES.md) and
 [`CAMPAIGNS.md`](CAMPAIGNS.md). A scenario pack cannot opt into lifecycle-v3
@@ -59,6 +59,10 @@ detectors inspect observable event fields and never query `scenario_variant`,
 | `mcp-scope-challenge-abuse` | An MCP authorization challenge expands resource or scope unexpectedly. |
 | `agent-task-id-replay` | A completed task identifier is reused for a different agent action. |
 | `retrieval-source-substitution` | A trusted retrieval source is replaced with an unverified origin before use. |
+| `delegation-identity-drift` | A delegated task is accepted under a principal that does not match the bound handoff. |
+| `shared-memory-retention-escape` | Untrusted memory crosses its session scope and influences another agent. |
+| `cross-agent-goal-fingerprint-drift` | A goal fingerprint changes across a delegation without approval. |
+| `multi-agent-trust-cascade` | One untrusted result fans out into high-risk proposals from multiple agents. |
 
 The catalog is declarative JSON under `agentsim_scenarios/packs/`; adding a
 scenario does not require editing the engine.
@@ -84,9 +88,9 @@ loading a plugin, or executing a tool.
 This boundary differs from endpoint behavior mode, which runs the documented
 read-only command catalog unless `--dry-run` is selected.
 
-## v1.3 disposable and reference-agent fixtures
+## v1.4 disposable and reference-agent fixtures
 
-`agentsim lab run all` adds twenty smaller in-memory controls alongside the
+`agentsim lab run all` adds twenty-one smaller in-memory controls alongside the
 declarative benchmark. The original prompt, memory, RAG, MCP, delegation,
 approval, decoy-secret, and budget controls now include goal hijacking,
 tool-definition/result poisoning, configuration and supply-chain tampering,
@@ -95,12 +99,17 @@ deceptive summaries. Each fixture exercises a malicious request and benign
 twin against a deterministic synthetic policy.
 
 `agentsim lab reference all` runs those controls through an instrumented
-reference agent. It emits causal requested → policy → outcome events using the
-canonical agent trace contract. MCP fixtures add explicit authorization
+reference agent. It emits causal requested → policy → outcome events using
+agent trace contract 1.1. MCP fixtures add explicit authorization
 checkpoints for audience and per-client consent, with malicious/benign values.
+The multi-agent fixture emits an eight-checkpoint, three-agent chain spanning
+goal binding, two delegations, shared memory, a tool proposal, and policy. Its
+malicious twin fails identity, principal, goal, provenance, and retention
+invariants; its benign twin remains clean.
 Only benign twins invoke a fixed synthetic tool, and that invocation changes an
-in-memory dictionary only. State is reset and verified after each fixture. The guarded HTTP form is packaged in a
-read-only, capability-free Docker profile under `labs/reference-agent/`.
+in-memory dictionary only. State is reset and verified after each fixture. The
+guarded HTTP form is packaged in a read-only, capability-free Docker profile
+under `labs/reference-agent/`.
 
 ## Event schema v2
 
@@ -118,6 +127,7 @@ Important correlation fields include:
 | `agent_id`, `agent_instance_id`, `principal_id` | Logical agent, runtime instance, and authenticated principal. |
 | `delegation_id`, `approval_id` | Delegation and human-approval correlation. |
 | `data_lineage_id`, `taint_labels` | Data provenance and trust propagation. |
+| `attributes.goal_*`, `attributes.memory_*`, `attributes.identity_binding_valid` | Goal, retention, provenance, and delegation invariants used by v1.4 scenarios. |
 | `policy_id`, `policy_version`, `policy_decision` | Versioned control result. |
 | `event_type`, `stage`, `outcome` | Runtime checkpoint and disposition. |
 | `input_trust`, `tool_name`, `tool_risk` | Trust and proposed tool context. |
@@ -241,10 +251,12 @@ Treat blocked requests as high-value observations: they show an attack reached
 a control boundary. Keep allowed/simulated outcomes too, so prevention can be
 distinguished from possible exposure.
 
-The v1.3 detection-pack sweep is a separate, answer-key-free view over
+The v1.4 detection-pack sweep is a separate, answer-key-free view over
 normalized evidence. It is useful for exploratory signal coverage, but it does
 not replace malicious/benign benchmark scoring. Run `agentsim telemetry doctor`
-first so a broken trace cannot be interpreted as a quiet rule.
+first so a broken trace cannot be interpreted as a quiet rule. Run
+`agentsim telemetry investigate` to reconstruct agent/delegation/memory paths
+and explain invariant failures without consulting the answer key.
 
 ## Framework references
 

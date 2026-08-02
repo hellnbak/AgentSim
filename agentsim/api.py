@@ -35,6 +35,7 @@ from agentsim.safety.authorization import AuthorizationManifest
 from agentsim.telemetry.collectors import collector_for
 from agentsim.telemetry.agent_contract import agent_trace_from_record
 from agentsim.telemetry.assurance import assess_telemetry
+from agentsim.telemetry.investigation import investigate_telemetry
 from agentsim.telemetry.connectors import (
     LiveQueryResult,
     QueryPlan,
@@ -115,6 +116,12 @@ def telemetry_assurance(events: Sequence[NormalizedEvent]) -> dict[str, object]:
     """Assess content safety and correlation readiness without reading payload values."""
 
     return assess_telemetry(events).to_dict()
+
+
+def telemetry_investigation(events: Sequence[NormalizedEvent]) -> dict[str, object]:
+    """Reconstruct a bounded multi-agent graph and evaluate defensive invariants."""
+
+    return investigate_telemetry(events).to_dict()
 
 
 def detection_pack_sweep(

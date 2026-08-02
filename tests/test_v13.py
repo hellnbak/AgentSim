@@ -103,7 +103,7 @@ class DetectionPackTests(unittest.TestCase):
     def test_builtin_pack_is_answer_key_free_and_sweeps_reference_evidence(self):
         pack = load_detection_pack()
         self.assertEqual(pack.pack_id, "agentsim.agent-security-core")
-        self.assertEqual(len(pack.rules), 10)
+        self.assertEqual(len(pack.rules), 12)
         self.assertNotIn("expected_detect", json.dumps(pack.to_dict()))
         events = tuple(
             event.to_normalized_event()
@@ -111,7 +111,7 @@ class DetectionPackTests(unittest.TestCase):
             for event in run.events
         )
         report = sweep_detection_pack(pack, events).to_dict()
-        self.assertEqual(report["summary"]["detected"], 7)
+        self.assertEqual(report["summary"]["detected"], 9)
         self.assertEqual(report["summary"]["visibility_gap"], 0)
         self.assertFalse(report["ground_truth_used"])
         self.assertEqual(detection_pack_sweep(events)["pack_id"], pack.pack_id)

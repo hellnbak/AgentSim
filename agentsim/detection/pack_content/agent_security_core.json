@@ -2,8 +2,8 @@
   "pack_schema_version": "1.0",
   "pack_id": "agentsim.agent-security-core",
   "name": "AgentSim Agent Security Core",
-  "version": "1.0.0",
-  "description": "Content-safe investigative signals for agent, tool, policy, and MCP telemetry.",
+  "version": "1.1.0",
+  "description": "Content-safe investigative signals for agent, tool, policy, MCP, and multi-agent graph telemetry.",
   "metadata": {
     "maintainer": "AgentSim contributors",
     "content_values_required": false,
@@ -180,6 +180,62 @@
         {"field": "tool_risk", "operator": "eq", "value": "high"}
       ]},
       "metadata": {"disposition": "baseline expected denials and investigate anomalous principals or volume"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.multi-agent-goal-memory-path",
+      "name": "Goal-integrity failure reached shared memory and a risky tool",
+      "description": "Traverses explicit parent and caused-by links across a multi-agent goal, memory, and tool path.",
+      "severity": "critical",
+      "group_by": ["trace_id"],
+      "mappings": ["ASI01 Agent Goal Hijack", "ASI06 Memory and Context Poisoning", "ASI08 Cascading Failures"],
+      "required_fields": ["caused_by_event_ids", "event_type", "goal_integrity_valid", "memory_retention_valid", "parent_event_id", "source_record_id", "tool_risk", "trace_id"],
+      "expected_sources": ["agent_runtime"],
+      "expression": {
+        "type": "graph_path",
+        "link_fields": ["parent_event_id", "caused_by_event_ids"],
+        "max_depth": 5,
+        "steps": [
+          {"type": "match", "predicates": [
+            {"field": "event_type", "operator": "eq", "value": "agent.goal.integrity"},
+            {"field": "goal_integrity_valid", "operator": "eq", "value": false}
+          ]},
+          {"type": "match", "predicates": [
+            {"field": "event_type", "operator": "eq", "value": "agent.memory.written"},
+            {"field": "memory_retention_valid", "operator": "eq", "value": false}
+          ]},
+          {"type": "match", "predicates": [
+            {"field": "event_type", "operator": "eq", "value": "agent.tool.requested"},
+            {"field": "tool_risk", "operator": "eq", "value": "high"}
+          ]}
+        ]
+      },
+      "metadata": {"disposition": "reconstruct the complete path, verify containment, and quarantine retained context"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.multi-agent-identity-fanout",
+      "name": "Untrusted memory fanned out across agent identities",
+      "description": "Finds invalid memory provenance with identity-binding failures across multiple causal descendants.",
+      "severity": "critical",
+      "group_by": ["trace_id"],
+      "mappings": ["ASI06 Memory and Context Poisoning", "ASI07 Insecure Inter-Agent Communication", "ASI08 Cascading Failures"],
+      "required_fields": ["agent_id", "caused_by_event_ids", "identity_binding_valid", "memory_provenance_valid", "parent_event_id", "source_record_id", "trace_id"],
+      "expected_sources": ["agent_runtime"],
+      "expression": {
+        "type": "graph_fanout",
+        "root": {"type": "match", "predicates": [
+          {"field": "memory_provenance_valid", "operator": "eq", "value": false}
+        ]},
+        "descendant": {"type": "match", "predicates": [
+          {"field": "identity_binding_valid", "operator": "eq", "value": false}
+        ]},
+        "count": 2,
+        "distinct_field": "agent_id",
+        "link_fields": ["parent_event_id", "caused_by_event_ids"],
+        "max_depth": 4
+      },
+      "metadata": {"disposition": "identify the first untrusted ancestor and contain every affected agent session"}
     }
   ]
 }

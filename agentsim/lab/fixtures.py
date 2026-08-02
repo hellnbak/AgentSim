@@ -166,6 +166,15 @@ def _fixtures() -> tuple[LabFixture, ...]:
             {"summary_evidence_valid": True}, ("AI Agent Clickbait",),
             ("ASI09 Human-Agent Trust Exploitation",), "synthetic.summary.verify",
         ),
+        (
+            "multi-agent-delegation-cascade", "Multi-agent delegation cascade", "multi_agent_cascade",
+            "delegation_goal_memory_invariants",
+            {"delegation_valid": False, "goal_integrity_valid": False, "memory_retention_allowed": False},
+            {"delegation_valid": True, "goal_integrity_valid": True, "memory_retention_allowed": True},
+            ("AI Agent Context Poisoning", "AI Agent Tool Invocation"),
+            ("ASI01 Agent Goal Hijack", "ASI06 Memory and Context Poisoning", "ASI07 Insecure Inter-Agent Communication", "ASI08 Cascading Failures"),
+            "synthetic.multi_agent.preview",
+        ),
     )
     return tuple(LabFixture(*value) for value in values)
 
@@ -197,6 +206,7 @@ def _allowed(request: Mapping[str, object]) -> tuple[bool, str]:
         "approval_fresh",
         "egress_allowed",
         "summary_evidence_valid",
+        "memory_retention_allowed",
     )
     if any(request.get(flag) is True for flag in deny_flags):
         return False, "risk flag denied"

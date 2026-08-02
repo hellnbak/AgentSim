@@ -17,6 +17,8 @@ from .ast import (
     CausalGraphNode,
     DetectionRule,
     Expression,
+    GraphFanoutNode,
+    GraphPathNode,
     MatchNode,
     NotNode,
     ParentChildNode,
@@ -59,6 +61,19 @@ def _expression_fields(expression: Expression) -> set[str]:
         return (
             {field for step in expression.steps for field in _expression_fields(step)}
             | {expression.link_field, "source_record_id"}
+        )
+    if isinstance(expression, GraphPathNode):
+        return (
+            {field for step in expression.steps for field in _expression_fields(step)}
+            | set(expression.link_fields)
+            | {"source_record_id"}
+        )
+    if isinstance(expression, GraphFanoutNode):
+        return (
+            _expression_fields(expression.root)
+            | _expression_fields(expression.descendant)
+            | set(expression.link_fields)
+            | {expression.distinct_field, "source_record_id"}
         )
     raise TypeError(f"Unsupported expression: {type(expression).__name__}")
 

@@ -1,4 +1,4 @@
-# AgentSim v1.3 architecture
+# AgentSim v1.4 architecture
 
 AgentSim separates content, execution, authorization, telemetry, detection,
 and defensive evaluation so synthetic traces cannot silently become executable
@@ -23,11 +23,13 @@ flowchart TD
     Contract --> Collect
     Collect --> Normalize["Normalized event model"]
     Normalize --> Assure["Telemetry assurance and causal integrity"]
+    Assure --> Investigate["Multi-agent graph and invariant analysis"]
     Assure --> Correlate["Ground-truth correlation"]
     Assure --> Sweep["Answer-key-free detection-pack sweep"]
     Timeline --> Correlate
     Correlate --> Detect["Detection AST and coverage analysis"]
     Sweep --> Detect
+    Investigate --> Detect
     Detect --> Candidate["Human-review candidate renderers"]
     Detect --> Defense["Gaps, runbooks, scorecards, regression"]
     Candidate --> Bundle["Portable evidence bundle"]
@@ -47,8 +49,8 @@ agentsim/
 ├── execution/             simulate, local, and Docker provider interfaces
 ├── external/              non-executing Atomic, Stratus, CALDERA plans
 ├── safety/                authorization, target scope, policy, limits, cleanup
-├── telemetry/             contracts, collectors, assurance, live connectors, correlation
-├── detection/             AST, packs, evaluator, coverage, generator, renderers
+├── telemetry/             contracts, collectors, assurance, graph investigation, connectors
+├── detection/             graph-aware AST, packs, evaluator, coverage, generator, renderers
 ├── defense/               recommendations, gaps, runbooks, regression, scorecard
 ├── lab/                   in-memory controls and instrumented reference agent
 ├── reporting/             bundles and Attack Flow STIX interchange
@@ -126,7 +128,7 @@ record limit, normalize known vendor fields, inventory available fields, and
 discard fields whose names indicate prompts, credentials, secrets, tokens,
 payloads, or authorization data.
 
-The agent trace contract adds stable correlation and authorization fields for
+Agent trace contract 1.1 adds stable correlation and authorization fields for
 agent runtimes, OpenTelemetry GenAI spans, and MCP audit records. Raw prompts,
 messages, tool arguments/results, and model responses are excluded by design.
 Live connector responses pass through the same normalized/redacted event model.
@@ -152,6 +154,18 @@ packs, and executable expressions. A sweep reports `detected`,
 `not_detected`, or `visibility_gap`; it does not claim malicious/benign ground
 truth and does not deploy vendor content.
 
+Multi-agent investigation consumes only normalized content-safe events. It
+constructs bounded nodes and parent, caused-by, delegation, data-lineage, and
+memory-lineage edges. Invariants evaluate delegation endpoints, principal
+continuity, agent handoffs, goal fingerprints, memory provenance, and retention
+scope. Findings contain field-level evidence, remediation, and a bounded causal
+path. The Web workbench is a renderer over this report; it cannot upload
+telemetry or execute an action.
+
+`graph_path` and `graph_fanout` extend the declarative AST without evaluating
+code. They traverse only explicit source record IDs, accept configured link
+fields, enforce depth 1–50, and remain inside the rule's grouping boundary.
+
 ## Persistence and evidence
 
 SQLite stores immutable manifest JSON/hash, action results, append-only
@@ -166,5 +180,6 @@ evidence is persisted.
 
 The public schemas are in [schemas](schemas/), including normalized events,
 detection rules, external plans, agent trace events, live query plans,
-reference-lab results, telemetry-assurance reports, detection packs and sweep
-reports, signed packs, authorization, and lifecycle v3.
+reference-lab results, telemetry-assurance and multi-agent investigation
+reports, detection packs and sweep reports, signed packs, authorization, and
+lifecycle v3.

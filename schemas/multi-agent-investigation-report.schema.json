@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentsim.dev/schemas/multi-agent-investigation-report.schema.json",
+  "title": "AgentSim multi-agent investigation report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind", "schema_version", "status", "score", "summary", "traces",
+    "nodes", "edges", "findings", "paths", "content_values_recorded"
+  ],
+  "properties": {
+    "kind": {"const": "multi-agent-investigation-report"},
+    "schema_version": {"const": "1.0"},
+    "status": {"enum": ["clean", "review", "elevated", "critical"]},
+    "score": {"type": "integer", "minimum": 0, "maximum": 100},
+    "summary": {
+      "type": "object",
+      "required": ["events", "traces", "agents", "delegations", "memories", "goals", "edges", "max_depth", "findings", "severity"]
+    },
+    "traces": {"type": "array", "items": {"type": "object"}},
+    "nodes": {"type": "array", "maxItems": 5000, "items": {"$ref": "#/$defs/node"}},
+    "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "paths": {"type": "array", "items": {"type": "object"}},
+    "content_values_recorded": {"const": false}
+  },
+  "$defs": {
+    "optionalString": {"type": ["string", "null"]},
+    "node": {
+      "type": "object",
+      "required": ["event_id", "index", "timestamp", "trace_id", "event_type", "depth", "flags"],
+      "properties": {
+        "event_id": {"type": "string"}, "index": {"type": "integer"},
+        "timestamp": {"type": "string"}, "trace_id": {"type": "string"},
+        "fixture_id": {"$ref": "#/$defs/optionalString"}, "variant": {"$ref": "#/$defs/optionalString"},
+        "session_id": {"$ref": "#/$defs/optionalString"}, "event_type": {"type": "string"},
+        "agent_id": {"$ref": "#/$defs/optionalString"}, "principal_id": {"$ref": "#/$defs/optionalString"},
+        "delegation_id": {"$ref": "#/$defs/optionalString"}, "data_lineage_id": {"$ref": "#/$defs/optionalString"},
+        "memory_id": {"$ref": "#/$defs/optionalString"}, "goal_id": {"$ref": "#/$defs/optionalString"},
+        "tool_risk": {"$ref": "#/$defs/optionalString"}, "input_trust": {"$ref": "#/$defs/optionalString"},
+        "policy_decision": {"$ref": "#/$defs/optionalString"}, "outcome": {"$ref": "#/$defs/optionalString"},
+        "depth": {"type": "integer", "minimum": 0}, "flags": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["source_event_id", "target_event_id", "relationship", "trace_id"],
+      "properties": {
+        "source_event_id": {"type": "string"}, "target_event_id": {"type": "string"},
+        "relationship": {"type": "string"}, "trace_id": {"type": "string"}
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["finding_id", "code", "severity", "title", "description", "trace_id", "event_ids", "evidence", "remediation"],
+      "properties": {
+        "finding_id": {"type": "string"}, "code": {"type": "string"},
+        "severity": {"enum": ["low", "medium", "high", "critical"]},
+        "title": {"type": "string"}, "description": {"type": "string"},
+        "trace_id": {"type": "string"}, "event_ids": {"type": "array", "items": {"type": "string"}},
+        "evidence": {"type": "object"}, "remediation": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

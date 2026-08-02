@@ -96,6 +96,37 @@ class CausalGraphNode:
             raise ValueError("Causal graph requires steps and a link field")
 
 
+@dataclass(frozen=True)
+class GraphPathNode:
+    """Match ordered expressions connected by one or more causal link fields."""
+
+    steps: tuple["Expression", ...]
+    link_fields: tuple[str, ...] = ("parent_event_id", "caused_by_event_ids")
+    max_depth: int = 6
+
+    def __post_init__(self) -> None:
+        if len(self.steps) < 2 or not self.link_fields or not 1 <= self.max_depth <= 50:
+            raise ValueError("Graph path requires two steps, link fields, and depth 1 to 50")
+
+
+@dataclass(frozen=True)
+class GraphFanoutNode:
+    """Match a causal root that reaches multiple distinct descendants."""
+
+    root: "Expression"
+    descendant: "Expression"
+    count: int
+    distinct_field: str
+    link_fields: tuple[str, ...] = ("parent_event_id", "caused_by_event_ids")
+    max_depth: int = 6
+
+    def __post_init__(self) -> None:
+        if self.count < 1 or not self.distinct_field or not self.link_fields:
+            raise ValueError("Graph fan-out requires a positive count, distinct field, and link fields")
+        if not 1 <= self.max_depth <= 50:
+            raise ValueError("Graph fan-out depth must be between 1 and 50")
+
+
 Expression = Union[
     MatchNode,
     AllNode,
@@ -105,6 +136,8 @@ Expression = Union[
     ThresholdNode,
     ParentChildNode,
     CausalGraphNode,
+    GraphPathNode,
+    GraphFanoutNode,
 ]
 
 
@@ -169,6 +202,23 @@ def expression_to_dict(expression: Expression) -> dict[str, object]:
             "type": "causal_graph",
             "steps": [expression_to_dict(item) for item in expression.steps],
             "link_field": expression.link_field,
+        }
+    if isinstance(expression, GraphPathNode):
+        return {
+            "type": "graph_path",
+            "steps": [expression_to_dict(item) for item in expression.steps],
+            "link_fields": list(expression.link_fields),
+            "max_depth": expression.max_depth,
+        }
+    if isinstance(expression, GraphFanoutNode):
+        return {
+            "type": "graph_fanout",
+            "root": expression_to_dict(expression.root),
+            "descendant": expression_to_dict(expression.descendant),
+            "count": expression.count,
+            "distinct_field": expression.distinct_field,
+            "link_fields": list(expression.link_fields),
+            "max_depth": expression.max_depth,
         }
     raise TypeError(f"Unsupported expression: {type(expression).__name__}")
 
@@ -236,6 +286,35 @@ def parse_expression(data: Mapping[str, object]) -> Expression:
         return CausalGraphNode(
             tuple(parse_expression(item) for item in steps),
             str(data.get("link_field", "parent_event_id")),
+        )
+    if kind == "graph_path":
+        steps = data.get("steps", ())
+        link_fields = data.get("link_fields", ("parent_event_id", "caused_by_event_ids"))
+        if not isinstance(steps, Sequence) or isinstance(steps, (str, bytes)):
+            raise ValueError("graph_path.steps must be a list")
+        if len(steps) < 2 or any(not isinstance(item, Mapping) for item in steps):
+            raise ValueError("graph_path.steps must contain at least two expression objects")
+        if not isinstance(link_fields, Sequence) or isinstance(link_fields, (str, bytes)):
+            raise ValueError("graph_path.link_fields must be a list")
+        return GraphPathNode(
+            tuple(parse_expression(item) for item in steps),
+            tuple(str(item) for item in link_fields),
+            int(data.get("max_depth", 6)),
+        )
+    if kind == "graph_fanout":
+        root, descendant = data.get("root"), data.get("descendant")
+        link_fields = data.get("link_fields", ("parent_event_id", "caused_by_event_ids"))
+        if not isinstance(root, Mapping) or not isinstance(descendant, Mapping):
+            raise ValueError("graph_fanout requires root and descendant objects")
+        if not isinstance(link_fields, Sequence) or isinstance(link_fields, (str, bytes)):
+            raise ValueError("graph_fanout.link_fields must be a list")
+        return GraphFanoutNode(
+            parse_expression(root),
+            parse_expression(descendant),
+            int(data["count"]),
+            str(data["distinct_field"]),
+            tuple(str(item) for item in link_fields),
+            int(data.get("max_depth", 6)),
         )
     raise ValueError(f"Unknown detection expression type: {kind or '<missing>'}")
 

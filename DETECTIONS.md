@@ -17,14 +17,15 @@ analytics below remain fully supported. See
 [`DETECTION_ENGINE.md`](DETECTION_ENGINE.md) for the vendor-neutral rule format
 and CLI workflow.
 
-## Reusable v1.3 detection pack
+## Reusable v1.4 detection pack
 
-The packaged `agentsim.agent-security-core` pack provides ten answer-key-free
-AST rules for agent/tool/MCP telemetry. It is intended for exploratory
+The packaged `agentsim.agent-security-core` pack provides twelve answer-key-free
+AST rules for agent/tool/MCP and multi-agent graph telemetry. It is intended for exploratory
 validation before vendor-specific tuning:
 
 ```bash
 agentsim telemetry doctor agent-events.jsonl --collector agent_runtime
+agentsim telemetry investigate agent-events.jsonl --collector agent_runtime --fail-on never
 agentsim detection sweep agent-events.jsonl --collector agent_runtime
 ```
 
@@ -34,7 +35,8 @@ otherwise it is a `visibility_gap`. The pack neither reads
 `scenario_variant`/`expected_detection` nor replaces the vendor examples and
 malicious/benign scoring below. See
 [`TELEMETRY_ASSURANCE.md`](TELEMETRY_ASSURANCE.md) for pack authoring and report
-semantics.
+semantics and [`MULTI_AGENT_INVESTIGATION.md`](MULTI_AGENT_INVESTIGATION.md)
+for graph evidence and invariant interpretation.
 
 ## Data requirements
 

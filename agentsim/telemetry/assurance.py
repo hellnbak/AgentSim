@@ -181,7 +181,7 @@ def assess_telemetry(events: Iterable[NormalizedEvent]) -> TelemetryAssuranceRep
                 "medium",
                 "Timestamp provenance is unknown",
                 "The event has a timestamp but does not say whether it came from the source or a fallback.",
-                "Normalize the record with a v1.3 collector that records timestamp presence and validity.",
+                "Normalize the record with a v1.4 collector that records timestamp presence and validity.",
                 index,
             )
         elif parsed_timestamp is None or event.metadata.get("timestamp_valid") is False:

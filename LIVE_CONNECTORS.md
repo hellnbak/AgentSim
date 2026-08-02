@@ -1,6 +1,6 @@
 # Live read-only telemetry connectors
 
-AgentSim 1.3 can validate candidate detections against a narrowly scoped live
+AgentSim 1.4 can validate candidate detections against a narrowly scoped live
 telemetry query. This is not a SIEM administration surface: connectors cannot
 create, update, deploy, or delete detections, dashboards, indexes, users, or
 policies.

@@ -3,6 +3,36 @@
 Notable changes to AgentSim are documented here. The project follows semantic
 versioning while its public interfaces mature.
 
+## 1.4.0 - 2026-08-02
+
+- Added bounded multi-agent investigation reports with content-safe nodes,
+  parent/caused-by/delegation/memory/data-lineage edges, per-trace summaries,
+  prioritized findings, and root-to-finding evidence paths.
+- Added delegation endpoint and principal-continuity invariants, cross-agent
+  handoff checks, goal fingerprint/integrity checks, and shared-memory
+  provenance/retention/lineage checks with operator remediation.
+- Extended the canonical agent trace contract to 1.1 with optional structured
+  delegation endpoint, identity binding, goal, and memory control fields plus
+  agent-runtime and dotted semantic aliases.
+- Added bounded `graph_path` and `graph_fanout` detection AST primitives and
+  expanded the answer-key-free Agent Security Core pack from ten to twelve
+  rules. The reference corpus detects nine rules with zero visibility gaps.
+- Added four malicious/benign multi-agent campaign scenarios for delegation
+  identity drift, shared-memory retention escape, cross-agent goal drift, and
+  cascading trust fan-out, expanding the benchmark to thirty-three scenarios.
+- Added a twenty-first disposable control and a longer three-agent reference
+  trace with malicious and benign goal, delegation, memory, policy, and tool
+  checkpoints. The benign twin passes every new invariant.
+- Added `agentsim telemetry investigate`, a stable Python API, a public JSON
+  schema, package/CI integration, and configurable investigation exit gates.
+- Added an interactive Web investigation workbench with trace and severity
+  filters, graph metrics, agent-aware causal checkpoints, click-highlighted
+  evidence, reconstructed attack paths, and operator remediation.
+- Made the hardened Docker reference lab's documented loopback API work on
+  Docker Desktop while retaining localhost-only publication and fixed inputs.
+- Updated the roadmap, architecture, telemetry, detection, scenario, security,
+  contributor, reference-lab, and Web documentation for the v1.4 interfaces.
+
 ## 1.3.0 - 2026-08-02
 
 - Added a telemetry-assurance doctor with `healthy`, `degraded`, and `unusable`

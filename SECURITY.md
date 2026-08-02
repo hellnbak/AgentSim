@@ -67,6 +67,19 @@ assurance must not retain raw invalid timestamps or content-bearing values, and
 must report—rather than hide—generated identities, broken causal links, and
 redaction-boundary violations.
 
+Multi-agent investigation accepts at most 5,000 normalized events and must
+traverse only explicit content-safe record identifiers. Graph construction,
+invariant evidence, Web rendering, and report export must never retain prompt,
+message, argument, result, response, token, credential, or payload values.
+Cross-trace causal edges are rejected. A change that permits unbounded graph
+depth, evaluates telemetry as code, hides a failed identity/goal/memory
+invariant, or renders untrusted HTML is a security issue.
+
+`graph_path` and `graph_fanout` are declarative detection expressions. Their
+link fields and depth must remain bounded, their traversal must stay inside the
+rule grouping boundary, and detection-pack field declarations must cover every
+link and distinct-entity field.
+
 Live telemetry connectors are read-only query clients and are disabled until
 both execution and network access are explicitly enabled. Wildcard datasets or
 targets, windows over 24 hours, limits over 10,000 records, responses over 32

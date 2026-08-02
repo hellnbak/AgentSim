@@ -43,6 +43,7 @@ from agentsim.safety.authorization import load_authorization_manifest
 from agentsim.storage import RunStore
 from agentsim.telemetry.collectors import COLLECTOR_NAMES, collector_for
 from agentsim.telemetry.assurance import assess_telemetry
+from agentsim.telemetry.investigation import investigate_telemetry
 from agentsim.telemetry.connectors import CONNECTOR_NAMES, QuerySpec, build_query_plan, execute_query_plan
 
 
@@ -123,6 +124,16 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     telemetry_doctor.add_argument("--output")
     telemetry_doctor.add_argument(
         "--fail-on", choices=("never", "degraded", "unusable"), default="unusable"
+    )
+    telemetry_investigate = telemetry_commands.add_parser(
+        "investigate",
+        help="Reconstruct multi-agent causal paths and evaluate identity, goal, and memory invariants.",
+    )
+    telemetry_investigate.add_argument("path")
+    telemetry_investigate.add_argument("--collector", choices=COLLECTOR_NAMES, default="jsonl")
+    telemetry_investigate.add_argument("--output")
+    telemetry_investigate.add_argument(
+        "--fail-on", choices=("never", "review", "elevated", "critical"), default="critical"
     )
     telemetry_query = telemetry_commands.add_parser(
         "query", help="Plan or explicitly execute an exact-target, read-only SIEM query."
@@ -309,6 +320,13 @@ def _run_v1(args: argparse.Namespace) -> int | None:
         if args.fail_on == "degraded":
             return 0 if report.status == "healthy" else 1
         return 1 if report.status == "unusable" else 0
+    if args.command == "telemetry" and args.telemetry_command == "investigate":
+        report = investigate_telemetry(collector_for(args.collector).collect(args.path))
+        _emit_json(report.to_dict(), args.output)
+        if args.fail_on == "never":
+            return 0
+        levels = {"clean": 0, "review": 1, "elevated": 2, "critical": 3}
+        return 1 if levels[report.status] >= levels[args.fail_on] else 0
     if args.command == "telemetry" and args.telemetry_command == "query-history":
         _emit_json(RunStore(args.database).telemetry_query_history(args.limit))
         return 0

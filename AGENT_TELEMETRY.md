@@ -1,6 +1,6 @@
 # Agent and MCP telemetry contract
 
-AgentSim 1.3 defines a content-safe event contract for correlating agent,
+AgentSim 1.4 defines agent trace contract 1.1 for correlating agent,
 model, tool, policy, and MCP activity without retaining prompts, reasoning,
 messages, tool arguments/results, model responses, payloads, credentials, or
 unsafe token values.
@@ -40,7 +40,9 @@ The complete machine-readable shape is
 | Identity | `agent_id`, `agent_instance_id`, `principal_id` | Prevent unrelated agents or principals from being correlated. |
 | Tool activity | `tool_call_id`, `tool_name`, `tool_risk` | Connect a request, authorization decision, and outcome. |
 | Causality | `parent_event_id`, `caused_by_event_ids`, `delegation_id` | Reconstruct delegation and multi-agent graphs. |
-| Data state | `data_lineage_id`, `memory_id`, `input_trust`, `taint_labels` | Track provenance and trust propagation. |
+| Delegation identity | `delegated_from_agent_id`, `delegated_to_agent_id`, `identity_binding_valid` | Verify sender/receiver continuity at cross-agent boundaries. |
+| Goal integrity | `goal_id`, `goal_fingerprint`, `goal_integrity_valid`, `goal_change_approved` | Detect unapproved goal changes across turns and agents. |
+| Data state | `data_lineage_id`, `memory_id`, `memory_scope`, `memory_provenance_valid`, `memory_retention_valid`, `input_trust`, `taint_labels` | Track provenance, retention, and trust propagation. |
 | Policy/approval | `policy_id`, `policy_version`, `policy_decision`, `approval_id`, `approval_fingerprint` | Detect stale policy, replay, or summary/action mismatch. |
 | MCP authorization | `mcp_client_id`, `mcp_server_id`, `auth_audience`, `auth_resource`, `auth_scopes`, `auth_audience_valid`, `consent_valid` | Detect audience, resource, scope, and per-client-consent failures. |
 | Result | `outcome`, `synthetic`, `content_recorded` | Separate proposed, blocked, simulated, and completed checkpoints. |
@@ -81,15 +83,33 @@ agent.tool.requested
 
 MCP-mediated requests should also emit `mcp.authorization.checked` with client,
 server, audience/resource, bounded scopes, audience validity, and per-client
-consent. The v1.3 reference corpus emits malicious/benign authorization twins
+consent. The v1.4 reference corpus emits malicious/benign authorization twins
 so absence of those fields is no longer a detection-pack visibility gap.
+
+Multi-agent runtimes should preserve a chain such as:
+
+```text
+agent.goal.integrity
+  → agent.delegation.requested
+  → agent.delegation.accepted
+  → agent.memory.written | agent.memory.read
+  → agent.tool.requested
+  → agent.policy.decision
+```
+
+Every cross-agent edge should carry a delegation ID, bound sender/receiver,
+originating principal, goal identity/fingerprint, and applicable memory
+lineage. The v1.4 reference fixture emits a three-agent malicious/benign twin
+for this sequence.
 
 Memory writes, retrieval, delegation, approval, configuration, and MCP
 authorization should likewise emit the observable decision separately from the
 requested action. Blocked events remain valuable: they prove hostile or unsafe
 intent reached a control boundary without implying compromise.
 
-Run [`telemetry doctor`](TELEMETRY_ASSURANCE.md) on every new runtime mapping.
+Run [`telemetry doctor`](TELEMETRY_ASSURANCE.md) on every new runtime mapping,
+then use [`telemetry investigate`](MULTI_AGENT_INVESTIGATION.md) when agent,
+delegation, goal, or memory fields are present.
 A deterministic fallback keeps malformed exports parseable, but the assurance
 report marks substituted timestamps and generated identities so they cannot be
 mistaken for native correlation evidence.

@@ -79,6 +79,219 @@ def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def _multi_agent_trace(
+    *,
+    run_id: str,
+    fixture: LabFixture,
+    variant: str,
+    allowed: bool,
+    reason: str,
+    tool_effect_applied: bool,
+) -> tuple[AgentTraceEvent, ...]:
+    """Emit a longer, content-safe delegation graph for v1.4 investigations."""
+
+    malicious = variant == "malicious"
+    trace_id = f"{run_id}:{variant}"
+    principal = "synthetic-operator"
+    drifted_principal = "synthetic-shadow-principal" if malicious else principal
+    goal_id = f"{trace_id}:goal"
+    goal_fingerprint = "goal-fingerprint-baseline"
+    changed_goal_fingerprint = "goal-fingerprint-drifted" if malicious else goal_fingerprint
+    lineage_id = None if malicious else f"{trace_id}:lineage"
+    memory_id = f"{trace_id}:memory"
+    delegation_one = f"{trace_id}:delegation-research"
+    delegation_two = f"{trace_id}:delegation-execution"
+
+    def checkpoint(event_id: str, event_type: str, **changes: object) -> AgentTraceEvent:
+        value: dict[str, object] = {
+            "timestamp": _timestamp(),
+            "event_id": f"{trace_id}:{event_id}",
+            "event_type": event_type,
+            "trace_id": trace_id,
+            "session_id": f"reference-session-{variant}",
+            "conversation_id": f"reference-conversation-{variant}",
+            "agent_id": "orchestrator-agent",
+            "agent_instance_id": f"orchestrator-{run_id[:8]}",
+            "principal_id": principal,
+            "tool_call_id": f"{trace_id}:tool-call",
+            "tool_name": fixture.tool_name,
+            "tool_risk": "high" if malicious else "low",
+            "policy_id": fixture.control,
+            "policy_version": "1.4",
+            "input_trust": "untrusted" if malicious else "trusted",
+            "taint_labels": (fixture.attack_class,) if malicious else (),
+            "goal_id": goal_id,
+            "goal_fingerprint": goal_fingerprint,
+            "goal_integrity_valid": True,
+            "goal_change_approved": False,
+            "synthetic": True,
+            "content_recorded": False,
+            "attributes": {"fixture_id": fixture.fixture_id, "variant": variant},
+        }
+        value.update(changes)
+        return AgentTraceEvent(**value)  # type: ignore[arg-type]
+
+    goal = checkpoint(
+        "goal",
+        "agent.goal.integrity",
+        goal_integrity_valid=not malicious,
+        outcome="mismatch" if malicious else "verified",
+        attributes={
+            "fixture_id": fixture.fixture_id,
+            "variant": variant,
+            "checkpoint": "goal_bound",
+        },
+    )
+    first_request = checkpoint(
+        "delegation-1-request",
+        "agent.delegation.requested",
+        parent_event_id=goal.event_id,
+        caused_by_event_ids=(goal.event_id,),
+        delegation_id=delegation_one,
+        delegated_from_agent_id="orchestrator-agent",
+        delegated_to_agent_id="research-agent",
+        identity_binding_valid=True,
+        outcome="proposed",
+        attributes={"fixture_id": fixture.fixture_id, "variant": variant, "executed": False},
+    )
+    first_accept = checkpoint(
+        "delegation-1-accept",
+        "agent.delegation.accepted",
+        parent_event_id=first_request.event_id,
+        caused_by_event_ids=(first_request.event_id,),
+        agent_id="research-agent",
+        agent_instance_id=f"research-{run_id[:8]}",
+        delegation_id=delegation_one,
+        delegated_from_agent_id="orchestrator-agent",
+        delegated_to_agent_id="research-agent",
+        identity_binding_valid=not malicious,
+        outcome="accepted" if not malicious else "identity_mismatch",
+        attributes={"fixture_id": fixture.fixture_id, "variant": variant, "executed": False},
+    )
+    memory = checkpoint(
+        "memory",
+        "agent.memory.written",
+        parent_event_id=first_accept.event_id,
+        caused_by_event_ids=(first_accept.event_id,),
+        agent_id="research-agent",
+        agent_instance_id=f"research-{run_id[:8]}",
+        delegation_id=delegation_one,
+        delegated_from_agent_id="orchestrator-agent",
+        delegated_to_agent_id="research-agent",
+        identity_binding_valid=not malicious,
+        data_lineage_id=lineage_id,
+        memory_id=memory_id,
+        memory_scope="shared",
+        memory_provenance_valid=not malicious,
+        memory_retention_valid=not malicious,
+        goal_fingerprint=changed_goal_fingerprint,
+        goal_integrity_valid=not malicious,
+        outcome="blocked" if malicious else "retained",
+        attributes={
+            "fixture_id": fixture.fixture_id,
+            "variant": variant,
+            "executed": False,
+            "content_recorded": False,
+        },
+    )
+    second_request = checkpoint(
+        "delegation-2-request",
+        "agent.delegation.requested",
+        parent_event_id=memory.event_id,
+        caused_by_event_ids=(memory.event_id,),
+        agent_id="research-agent",
+        agent_instance_id=f"research-{run_id[:8]}",
+        delegation_id=delegation_two,
+        delegated_from_agent_id="research-agent",
+        delegated_to_agent_id="execution-agent",
+        identity_binding_valid=not malicious,
+        memory_id=memory_id,
+        memory_scope="shared",
+        memory_provenance_valid=not malicious,
+        memory_retention_valid=not malicious,
+        goal_fingerprint=changed_goal_fingerprint,
+        goal_integrity_valid=not malicious,
+        outcome="proposed",
+        attributes={"fixture_id": fixture.fixture_id, "variant": variant, "executed": False},
+    )
+    second_accept = checkpoint(
+        "delegation-2-accept",
+        "agent.delegation.accepted",
+        parent_event_id=second_request.event_id,
+        caused_by_event_ids=(second_request.event_id,),
+        agent_id="execution-agent",
+        agent_instance_id=f"execution-{run_id[:8]}",
+        principal_id=drifted_principal,
+        delegation_id=delegation_two,
+        delegated_from_agent_id="research-agent",
+        delegated_to_agent_id="execution-agent",
+        identity_binding_valid=not malicious,
+        memory_id=memory_id,
+        memory_scope="shared",
+        memory_provenance_valid=not malicious,
+        memory_retention_valid=not malicious,
+        goal_fingerprint=changed_goal_fingerprint,
+        goal_integrity_valid=not malicious,
+        outcome="accepted" if not malicious else "identity_mismatch",
+        attributes={"fixture_id": fixture.fixture_id, "variant": variant, "executed": False},
+    )
+    tool = checkpoint(
+        "tool",
+        "agent.tool.requested",
+        parent_event_id=second_accept.event_id,
+        caused_by_event_ids=(second_accept.event_id, memory.event_id),
+        agent_id="execution-agent",
+        agent_instance_id=f"execution-{run_id[:8]}",
+        principal_id=drifted_principal,
+        delegation_id=delegation_two,
+        delegated_from_agent_id="research-agent",
+        delegated_to_agent_id="execution-agent",
+        identity_binding_valid=not malicious,
+        memory_id=memory_id,
+        memory_scope="shared",
+        memory_provenance_valid=not malicious,
+        memory_retention_valid=not malicious,
+        goal_fingerprint=changed_goal_fingerprint,
+        goal_integrity_valid=not malicious,
+        policy_decision="deny" if malicious else "allow",
+        outcome="proposed",
+        attributes={
+            "fixture_id": fixture.fixture_id,
+            "variant": variant,
+            "executed": False,
+            "arguments_recorded": False,
+        },
+    )
+    policy = checkpoint(
+        "policy",
+        "agent.policy.decision",
+        parent_event_id=tool.event_id,
+        caused_by_event_ids=(tool.event_id,),
+        agent_id="execution-agent",
+        agent_instance_id=f"execution-{run_id[:8]}",
+        principal_id=drifted_principal,
+        delegation_id=delegation_two,
+        delegated_from_agent_id="research-agent",
+        delegated_to_agent_id="execution-agent",
+        identity_binding_valid=not malicious,
+        memory_id=memory_id,
+        memory_scope="shared",
+        memory_provenance_valid=not malicious,
+        memory_retention_valid=not malicious,
+        goal_fingerprint=changed_goal_fingerprint,
+        goal_integrity_valid=not malicious,
+        policy_decision="allow" if allowed else "deny",
+        outcome="allowed" if allowed else "prevented",
+        attributes={
+            "fixture_id": fixture.fixture_id,
+            "variant": variant,
+            "decision_reason": reason,
+            "tool_effect_applied": tool_effect_applied,
+        },
+    )
+    return (goal, first_request, first_accept, memory, second_request, second_accept, tool, policy)
+
+
 def _trace(
     *,
     run_id: str,
@@ -88,6 +301,15 @@ def _trace(
     reason: str,
     tool_effect_applied: bool,
 ) -> tuple[AgentTraceEvent, ...]:
+    if fixture.fixture_id == "multi-agent-delegation-cascade":
+        return _multi_agent_trace(
+            run_id=run_id,
+            fixture=fixture,
+            variant=variant,
+            allowed=allowed,
+            reason=reason,
+            tool_effect_applied=tool_effect_applied,
+        )
     trace_id = f"{run_id}:{variant}"
     request = fixture.malicious_request if variant == "malicious" else fixture.benign_request
     mcp_authorization = fixture.tool_name.startswith("mcp.")
@@ -105,7 +327,7 @@ def _trace(
         "tool_name": fixture.tool_name,
         "tool_risk": "low" if variant == "benign" else "high",
         "policy_id": fixture.control,
-        "policy_version": "1.3",
+        "policy_version": "1.4",
         "synthetic": True,
         "content_recorded": False,
     }

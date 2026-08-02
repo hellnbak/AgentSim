@@ -3,7 +3,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import closing, redirect_stdout
 from dataclasses import replace
 from pathlib import Path
 
@@ -271,7 +271,7 @@ class LiveConnectorTests(unittest.TestCase):
     def test_query_history_schema_migrates_existing_v1_database(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             database = Path(temp_dir) / "runs.sqlite3"
-            with sqlite3.connect(database) as connection:
+            with closing(sqlite3.connect(database)) as connection, connection:
                 connection.execute(
                     """
                     CREATE TABLE telemetry_queries (
@@ -283,7 +283,7 @@ class LiveConnectorTests(unittest.TestCase):
                     """
                 )
             RunStore(database)
-            with sqlite3.connect(database) as connection:
+            with closing(sqlite3.connect(database)) as connection:
                 columns = {row[1] for row in connection.execute("PRAGMA table_info(telemetry_queries)")}
             self.assertIn("run_id", columns)
 

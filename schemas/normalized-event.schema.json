@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/normalized-event.schema.json",
+  "title": "AgentSim Normalized Defensive Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "timestamp", "source", "event_type", "fields", "available_fields", "collector", "synthetic", "metadata"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "timestamp": {"type": "string", "minLength": 1},
+    "source": {"type": "string", "minLength": 1},
+    "event_type": {"type": "string", "minLength": 1},
+    "fields": {"type": "object"},
+    "available_fields": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "collector": {"enum": ["jsonl", "otel", "sysmon", "auditd", "cloudtrail", "crowdstrike", "splunk", "agent_runtime"]},
+    "synthetic": {"type": "boolean"},
+    "source_record_id": {"type": ["string", "null"]},
+    "metadata": {"type": "object"}
+  }
+}

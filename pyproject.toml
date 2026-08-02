@@ -4,18 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentsim"
-version = "0.4.0"
+version = "1.0.0"
 description = "Detection-first adversary emulation for endpoints, cloud, and agentic AI"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
 authors = [{name = "AgentSim contributors"}]
 keywords = ["adversary-emulation", "agentic-ai", "detection-engineering", "purple-team", "security", "mitre-attack"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Security",
 ]
@@ -42,6 +42,7 @@ include = ["agentsim*", "agentsim_scenarios*"]
 "agentsim.content.packs" = ["*.json"]
 "agentsim.content.campaigns" = ["*.json"]
 "agentsim.content.catalogs" = ["*.json"]
+"agentsim.content" = ["trusted_keys.json"]
 
 [tool.setuptools.data-files]
 "share/agentsim/schemas" = [
@@ -52,4 +53,7 @@ include = ["agentsim*", "agentsim_scenarios*"]
     "schemas/command-catalog.schema.json",
     "schemas/agent-event.schema.json",
     "schemas/scenario-pack.schema.json",
+    "schemas/normalized-event.schema.json",
+    "schemas/detection-rule.schema.json",
+    "schemas/external-plan.schema.json",
 ]

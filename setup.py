@@ -14,7 +14,7 @@ README = Path(__file__).with_name("README.md").read_text(encoding="utf-8")
 
 setup(
     name="agentsim",
-    version="0.4.0",
+    version="1.0.0",
     description="Detection-first adversary emulation for endpoints, cloud, and agentic AI",
     url="https://github.com/hellnbak/AgentSim",
     project_urls={
@@ -27,10 +27,9 @@ setup(
     python_requires=">=3.9",
     license="MIT",
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 5 - Production/Stable",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3 :: Only",
-        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Topic :: Security",
     ],
@@ -41,6 +40,7 @@ setup(
         "agentsim.content.packs": ["*.json"],
         "agentsim.content.campaigns": ["*.json"],
         "agentsim.content.catalogs": ["*.json"],
+        "agentsim.content": ["trusted_keys.json"],
     },
     data_files=[
         (
@@ -53,6 +53,9 @@ setup(
                 "schemas/command-catalog.schema.json",
                 "schemas/agent-event.schema.json",
                 "schemas/scenario-pack.schema.json",
+                "schemas/normalized-event.schema.json",
+                "schemas/detection-rule.schema.json",
+                "schemas/external-plan.schema.json",
             ],
         )
     ],

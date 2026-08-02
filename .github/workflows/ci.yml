@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.9", "3.12"]
+        python-version: ["3.9", "3.12", "3.13"]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -28,6 +28,14 @@ jobs:
         run: python -m py_compile core.py mcp_lab.py scenarios.py tactics.py web_ui.py
       - name: Test
         run: python -m unittest discover -s tests -v
+      - name: v1 campaign and evidence smoke test
+        run: agentsim campaign run endpoint-discovery-baseline --mode simulate --target synthetic://ci --authorization examples/authorization.simulate.json --output-dir smoke-campaign-runs --database smoke-runs.db
+      - name: v1 detection and lab interfaces
+        run: |
+          agentsim detection generate endpoint.discovery.processes --format sigma
+          agentsim lab run all --output smoke-agentic-lab.json
+          agentsim attack-flow export endpoint-discovery-baseline --output smoke-attack-flow.json
+          agentsim external plan stratus-red-team --provider-version 2.17.0 --target cloud://aws/security-sandbox --technique-id aws.discovery.ec2-describe-instances --output smoke-external-plan.json
       - name: Smoke test
         run: python core.py --dry-run --iterations 3 --speed 0 --seed 42 --output smoke-layer.json
       - name: Scenario smoke test
@@ -41,3 +49,7 @@ jobs:
           path: |
             agent_sim_evidence.zip
             smoke-mcp-lab.json
+            smoke-agentic-lab.json
+            smoke-attack-flow.json
+            smoke-external-plan.json
+            smoke-campaign-runs/*/evidence.zip

@@ -5,102 +5,83 @@ Detection-first adversary emulation for endpoints, cloud, and agentic AI.
 **EMULATE → OBSERVE → DETECT → DEFEND → RETEST**
 
 AgentSim is an open-source purple-team framework that connects bounded attack
-behavior to ground truth, telemetry expectations, detection validation,
-defensive recommendations, cleanup verification, and repeatable evidence. It
-is deliberately not a general exploitation toolkit or command-and-control
-platform.
+behavior to ground truth, telemetry coverage, detection validation, defensive
+guidance, cleanup verification, and repeatable evidence. It is deliberately not
+a general exploitation toolkit or command-and-control platform.
 
-Version 0.4.0, **Adversary Emulation Foundation**, adds directed campaigns,
-reviewed ability content, scoped authorization, execution providers, action
-lifecycle schema v3, persistent run history, and a safe campaign workflow in
-the dashboard. The existing synthetic agentic benchmark remains
-simulation-only.
+Version 1.0.0 consolidates the adversary-emulation foundation, offline
+detection engine, disposable agentic lab, external-provider planning, signed
+content, portable evidence, Web workspace, CI interfaces, and stable plugin SDK.
 
-## What makes AgentSim different
+## Core workflow
 
-A conventional attack framework often stops after an action runs. AgentSim
-records and evaluates the complete defensive lifecycle:
+Every campaign action records a complete lifecycle:
 
 ```text
 planned → authorized → prepared → attempted → simulated/executed
-        → observed → detected/missed/pending
+        → observed → prevented/detected/missed/pending
         → cleanup started → cleaned → verified
 ```
 
-Every v0.4 ability defines expected telemetry, detection objectives, benign
-controls, and defenses. Campaign runs produce an immutable authorization/run
-manifest, lifecycle-v3 JSONL, a defensive report, SQLite history, and a ZIP
-evidence bundle.
+AgentSim then correlates exported telemetry, evaluates vendor-neutral rules,
+checks field availability, creates human-review candidate detections, explains
+defensive gaps, and emits regression-ready evidence.
 
-## Three separate content contracts
+## v1 capabilities
+
+- Eight reviewed endpoint/cloud abilities and two directed campaigns.
+- Strict scenario, ability, and campaign content boundaries.
+- Simulation, localhost, and named Docker execution providers.
+- Expiring authorization, exact target/CIDR scope, production lockout, resource
+  limits, kill switch, redaction, and mandatory cleanup paths.
+- Offline JSON/JSONL collectors for OTel, Sysmon, auditd, CloudTrail,
+  CrowdStrike, Splunk, and agent-runtime exports.
+- Detection AST supporting field predicates, boolean logic, ordered sequences,
+  time windows, thresholds, distinct counts, parent/child relationships,
+  causal graphs, negative conditions, and host/user/resource grouping.
+- Candidate renderers for Sigma, Microsoft KQL, Splunk SPL, CrowdStrike
+  LogScale, Elastic EQL, Panther Python, and Graylog.
+- Telemetry coverage, defensive gap analysis, investigation runbooks,
+  malicious/benign regression, and readiness scorecards.
+- Nineteen declarative agentic scenarios plus ten disposable in-memory control
+  fixtures for prompt injection, memory/RAG poisoning, MCP abuse, confused
+  deputy, delegation spoofing, approval deception, decoy-secret access, and
+  recursive budget abuse.
+- Version-pinned, non-executing plans for Atomic Red Team, Stratus Red Team,
+  and MITRE CALDERA. The public core does not execute these plans.
+- Attack Flow STIX 2.1 import/export.
+- RSA-signed built-in ability, campaign, and reviewed-command content.
+- SQLite run, action, lifecycle, detection, and artifact records.
+- Stable plugin API 1.0 for collectors, detection renderers, and separately
+  installed external executors.
+
+## Content and execution boundaries
 
 | Content | Purpose | Execution |
 | --- | --- | --- |
 | Scenario pack | Malicious/benign agentic traces and detector tests | Never |
-| Ability pack | One reviewed adversary behavior | Gated by provider and policy |
-| Campaign pack | Directed ability graph, objective, telemetry, and stop conditions | Gated by provider and policy |
-
-Scenario validation still requires `attributes.executed: false` for proposed
-sensitive actions and permits only synthetic or loopback resources. Ability
-and campaign files cannot embed commands, scripts, payloads, or arbitrary shell
-text. Abilities reference an independently checksummed, reviewed static command
-catalog with `catalog://...` identifiers.
-
-## Execution modes
+| Ability pack | One reviewed adversary behavior | Policy-gated |
+| Campaign pack | Directed ability graph and defensive objective | Policy-gated |
 
 | Mode | Provider | Boundary |
 | --- | --- | --- |
-| `simulate` | Simulation | Default; starts no process and opens no network connection |
+| `simulate` | Simulation | Default; no process and no network |
 | `emulate` | Local | Static reviewed argv on an explicit `localhost://` target |
-| `lab` | Docker | Static reviewed argv inside an explicitly named `docker://` container |
+| `lab` | Docker | Static reviewed argv in an explicitly named existing container |
+| external plan | Plugin handoff | Version-pinned plan only; never executed by the public core |
 
-The public core rejects elevation, production targets, unallowlisted targets,
-expired authorization, arbitrary command input, and state-changing abilities
-without cleanup. Network access requires approval from the ability, run flag,
-and authorization manifest.
+Ability and campaign packs cannot embed commands, scripts, payloads, downloads,
+or arbitrary shell text. Abilities reference an independently signed reviewed
+catalog with `catalog://...` identifiers. Scenario actions remain synthetic,
+redacted, and explicitly non-executing.
 
-External Atomic Red Team, Stratus Red Team, CALDERA, and Attack Flow adapters
-are planned for later releases; AgentSim will integrate with those projects
-instead of duplicating their exploitation or C2 functionality.
-
-## Included coverage
-
-### Directed endpoint and cloud abilities
-
-Eight built-in abilities migrate the original read-only discovery catalog:
-
-- system, user, account, process, and group discovery;
-- network connection and network configuration discovery; and
-- authenticated read-only cloud service discovery.
-
-Two built-in campaigns provide an endpoint discovery baseline and a
-simulation-first cloud visibility baseline. See [`ABILITIES.md`](ABILITIES.md)
-and [`CAMPAIGNS.md`](CAMPAIGNS.md).
-
-### Agentic detection benchmark
-
-Nineteen built-in scenarios cover prompt injection, memory and RAG poisoning,
-MCP tool and identity abuse, confused-deputy/SSRF intent, inter-agent spoofing,
-cascading delegation, deceptive and replayed approvals, rogue policy evasion,
-unexpected code-execution intent, recursive cost abuse, decoy-secret intent,
-model fallback downgrade, planner/executor policy gaps, tenant confusion,
-emergent tool chains, and agent registry poisoning.
-
-Every malicious trace has a benign twin and a label-independent reference
-detector. Optional mutations test resilience. Scenario runs preserve JSONL,
-JUnit, SARIF, OpenTelemetry-compatible logs, coverage, scorecards, and ZIP
-evidence bundles. See [`SCENARIOS.md`](SCENARIOS.md).
-
-## Requirements
+## Requirements and install
 
 - Python 3.9 or newer
 - Flask 3.1 or newer for the local Web UI
-- Docker only when explicitly using `--mode lab`
-
-The CLI foundation has no vendor credentials or direct SIEM dependency.
-Detection outcomes can be supplied as an offline JSON mapping.
-
-## Install
+- Docker only for an explicitly authorized `lab` campaign
+- External tools only when a separately installed executor plugin is reviewed
+  and authorized
 
 ```bash
 python -m venv .venv
@@ -109,99 +90,117 @@ python -m pip install -r requirements.txt
 python -m pip install .
 ```
 
-On Windows PowerShell:
+Windows PowerShell activation:
 
 ```powershell
 .venv\Scripts\Activate.ps1
 ```
 
-## Quick start
-
-Inspect the reviewed content:
+## Campaign quick start
 
 ```bash
 agentsim --version
 agentsim ability list
 agentsim campaign list
-```
 
-Plan the endpoint campaign against the included simulation-only authorization:
-
-```bash
 agentsim campaign plan endpoint-discovery-baseline \
   --mode simulate \
   --target synthetic://ci \
   --authorization examples/authorization.simulate.json
-```
 
-Run it without starting a process:
-
-```bash
 agentsim campaign run endpoint-discovery-baseline \
   --mode simulate \
   --target synthetic://ci \
   --authorization examples/authorization.simulate.json
+
+agentsim campaign history
 ```
 
-The run creates:
+A v1 campaign run creates:
 
 ```text
 agent_sim_campaign_runs/<run-id>/
 ├── run-manifest.json
 ├── action-lifecycle.jsonl
 ├── campaign-report.json
+├── defense-scorecard.json
+├── defense-runbooks.json
+├── detection-candidates.json
+├── attack-flow.json
 └── evidence.zip
 ```
 
-Inspect persistent history:
+Simulation completes the execution/cleanup lifecycle but leaves telemetry and
+detection status explicitly unevaluated until exported sensor data or an
+offline detection-result map is supplied.
 
-```bash
-agentsim campaign history
-```
+### Local and Docker modes
 
-Run one ability through the same authorization and lifecycle pipeline:
+Local execution is never the default. Create a short-lived authorization that
+names the exact target and abilities, then explicitly select `emulate`:
 
 ```bash
 agentsim ability run endpoint.discovery.processes \
-  --mode simulate \
-  --target synthetic://ci \
-  --authorization examples/authorization.simulate.json
-```
-
-### Local emulation
-
-Local execution is never the default. Create a short-lived authorization
-manifest that names the exact `localhost://` target, allowed ability IDs,
-resource limits, and `emulate` mode. Then run:
-
-```bash
-agentsim campaign run endpoint-discovery-baseline \
   --mode emulate \
   --target localhost://detection-lab \
-  --authorization /path/to/short-lived-local-authorization.json
+  --authorization /path/to/local-authorization.json
 ```
 
-Commands are resolved from the reviewed catalog into argv arrays and executed
-without user-controlled shell interpolation. Output content is not persisted;
-only its byte count and SHA-256 digest are recorded.
-
-### Docker lab
-
-The Docker provider requires an existing, disposable Linux container named in
-both the target URI and authorization allowlist:
+Docker mode requires an existing disposable container. AgentSim never pulls or
+selects an image implicitly:
 
 ```bash
 agentsim campaign run endpoint-discovery-baseline \
   --mode lab \
   --target docker://agentsim-lab \
-  --authorization /path/to/short-lived-lab-authorization.json
+  --authorization /path/to/lab-authorization.json
 ```
 
-AgentSim does not create, pull, or select a container implicitly.
+## Offline detection workflow
 
-## Synthetic scenario and MCP labs
+Inspect a vendor export without sending it anywhere:
 
-The v0.3 flags remain compatible:
+```bash
+agentsim telemetry inspect exported-events.jsonl --collector crowdstrike
+```
+
+Generate a transparent candidate bundle:
+
+```bash
+agentsim detection generate endpoint.discovery.processes \
+  --output-dir candidate-process-discovery
+```
+
+Evaluate a vendor-neutral rule:
+
+```bash
+agentsim detection evaluate rule.json exported-events.jsonl \
+  --collector crowdstrike
+```
+
+Analyze expected sources and required fields, then generate a runbook:
+
+```bash
+agentsim defense analyze endpoint.discovery.processes exported-events.jsonl \
+  --collector crowdstrike
+```
+
+Use malicious and benign exports as a CI gate:
+
+```bash
+agentsim defense regress rule.json \
+  --malicious malicious.jsonl \
+  --benign benign.jsonl \
+  --collector jsonl
+```
+
+Exit code `0` means the requested detection/regression condition passed; `1`
+means it did not. Generated rules always retain candidate/human-review status.
+See [DETECTION_ENGINE.md](DETECTION_ENGINE.md) and [DETECTIONS.md](DETECTIONS.md).
+
+## Agentic security lab
+
+The existing declarative benchmark remains available:
 
 ```bash
 agentsim --list-scenarios
@@ -209,107 +208,114 @@ agentsim --scenario all --variant both --mutations 1 --mutation-seed 42 --speed 
 agentsim --mcp-lab
 ```
 
-Legacy randomized endpoint behavior is now a safe preview by default:
+The v1 control fixtures are smaller disposable policy exercises:
 
 ```bash
-agentsim --iterations 12 --seed 42
+agentsim lab list
+agentsim lab run all --output agentic-lab-results.json
+agentsim lab run approval-deception
 ```
 
-Explicit legacy local execution requires `--execute-local`. New automation
-should prefer abilities and campaigns because they also require scoped
-authorization and produce lifecycle-v3 evidence.
+These fixtures run in memory. They do not open a socket, start a process, load
+a tool/plugin, read a file or credential, or record a prompt/token/payload.
+See [SCENARIOS.md](SCENARIOS.md).
 
-## Web UI
+## External provider plans and Attack Flow
+
+The public core only emits reviewed plans:
+
+```bash
+agentsim external list
+
+agentsim external plan atomic-red-team \
+  --provider-version 2.2.0 \
+  --target localhost://atomic-lab \
+  --technique-id T1057 \
+  --test-guid 11111111-1111-4111-8111-111111111111 \
+  --output atomic-plan.json
+
+agentsim external plan stratus-red-team \
+  --provider-version 2.17.0 \
+  --target cloud://aws/security-sandbox \
+  --technique-id aws.discovery.ec2-describe-instances
+```
+
+No plan contains credentials, and `execution_supported_by_core` is always
+false. Execution requires a separately installed plugin, explicit operator
+authorization, a version match, and an isolated target.
+
+```bash
+agentsim attack-flow export endpoint-discovery-baseline --output flow.json
+agentsim attack-flow import flow.json --output campaign-draft.json
+```
+
+Imports are review drafts and must be converted into a signed campaign pack
+before execution. See [EXTERNAL_PROVIDERS.md](EXTERNAL_PROVIDERS.md).
+
+## Web workspace
 
 ```bash
 agentsim-web
 ```
 
-Open `http://127.0.0.1:5000`. The development server binds only to localhost.
-The dashboard includes:
+Open `http://127.0.0.1:5000`. The server binds only to loopback. The dashboard
+includes safe endpoint preview, the scenario benchmark, human Detection
+Debugger, authorized simulation-only campaigns, SQLite history, a synthetic
+detection/coverage workspace, and all ten in-memory agentic control fixtures.
+Local, Docker, and external execution are intentionally unavailable in the UI.
 
-- safe endpoint behavior preview and explicit local opt-in;
-- the synthetic agentic scenario benchmark;
-- the human Detection Debugger;
-- an **Authorized campaign foundation** card that runs simulation-only
-  campaigns through lifecycle v3; and
-- SQLite-backed campaign history.
+## Plugin SDK
 
-The campaign card intentionally exposes only `simulate`. Local and Docker
-execution require the CLI and an operator-created authorization manifest.
+```bash
+agentsim plugin list
+```
 
-## Authorization manifests
-
-An authorization manifest records who approved a run, its purpose, issuance
-and expiration, modes, exact targets, ability IDs, network decision, and
-resource limits. The machine-readable contract is
-[`schemas/authorization-manifest.schema.json`](schemas/authorization-manifest.schema.json).
-
-Target URI examples:
-
-- `synthetic://ci`
-- `localhost://detection-lab`
-- `docker://agentsim-lab`
-- `ip://192.0.2.10`, authorized through an explicit `cidr://192.0.2.0/24`
-- `cloud://aws/security-sandbox`
-
-Built-in abilities set `production_allowed: false`; a production cloud target
-therefore fails closed even if it appears in a manifest.
-
-## Detection content
-
-The [`detections/`](detections/) directory contains experimental Sigma,
-Microsoft KQL, Splunk SPL, CrowdStrike LogScale CQL, Graylog, Panther, and
-Elastic EQL examples. Agent-runtime rules never query ground-truth labels.
-See [`DETECTIONS.md`](DETECTIONS.md).
+Plugin metadata is listed without importing third-party code. Explicit loading
+enforces API version `1.0`. Entry-point groups are `agentsim.collectors`,
+`agentsim.detection_renderers`, and `agentsim.external_executors`. See
+[PLUGIN_SDK.md](PLUGIN_SDK.md).
 
 ## Safety guarantees
 
-- Simulation is the default for campaigns and legacy endpoint behavior.
-- Scenario packs remain non-executing and synthetic-only.
-- Campaigns reference abilities; they cannot contain executable text.
-- Ability packs, campaign packs, and reviewed command catalogs require
-  canonical SHA-256 integrity metadata.
-- Local execution requires an explicit localhost target and short-lived
-  authorization.
-- Target allowlists accept exact named URIs or explicit CIDRs; wildcard target
-  scope is not accepted.
-- Docker execution requires an explicitly named existing container.
-- Network use requires ability, manifest, and run approval.
-- Production execution is disabled for every built-in ability.
-- State-changing abilities require cleanup metadata; cleanup always runs in a
-  `finally` path and is recorded.
-- Kill-switch and resource-limit checks apply before actions and processes;
-  cancellation preserves a separate bounded cleanup reserve.
-- Raw command output, tokens, prompts, and secrets are not written to evidence.
-- SQLite stores the immutable manifest hash and append-only action/event rows.
+- Simulation is the default.
+- Targets must be exact named URIs or explicit CIDRs; wildcard scope is denied.
+- Built-in abilities are locked out of production.
+- Network use requires ability, run, and authorization consent.
+- Elevation is rejected by the public core.
+- State changes require idempotent cleanup metadata and a cleanup attempt.
+- Kill-switch cancellation preserves a bounded cleanup reserve.
+- Raw command output, prompts, tokens, secrets, credentials, and payloads are
+  excluded from evidence.
+- Offline collectors limit file size and record count and never query vendors.
+- Third-party entry points are not imported during plugin discovery.
+- Built-in executable content has both a canonical digest and trusted RSA
+  signature.
+- External adapter plans are non-executing, version-pinned, hashed, and require
+  cleanup phases.
 
-Read-only does not mean impact-free. Local discovery can expose system metadata
-to local process telemetry or trigger alerts. Run it only on systems you own or
-are explicitly authorized to test.
+Read-only behavior can still expose local metadata to sensors or trigger
+alerts. Use AgentSim only on systems and accounts you own or are explicitly
+authorized to test. See [SECURITY.md](SECURITY.md).
 
-See [`SECURITY.md`](SECURITY.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md).
-
-## Development
+## Development and documentation
 
 ```bash
 python -m py_compile core.py mcp_lab.py scenarios.py tactics.py web_ui.py
-python -m compileall -q agentsim
 python -m unittest discover -s tests -v
-agentsim campaign run endpoint-discovery-baseline \
-  --mode simulate \
-  --target synthetic://ci \
-  --authorization examples/authorization.simulate.json
+python -m build
 ```
 
-Tests must mock local or Docker process execution. See
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-## Project status
-
-AgentSim 0.4.0 is an alpha foundation. Direct telemetry collectors, temporal
-and graph detector ASTs, candidate rule generation, isolated agentic fixtures,
-and external attack-provider adapters remain planned work.
+- [Architecture](ARCHITECTURE.md)
+- [Abilities](ABILITIES.md)
+- [Campaigns](CAMPAIGNS.md)
+- [Detection engine](DETECTION_ENGINE.md)
+- [Detection content](DETECTIONS.md)
+- [Agentic scenarios](SCENARIOS.md)
+- [External providers](EXTERNAL_PROVIDERS.md)
+- [Plugin SDK](PLUGIN_SDK.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 
 ## License and attribution
 
@@ -317,4 +323,4 @@ AgentSim is available under the [MIT License](LICENSE).
 
 MITRE ATT&CK® and ATT&CK® are registered trademarks of The MITRE Corporation.
 AgentSim is not affiliated with, sponsored by, or endorsed by MITRE. See
-[`NOTICE`](NOTICE).
+[NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

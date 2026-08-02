@@ -4,7 +4,7 @@
   "title": "AgentSim Campaign Pack",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "kind", "pack_id", "campaigns"],
+  "required": ["schema_version", "kind", "pack_id", "integrity", "campaigns"],
   "properties": {
     "schema_version": {"const": "1.0"},
     "kind": {"const": "campaign-pack"},
@@ -13,7 +13,20 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["algorithm", "digest"],
-      "properties": {"algorithm": {"const": "sha256"}, "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "signature": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "key_id", "value"],
+          "properties": {
+            "algorithm": {"const": "rsa-pkcs1v15-sha256"},
+            "key_id": {"type": "string", "minLength": 3},
+            "value": {"type": "string", "minLength": 32}
+          }
+        }
+      }
     },
     "campaigns": {
       "type": "array",

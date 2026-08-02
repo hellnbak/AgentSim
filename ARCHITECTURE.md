@@ -1,130 +1,131 @@
-# AgentSim architecture
+# AgentSim v1 architecture
 
-AgentSim 0.4.0 separates attack content, execution, authorization, evidence,
-and defensive evaluation so synthetic test data can never silently become
-executable content.
+AgentSim separates content, execution, authorization, telemetry, detection,
+and defensive evaluation so synthetic traces cannot silently become executable
+behavior and external integrations cannot bypass the public-core boundary.
 
 ```mermaid
 flowchart TD
-    Campaign["Campaign / attack flow"] --> Policy["Authorization and safety policy"]
+    Campaign["Campaign / Attack Flow"] --> Policy["Authorization and safety policy"]
     Policy --> Sim["Simulation provider"]
     Policy --> Local["Local provider"]
     Policy --> Docker["Docker lab provider"]
+    Policy --> Plan["External plan adapters"]
+    Plan --> Plugin["Explicit executor plugin outside public core"]
     Sim --> Timeline["Lifecycle-v3 ground truth"]
     Local --> Timeline
     Docker --> Timeline
-    Timeline --> History["SQLite run and action history"]
-    Timeline --> Detection["Detection outcome and telemetry expectations"]
-    Detection --> Defense["Defense recommendations"]
-    Defense --> Bundle["Portable evidence and regression command"]
+    Plugin --> Timeline
+    Timeline --> Store["SQLite run, action, event, detection, artifact history"]
+    Export["Offline vendor exports"] --> Collect["Bounded collectors and redaction"]
+    Collect --> Normalize["Normalized event model"]
+    Normalize --> Correlate["Ground-truth correlation"]
+    Timeline --> Correlate
+    Correlate --> Detect["Detection AST and coverage analysis"]
+    Detect --> Candidate["Human-review candidate renderers"]
+    Detect --> Defense["Gaps, runbooks, scorecards, regression"]
+    Candidate --> Bundle["Portable evidence bundle"]
+    Defense --> Bundle
 ```
 
 ## Package layout
 
 ```text
 agentsim/
-├── cli.py                 v0.4 commands and legacy dispatch
-├── api.py                 Python campaign API
-├── models/                ability, campaign, target, event, and result models
-├── content/               strict loaders, integrity, packs, campaigns, catalogs
-├── orchestration/         planning and lifecycle runner
-├── execution/             provider interface plus simulate/local/docker
-├── safety/                authorization, target scope, policy, and limits
-├── telemetry/             lifecycle-v3 JSONL persistence
-├── defense/               evidence-backed recommendations
-├── reporting/             portable campaign evidence bundles
-├── detection/             reserved package boundary for v0.5
-└── web/                   packaged Web entry point
+├── cli.py                 stable v1 CLI and legacy dispatch
+├── api.py                 stable Python API
+├── plugins.py             entry-point metadata and API 1.0 contracts
+├── models/                ability, campaign, target, result, event, telemetry
+├── content/               strict loaders, integrity, RSA trust, signed content
+├── orchestration/         directed planning and lifecycle runner
+├── execution/             simulate, local, and Docker provider interfaces
+├── external/              non-executing Atomic, Stratus, CALDERA plans
+├── safety/                authorization, target scope, policy, limits, cleanup
+├── telemetry/             ground truth, normalization, collectors, correlation
+├── detection/             AST, evaluator, coverage, generator, renderers
+├── defense/               recommendations, gaps, runbooks, regression, scorecard
+├── lab/                   disposable in-memory agentic control fixtures
+├── reporting/             bundles and Attack Flow STIX interchange
+└── web/                   packaged loopback Web entry point
 ```
 
 The root `core.py`, `scenarios.py`, `tactics.py`, `mcp_lab.py`, and `web_ui.py`
-modules remain as compatibility surfaces. `tactics.py` now derives the legacy
-random simulator view from the reviewed v0.4 command catalog.
+remain compatibility surfaces. New automation should use `agentsim.cli` or
+`agentsim.api`.
 
-## Content boundaries
+## Trust boundaries
 
 ### Scenario packs
 
-Scenario packs are synthetic evaluation fixtures. Validation requires proposed
-action events to set `attributes.executed: false`, limits resources to
-synthetic or loopback URIs, rejects payload and token recording, and prevents
-reference detectors from reading ground-truth labels.
+Scenario packs are non-executing fixtures. Validators require action events to
+set `attributes.executed: false`, restrict resources to synthetic/loopback
+identifiers, reject prompt/token/payload recording, and prevent detectors from
+reading ground-truth labels.
 
-### Ability packs
+### Ability and campaign packs
 
-An ability defines exactly one bounded behavior. It contains risk, supported
-providers and targets, a `catalog://` command reference, cleanup metadata,
-expected telemetry, detection objectives, benign controls, and defenses.
-Ability files cannot contain command, script, payload, shell, or download
-fields.
+Abilities reference reviewed `catalog://` argv; campaign steps reference
+abilities. Unknown executable fields fail closed. Canonical SHA-256 digests
+protect content arrays, and built-in content adds an RSA PKCS#1 v1.5 SHA-256
+signature verified against `agentsim/content/trusted_keys.json`.
 
-Pack checksums cover the canonical `abilities` array and are mandatory. The
-reviewed command catalog has a separate mandatory checksum so changing a static
-argv sequence cannot preserve the ability-pack digest. Optional signature
-verification can be layered over the same canonical digests in a later release.
+The signing private key is not distributed. Third-party packs may use checksum
+integrity without claiming AgentSim trust; deployments can maintain their own
+review/signing pipeline rather than modifying the built-in trust key.
 
-### Campaign packs
+### External adapters and plugins
 
-A campaign contains ability IDs and already-declared dependencies. The loader
-rejects unknown/later dependencies and executable fields. Execution also
-rejects campaigns whose ability references cannot be resolved.
+External adapters return a hashed `ExternalPlan`; they do not run a command or
+make an HTTP request. Plans require exact semantic versions, typed identifiers,
+explicit targets, and cleanup phases. CALDERA plans exclude credentials.
 
-## Authorization flow
+Plugin discovery reads entry-point metadata without importing code. Loading is
+an explicit act and enforces plugin API `1.0`. An external executor is outside
+the public core and must independently enforce authorization, version, target,
+resource, cleanup, and evidence contracts.
 
-Before preparation, the central safety policy verifies:
+## Authorization and execution
 
-1. the manifest has not expired;
-2. the selected mode is authorized;
-3. the exact target or CIDR is allowlisted (wildcards are not accepted);
-4. the ability ID is in scope;
-5. the provider and target type are supported;
-6. production is allowed by the ability;
-7. elevation is not requested;
-8. network use is approved by ability, run, and manifest; and
-9. state-changing content declares cleanup.
+Before preparation, the safety policy checks manifest expiration, mode, exact
+target/CIDR, ability scope, provider compatibility, target type, production
+lockout, elevation, network triple-consent, and cleanup metadata. Denied actions
+still produce `planned`, `denied`, and `prevented` evidence.
 
-Denied actions still produce `planned`, `denied`, and `prevented` evidence but
-never reach provider preparation.
+`ExecutionProvider` exposes `prepare`, `execute`, and `cleanup`:
 
-## Execution providers
+- Simulation validates lifecycle without starting a process.
+- Local resolves static argv for an explicit localhost target.
+- Docker uses static argv with `docker exec` against a named existing container.
 
-`ExecutionProvider` exposes `prepare`, `execute`, and `cleanup`.
+Cleanup is called from a `finally` path. Kill-switch cancellation stops new
+actions while keeping a separately bounded cleanup reserve.
 
-- `simulate` validates the content and lifecycle without starting a process.
-- `local` accepts only `localhost://` and resolves static argv for the detected
-  operating system.
-- `docker` accepts only `docker://<name>` and uses static argv through
-  `docker exec`; it never pulls or chooses an image.
+## Telemetry and detection
 
-The runner invokes cleanup in a `finally` path. Read-only abilities produce a
-verified no-op cleanup record. State-changing abilities are rejected at load
-and authorization time if they do not include a cleanup reference.
-Kill-switch cancellation stops subsequent actions and emits a `cancelled`
-lifecycle state. A separately counted, bounded cleanup-process reserve remains
-available after cancellation so cleanup is attempted rather than blocked by
-the kill switch.
+Collectors read only local JSON/JSONL exports, enforce a 256 MiB and 250,000
+record limit, normalize known vendor fields, inventory available fields, and
+discard fields whose names indicate prompts, credentials, secrets, tokens,
+payloads, or authorization data.
 
-## Lifecycle and persistence
+The detection AST is data, not executable code. Evaluation is deterministic and
+bounded. Regex values are length-limited; evidence is capped and contains only
+record identity, time, source, type, and synthetic status. Grouping prevents
+cross-host or cross-principal sequence matches.
 
-[`schemas/action-event-v3.schema.json`](schemas/action-event-v3.schema.json)
-defines the common ground truth. Each action has globally ordered immutable
-events linked by `parent_event_id`.
+Candidate generation uses reviewed ability metadata and static command names.
+It does not inspect raw command output or deploy a rule. Rendered content is
+marked experimental/candidate and includes known limitations.
 
-SQLite stores:
+## Persistence and evidence
 
-- the immutable serialized manifest and its SHA-256;
-- one result per action; and
-- append-only lifecycle events keyed by run and sequence.
+SQLite stores immutable manifest JSON/hash, action results, append-only
+lifecycle events, detection evaluations, and artifact metadata. Only final run
+status/summary fields are updated.
 
-Only final run status and summary fields are updated. Raw process output is not
-stored. Provider evidence includes return codes, output byte count, and digest.
+The v1 evidence ZIP contains the manifest, lifecycle JSONL, campaign report,
+scorecard, runbooks, candidate detections, and Attack Flow export. Process
+output is reduced to return codes, byte count, and SHA-256 digest before any
+evidence is persisted.
 
-## Compatibility and roadmap
-
-Scenario schema v2 remains unchanged because it is a different, strictly
-non-executing contract. Lifecycle schema v3 applies to ability and campaign
-runs.
-
-Version 0.5 is expected to add offline collectors, field/sensor coverage,
-temporal and graph detector ASTs, candidate rule rendering, and automated
-detection-gap analysis on top of the v0.4 timeline.
+The public schemas are in [schemas](schemas/), including normalized events,
+detection rules, external plans, signed packs, authorization, and lifecycle v3.

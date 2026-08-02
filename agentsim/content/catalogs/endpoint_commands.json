@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "kind": "command-catalog",
   "catalog_id": "agentsim.endpoint.readonly",
-  "integrity": {"algorithm": "sha256", "digest": "c30bb9fddbd9e7911d3a60a5c0468739ea356c1a4fe52096274c5289e69a02b0"},
+  "integrity": {"algorithm": "sha256", "digest": "c30bb9fddbd9e7911d3a60a5c0468739ea356c1a4fe52096274c5289e69a02b0", "signature": {"algorithm": "rsa-pkcs1v15-sha256", "key_id": "agentsim-release-1", "value": "aaMzjQMJNZ8HEE1aOxg153bJUUyyVlCuOp6K/odW5A+Ec/LAQD7+LMzocMpB8ai2RppeEunUNA2s3LUYVLjystEgFzOgqanYYgp4bLnjrm+eElNNERyfSW0IniQhXAP2QBMcxt6YaFdSCrn+JvsMCXnrL06AV4gtfH6BYxhocPHh14MeEErc2nsLIMmYPeP6YQZdAId0Xuo+2isRXDSPn/8ol0xm65KVnZG9bdurB8pGj9ExpAwgUpnwiAy6wHIxyfdtyKkIlixD3HAPwFcAmF9N39XkjV/rcCeNof96IhxSpPmpAa/pAtC/vDZqeeKQkMD6HNcfGC+BnbmRjRbpig=="}},
   "commands": {
     "catalog://endpoint/discovery/system-information": {
       "description": "Reviewed read-only host and operating-system discovery.",

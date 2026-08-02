@@ -6,6 +6,8 @@ import hashlib
 import json
 from typing import Mapping
 
+from .signature import verify_signature
+
 
 def content_digest(value: object) -> str:
     canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
@@ -26,3 +28,4 @@ def verify_integrity(pack: Mapping[str, object], content_key: str) -> None:
     observed = content_digest(pack.get(content_key))
     if observed != expected.lower():
         raise ValueError("pack integrity checksum does not match its content")
+    verify_signature(pack, content_key)

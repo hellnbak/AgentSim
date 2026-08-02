@@ -15,7 +15,17 @@
       "required": ["algorithm", "digest"],
       "properties": {
         "algorithm": {"const": "sha256"},
-        "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "signature": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "key_id", "value"],
+          "properties": {
+            "algorithm": {"const": "rsa-pkcs1v15-sha256"},
+            "key_id": {"type": "string", "minLength": 3},
+            "value": {"type": "string", "minLength": 32}
+          }
+        }
       }
     },
     "commands": {

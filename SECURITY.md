@@ -2,13 +2,12 @@
 
 ## Supported versions
 
-AgentSim is currently pre-1.0. Security fixes are applied to the latest version
-on the default branch.
+Security fixes are applied to the latest v1 release on the default branch.
 
 | Version | Supported |
 | --- | --- |
-| Latest `0.4.x` | Yes |
-| Older snapshots | No |
+| Latest `1.x` | Yes |
+| `0.x` and older snapshots | No |
 
 ## Reporting a vulnerability
 
@@ -54,3 +53,19 @@ fail-closed for non-synthetic resource identifiers, executable action events,
 token or payload recording, detector label leakage, and malicious/benign
 control separation. The MCP lab must remain transport-free, use only fixed
 synthetic authorization facts, and never accept or store a real bearer token.
+
+Offline telemetry exports are untrusted input. Collector size/record bounds,
+sensitive-field redaction, non-executable detection AST parsing, regex limits,
+and bounded evidence must remain fail closed. Report any path that evaluates
+telemetry as code, records sensitive field values, or silently contacts a
+vendor as a security issue.
+
+Built-in ability, campaign, and command content is RSA-signed. Signature
+bypass, trust-store substitution, acceptance of an untrusted key ID, or a
+content change that preserves verification is a security issue. The release
+private key must never be committed or distributed with a package.
+
+External adapters in the public core must remain non-executing. They may create
+typed, version-pinned plans but must not start tools, send CALDERA requests,
+load credentials, or install dependencies. Third-party plugins are trusted
+code only after explicit loading; plugin discovery must not import them.

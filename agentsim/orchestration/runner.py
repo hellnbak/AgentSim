@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 from agentsim.defense.recommendations import recommendations_for_action
+from agentsim.defense.scorecard import build_scorecard
+from agentsim.detection.generator import generate_candidates
 from agentsim.execution import provider_for_name
 from agentsim.models.ability import AbilityDefinition
 from agentsim.models.campaign import CampaignDefinition
@@ -19,6 +21,7 @@ from agentsim.models.event import ActionLifecycleEvent
 from agentsim.models.result import ActionResult, CampaignRunResult
 from agentsim.models.target import TargetProfile
 from agentsim.reporting.bundle import write_evidence_bundle
+from agentsim.reporting.attack_flow import export_campaign
 from agentsim.safety.authorization import AuthorizationManifest
 from agentsim.safety.policy import MODE_PROVIDER, SafetyPolicy
 from agentsim.safety.resource_limits import RunLimits
@@ -83,6 +86,7 @@ class CampaignRunner:
             manifest=manifest,
             allow_network=allow_network,
             policy=self.policy,
+            now=self.clock(),
         )
         selected_run_id = run_id or uuid.uuid4().hex
         output_root = Path(output_directory)
@@ -93,6 +97,10 @@ class CampaignRunner:
         timeline_path = run_directory / "action-lifecycle.jsonl"
         report_path = run_directory / "campaign-report.json"
         bundle_path = run_directory / "evidence.zip"
+        scorecard_path = run_directory / "defense-scorecard.json"
+        runbooks_path = run_directory / "defense-runbooks.json"
+        candidates_path = run_directory / "detection-candidates.json"
+        attack_flow_path = run_directory / "attack-flow.json"
         started_at = _timestamp(self.clock)
         manifest_value: dict[str, object] = {
             "schema_version": "1.0",
@@ -192,6 +200,7 @@ class CampaignRunner:
                 target=target,
                 manifest=manifest,
                 run_allows_network=allow_network,
+                now=self.clock(),
             )
             if not decision.allowed:
                 parent_id = emit(
@@ -467,15 +476,90 @@ class CampaignRunner:
             "actions": [asdict(action) for action in actions],
             "defense_recommendations": recommendations,
         }
+        evaluated_detections = summary["detections"] + summary["misses"]
+        scorecard = build_scorecard(
+            total_abilities=len(actions),
+            covered_abilities=0,
+            evaluated_detections=evaluated_detections,
+            detected_abilities=summary["detections"],
+            cleanup_attempts=len(actions),
+            successful_cleanups=sum(action.cleanup_status == "cleaned" for action in actions),
+        ).to_dict()
+        scorecard["telemetry_status"] = "not_collected"
+        scorecard["detection_status"] = (
+            "evaluated" if evaluated_detections else "not_evaluated"
+        )
+        report["defense_scorecard"] = scorecard
         report_path.write_text(
             json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
+        scorecard_path.write_text(
+            json.dumps(scorecard, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        runbooks_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "run_id": selected_run_id,
+                    "recommendations": recommendations,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        candidates_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "status": "candidates_require_human_review",
+                    "candidates": [
+                        item.to_dict()
+                        for item in generate_candidates(
+                            {ability_id: self.abilities[ability_id] for ability_id in campaign.ability_ids}
+                        )
+                    ],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        attack_flow_path.write_text(
+            json.dumps(export_campaign(campaign, self.abilities), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        extra_artifacts = {
+            "defense-scorecard.json": scorecard_path,
+            "defense-runbooks.json": runbooks_path,
+            "detection-candidates.json": candidates_path,
+            "attack-flow.json": attack_flow_path,
+        }
         write_evidence_bundle(
             bundle_path,
             manifest_path=manifest_path,
             timeline_path=timeline_path,
             report_path=report_path,
+            artifacts=extra_artifacts,
         )
+        for artifact_type, artifact_path in {
+            "manifest": manifest_path,
+            "timeline": timeline_path,
+            "report": report_path,
+            "scorecard": scorecard_path,
+            "runbooks": runbooks_path,
+            "detection_candidates": candidates_path,
+            "attack_flow": attack_flow_path,
+            "bundle": bundle_path,
+        }.items():
+            store.record_artifact(
+                selected_run_id,
+                artifact_type=artifact_type,
+                path=str(artifact_path),
+                sha256=hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
+            )
         store.finish_run(
             selected_run_id,
             finished_at=finished_at,

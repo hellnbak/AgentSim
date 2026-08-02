@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "kind": "ability-pack",
   "pack_id": "agentsim.endpoint.discovery",
-  "integrity": {"algorithm": "sha256", "digest": "97b98c9a14e1bd3b29679a0241c0340fd1a8b1033493e08dbd295f6e953c22da"},
+  "integrity": {"algorithm": "sha256", "digest": "97b98c9a14e1bd3b29679a0241c0340fd1a8b1033493e08dbd295f6e953c22da", "signature": {"algorithm": "rsa-pkcs1v15-sha256", "key_id": "agentsim-release-1", "value": "c8u2igHN3tkOdHozcPQdGHBlyCLQgwK8BGx9D7y/xjGPiifVkI7Z4pfQdbki+Ipyq27OPRVDePyZT+6F5kHLT4JMPpgBBkKk7x7cIup/npHLEcIaC/fN7bj+sTISxec4lW5mjbDUQcYLAFyzs3GILSaOLyGB2K2q+Qzusqr3j/cQ8lh8+/4YnjR+zG9yPDsMdnnNo+ozlm3VsTOytxbqZrQjPBURwRz1Kh2/FuHpz3OY67PrfoUxeeSyVDHmGL9vaJ+FqB/O7koEtVDZfCHnxfvgwi0vB72m0rpprOJjfibl7x1u/0gqSz2Ym50hviDARoUFXqpc0Qlmw2x7SAyAXA=="}},
   "abilities": [
     {
       "id": "endpoint.discovery.system-information",

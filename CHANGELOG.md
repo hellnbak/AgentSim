@@ -3,6 +3,41 @@
 Notable changes to AgentSim are documented here. The project follows semantic
 versioning while its public interfaces mature.
 
+## 1.0.0 - 2026-08-02
+
+- Stabilized the detection-first workflow across endpoint, cloud, and agentic
+  testing with a public v1 CLI, Python API, Web API, schemas, and plugin API.
+- Added bounded offline JSON/JSONL collectors and redacted normalization for
+  OTel, Sysmon, auditd, CloudTrail, CrowdStrike, Splunk, and agent-runtime data.
+- Added a vendor-neutral detection AST for predicates, boolean/negative logic,
+  ordered sequences, windows, thresholds/distinct counts, parent-child
+  lineage, causal graphs, and entity grouping.
+- Added expected-source/required-field coverage, ground-truth correlation,
+  gap findings, runbooks, regression evaluation, and defensive scorecards.
+- Added transparent human-review candidate generation and renderers for Sigma,
+  KQL, SPL, CrowdStrike LogScale, Elastic EQL, Panther, and Graylog.
+- Added ten disposable in-memory agentic security fixtures covering prompt,
+  memory, RAG, MCP, confused-deputy, delegation, approval, decoy-secret, and
+  resource-budget controls while preserving the non-executing scenario engine.
+- Added version-pinned, hashed, non-executing Atomic Red Team, Stratus Red
+  Team, and MITRE CALDERA adapter plans.
+- Added Attack Flow STIX 2.1 campaign import/export with reviewed ability
+  mapping, cycle rejection, and review-draft imports.
+- Added RSA PKCS#1 v1.5 SHA-256 signatures to built-in ability, campaign, and
+  reviewed-command content plus a public trust store and maintainer signing
+  helper. The release private key is not distributed.
+- Added plugin API 1.0 entry points for collectors, detection renderers, and
+  separately installed external executors; discovery does not import plugins.
+- Expanded SQLite history with detection/artifact records and expanded every
+  campaign evidence ZIP with scorecard, runbooks, candidates, and Attack Flow.
+- Added v1 CLI commands for telemetry, detection, defense, lab, external plans,
+  Attack Flow, and plugin discovery with CI-friendly exit codes.
+- Added Web v1 catalog, campaign, synthetic detection/coverage, and disposable
+  agentic-lab APIs plus a dashboard validation workspace.
+- Published normalized-event, detection-rule, external-plan, and signed-pack
+  schemas and replaced the future-roadmap documentation with v1 operations,
+  safety, provider, and plugin guidance.
+
 ## 0.4.0 - 2026-08-01
 
 - Repositioned AgentSim as detection-first adversary emulation built around the

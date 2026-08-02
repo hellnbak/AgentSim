@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "kind": "campaign-pack",
   "pack_id": "agentsim.foundation.campaigns",
-  "integrity": {"algorithm": "sha256", "digest": "096569db17731b9b9526414fbd6c6731cce3fdeadf1024b40ded75b1b9ce1b13"},
+  "integrity": {"algorithm": "sha256", "digest": "096569db17731b9b9526414fbd6c6731cce3fdeadf1024b40ded75b1b9ce1b13", "signature": {"algorithm": "rsa-pkcs1v15-sha256", "key_id": "agentsim-release-1", "value": "dTX82AlADoLqU5nVTVweAdoANw1KVFmJfe4higV5SH//zoBHyzJSbmKk05+r75FwE6zzA+pz7oPlnk5fAEi8uP9bOa1cllCsWHIt9mviJCbTH/TR75/2tPszncr4HaQtjwWL+we1tJTAfggquTTSGpdz+WQQIXvNpHl2bJbn4bZ7bVLubDt+GLuXU6G3pcZT1YeFErHfGBH8zCl0bPDl1GcXMSzI9W+1I2owVEPjh8mCJgRHb8kn294cmgVnMUCyhMiP3TEknYoF1Wx3CipkMr2IqWbYSPOVlXTe6n0Ng5plN27Lc8SLiB+l67hocRdnIJmewul+m7XEYgytBDR1ug=="}},
   "campaigns": [
     {
       "id": "endpoint-discovery-baseline",

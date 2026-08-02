@@ -38,12 +38,15 @@ All built-in abilities are `production_allowed: false`.
 ## Integrity
 
 Every ability pack must include a SHA-256 digest of the canonical abilities
-array. The reviewed command catalog is independently checksummed because it is
-the executable trust boundary. Its machine-readable contract is
+array. Built-in packs and the reviewed command catalog also include an RSA
+PKCS#1 v1.5 SHA-256 signature tied to the content kind, ID, key, and digest.
+The reviewed command catalog remains an independent executable trust boundary.
+Its machine-readable contract is
 [`schemas/command-catalog.schema.json`](schemas/command-catalog.schema.json).
 To calculate a digest for custom content, serialize the content object with
 sorted keys and compact separators, then hash the UTF-8 bytes. AgentSim rejects
-missing, malformed, or mismatched integrity metadata.
+missing, malformed, or mismatched integrity metadata and rejects an unknown or
+invalid signature when one is present.
 
 ## Adding an ability
 
@@ -53,7 +56,7 @@ missing, malformed, or mismatched integrity metadata.
 4. Set `production_allowed: false` unless a future reviewed policy explicitly
    supports production.
 5. For state changes, add an idempotent cleanup catalog reference.
-6. Update the checksum after review.
+6. Have a maintainer update the checksum and release signature after review.
 7. Test simulation, policy denial, cleanup, and mocked provider execution.
 
 Custom packs can be loaded with repeatable `--ability-pack PATH` options.

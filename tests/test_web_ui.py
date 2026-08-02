@@ -85,6 +85,7 @@ class WebUiTests(unittest.TestCase):
         )
         self.assertIn("Detection-First Adversary Emulation", page)
         self.assertIn("Authorized campaign foundation", page)
+        self.assertIn("Validate visibility and agent safeguards", page)
         self.assertIn("endpoint-discovery-baseline", page)
         self.assertIn("Detection debugger", page)
         self.assertIn("Agentic attack scenarios", page)
@@ -93,12 +94,14 @@ class WebUiTests(unittest.TestCase):
         self.assertNotIn(".innerHTML", page)
 
     def test_foundation_catalog_and_safe_campaign_api(self):
-        catalog_response = self.client.get("/api/v0.4/catalog")
+        catalog_response = self.client.get("/api/v1/catalog")
         self.assertEqual(catalog_response.status_code, 200)
         catalog = catalog_response.get_json()
-        self.assertEqual(catalog["version"], "0.4.0")
+        self.assertEqual(catalog["version"], "1.0.0")
         self.assertEqual(len(catalog["abilities"]), 8)
         self.assertEqual(len(catalog["campaigns"]), 2)
+        self.assertEqual(catalog["capabilities"]["agentic_fixtures"], 10)
+        self.assertTrue(catalog["capabilities"]["signed_builtin_content"])
         self.assertEqual(catalog["history"], [])
 
         denied = self.client.post(
@@ -122,6 +125,31 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(payload["history"][0]["run_id"], payload["run_id"])
         self.assertTrue(web_ui.CAMPAIGN_DATABASE_PATH.exists())
         self.assertEqual(len(list(web_ui.CAMPAIGN_OUTPUT_DIRECTORY.glob("*/evidence.zip"))), 1)
+
+    def test_v1_detection_and_agentic_lab_apis_are_synthetic(self):
+        headers = {"X-AgentSim-Form-Token": web_ui.form_token}
+        detection = self.client.post(
+            "/api/v1/detection/demo",
+            json={"ability_id": "endpoint.discovery.processes"},
+            headers=headers,
+        )
+        self.assertEqual(detection.status_code, 200)
+        value = detection.get_json()
+        self.assertTrue(value["evaluation"]["matched"])
+        self.assertEqual(value["coverage"]["coverage_percent"], 100.0)
+        self.assertFalse(value["process_started"])
+        self.assertFalse(value["network_opened"])
+
+        lab = self.client.post(
+            "/api/v1/lab/run", json={"fixture_id": "all"}, headers=headers
+        )
+        self.assertEqual(lab.status_code, 200)
+        lab_value = lab.get_json()
+        self.assertTrue(lab_value["passed"])
+        self.assertEqual(len(lab_value["results"]), 10)
+        self.assertTrue(
+            all(not result["safety"]["tool_executed"] for result in lab_value["results"])
+        )
 
     def test_classifies_command_cycle_and_anomaly_events(self):
         command = web_ui._classify_message("[*] EXECUTING: whoami (bash)")

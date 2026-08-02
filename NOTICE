@@ -12,3 +12,10 @@ MITRE ATT&CK® and ATT&CK® are registered trademarks of The MITRE Corporation.
 AgentSim is not affiliated with, sponsored by, or endorsed by MITRE.
 
 Terms of use: https://attack.mitre.org/resources/terms-of-use/
+
+External Project References
+
+AgentSim can emit non-executing integration plans or interchange records for
+Atomic Red Team™, Stratus Red Team, MITRE Caldera™, and Attack Flow. AgentSim
+does not bundle or redistribute those projects and is not affiliated with or
+endorsed by their maintainers. See THIRD_PARTY_NOTICES.md.

@@ -5,6 +5,7 @@ from .campaign import CampaignDefinition, CampaignStep
 from .event import ActionLifecycleEvent
 from .result import ActionResult, CampaignRunResult
 from .target import TargetProfile
+from .telemetry import CorrelatedAction, NormalizedEvent
 
 __all__ = [
     "AbilityDefinition",
@@ -15,4 +16,6 @@ __all__ = [
     "ActionResult",
     "CampaignRunResult",
     "TargetProfile",
+    "CorrelatedAction",
+    "NormalizedEvent",
 ]

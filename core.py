@@ -596,7 +596,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Explicitly execute reviewed read-only endpoint commands on localhost. "
-            "Directed v0.4 campaigns additionally require an authorization manifest."
+            "Directed v1 campaigns additionally require an authorization manifest."
         ),
     )
     parser.add_argument(

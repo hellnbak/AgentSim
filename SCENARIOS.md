@@ -4,7 +4,7 @@ AgentSim produces safe, labeled traces for validating detections at AI-agent
 trust boundaries. It records what an agent observed, proposed, delegated, and
 was allowed or blocked from doing. It never invokes an AI model or tool.
 
-As of v0.4, scenario packs remain a separate non-executing content contract.
+In v1, scenario packs remain a separate non-executing content contract.
 Gated endpoint or lab behavior belongs in ability packs and directed campaign
 packs documented in [`ABILITIES.md`](ABILITIES.md) and
 [`CAMPAIGNS.md`](CAMPAIGNS.md). A scenario pack cannot opt into lifecycle-v3
@@ -73,6 +73,16 @@ loading a plugin, or executing a tool.
 
 This boundary differs from endpoint behavior mode, which runs the documented
 read-only command catalog unless `--dry-run` is selected.
+
+## v1 disposable control fixtures
+
+`agentsim lab run all` adds ten smaller in-memory controls alongside the
+declarative benchmark: indirect prompt injection, memory poisoning, RAG
+poisoning, MCP permission expansion, MCP identity/audience failure, confused
+deputy, delegation spoofing, approval deception, decoy-secret access, and
+budget/recursion abuse. Each fixture exercises a malicious request and benign
+twin against a deterministic synthetic policy. No fixture opens a socket,
+starts a process, loads a plugin, executes a tool, or uses a credential.
 
 ## Event schema v2
 

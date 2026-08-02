@@ -24,6 +24,7 @@ Run the automated checks:
 python -m py_compile core.py mcp_lab.py scenarios.py tactics.py web_ui.py
 python -m compileall -q agentsim
 python -m unittest discover -s tests -v
+python -m build
 python core.py --iterations 6 --speed 0 --seed 42
 python core.py --scenario all --variant both --mutations 1 --mutation-seed 42 --speed 0
 python core.py --mcp-lab
@@ -62,9 +63,10 @@ telemetry, detection objectives, benign controls, and defenses. Built-in
 content should remain `production_allowed: false`.
 
 Ability packs, campaign packs, and command catalogs require canonical SHA-256
-integrity metadata. Unknown fields are rejected. Update the affected digest
-after review; never disable integrity verification to make a content change
-load.
+integrity metadata. Built-in content also requires the AgentSim release
+signature. Contributors should update content and tests; a maintainer updates
+the digest and signature with `scripts/sign_content.py` after review. Never
+commit a private key or disable integrity verification to make a change load.
 
 State-changing abilities require an idempotent cleanup catalog reference and
 tests for success, failure, cancellation, and cleanup. Higher-risk behaviors
@@ -122,6 +124,24 @@ security fields and include a benign event test.
 
 Detection examples must use obvious placeholders for environment-specific
 indexes and tables.
+
+Detection-AST contributions must include malicious and benign normalized-event
+fixtures, group/time-boundary tests, required-field coverage, and renderer
+limitations. Generated rules must remain candidates until a human reviewer
+promotes them outside AgentSim.
+
+## Collectors, external adapters, and plugins
+
+Collectors must read exported data only, enforce bounded input, normalize to
+the public event schema, and remove sensitive values. Do not add a live SIEM
+credential/query connector to the public core.
+
+External adapters may emit version-pinned plans but may not execute a tool or
+send a network request. Execution belongs in an explicitly installed
+`agentsim.external_executors` plugin. New plugin contracts must preserve API
+1.0 or introduce a clearly versioned new contract. See
+[`PLUGIN_SDK.md`](PLUGIN_SDK.md) and
+[`EXTERNAL_PROVIDERS.md`](EXTERNAL_PROVIDERS.md).
 
 ## Pull requests
 

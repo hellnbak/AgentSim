@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/external-plan.schema.json",
+  "title": "AgentSim External Provider Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "adapter", "provider_version", "target_uri", "phases", "cleanup_required", "network_required", "execution_supported_by_core", "status", "plan_sha256"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "adapter": {"enum": ["atomic-red-team", "stratus-red-team", "mitre-caldera"]},
+    "provider_version": {"type": "string", "pattern": "^v?[0-9]+\\.[0-9]+\\.[0-9]+"},
+    "target_uri": {"type": "string", "minLength": 3},
+    "phases": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+    "cleanup_required": {"const": true},
+    "network_required": {"type": "boolean"},
+    "execution_supported_by_core": {"const": false},
+    "status": {"const": "reviewed_plan_requires_explicit_executor_plugin"},
+    "plan_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

@@ -8,12 +8,14 @@ sources.
 MITRE ATT&CK® mappings describe the discovery behavior being simulated. A
 mapping does not guarantee complete coverage of an ATT&CK technique.
 
-AgentSim v0.4 campaign runs add lifecycle-v3 ground truth with ability,
+AgentSim v1 campaign runs add lifecycle-v3 ground truth with ability,
 campaign, authorization, provider, target, cleanup, and detection-outcome
-fields. The v0.4 foundation accepts offline ability-level detection results;
-temporal/graph correlation and candidate rule generation are planned for the
-v0.5 validation engine. Existing scenario and vendor analytics below remain
-fully supported.
+fields. The v1 engine adds bounded offline collectors, normalized telemetry,
+temporal/graph evaluation, source/field coverage, malicious/benign regression,
+gap analysis, runbooks, and candidate renderers. Existing scenario and vendor
+analytics below remain fully supported. See
+[`DETECTION_ENGINE.md`](DETECTION_ENGINE.md) for the vendor-neutral rule format
+and CLI workflow.
 
 ## Data requirements
 

@@ -18,9 +18,10 @@ creation, ancestry, and user context telemetry.
 
 ### `cloud-discovery-baseline`
 
-Runs one authenticated read-only cloud discovery ability. In 0.4 it is
-simulation-only and does not contact a cloud service. Executable cloud
-discovery is reserved for a future isolated or external provider.
+Runs one authenticated read-only cloud discovery ability. The built-in ability
+is simulation-only and does not contact a cloud service. Higher-risk cloud
+emulation can be represented by a version-pinned Stratus plan and executed only
+through a separately reviewed plugin in a named sandbox.
 
 ## Workflow
 
@@ -57,9 +58,17 @@ booleans:
 ```
 
 `true` produces a `detected` lifecycle transition, `false` produces `missed`,
-and omitted abilities remain `detection_pending`. This is intentionally an
-offline interface in 0.4. Direct read-only SIEM connectors are planned for a
-later release.
+and omitted abilities remain `detection_pending`. Vendor exports can also be
+validated separately with `agentsim telemetry`, `agentsim detection`, and
+`agentsim defense`; the public core intentionally has no live SIEM credential
+connector.
+
+## v1 portable outputs
+
+Every run bundles the immutable manifest, lifecycle JSONL, campaign report,
+defense scorecard, runbook/recommendation record, human-review detection
+candidates, and Attack Flow STIX export. SQLite records artifact paths and
+hashes alongside run/action/event history.
 
 ## Stop and cleanup behavior
 

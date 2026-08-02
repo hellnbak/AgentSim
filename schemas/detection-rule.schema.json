@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/detection-rule.schema.json",
+  "title": "AgentSim Detection AST Rule",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rule_id", "name", "severity", "expression"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "rule_id": {"type": "string", "minLength": 3},
+    "name": {"type": "string", "minLength": 1},
+    "description": {"type": "string"},
+    "severity": {"enum": ["low", "medium", "high", "critical"]},
+    "group_by": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "mappings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "expression": {"$ref": "#/$defs/expression"},
+    "metadata": {"type": "object"}
+  },
+  "$defs": {
+    "predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "operator"],
+      "properties": {
+        "field": {"type": "string", "minLength": 1},
+        "operator": {"enum": ["eq", "ne", "in", "contains", "exists", "startswith", "endswith", "matches"]},
+        "value": {}
+      }
+    },
+    "expression": {
+      "oneOf": [
+        {"type": "object", "required": ["type", "predicates"], "properties": {"type": {"const": "match"}, "predicates": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/predicate"}}}},
+        {"type": "object", "required": ["type", "children"], "properties": {"type": {"enum": ["all", "any"]}, "children": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/expression"}}}},
+        {"type": "object", "required": ["type", "child"], "properties": {"type": {"const": "not"}, "child": {"$ref": "#/$defs/expression"}}},
+        {"type": "object", "required": ["type", "steps"], "properties": {"type": {"enum": ["sequence", "causal_graph"]}, "steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/expression"}}, "max_span_seconds": {"type": "integer", "minimum": 1}, "link_field": {"type": "string"}}},
+        {"type": "object", "required": ["type", "child", "count"], "properties": {"type": {"const": "threshold"}, "child": {"$ref": "#/$defs/expression"}, "count": {"type": "integer", "minimum": 1}, "window_seconds": {"type": "integer", "minimum": 1}, "distinct_field": {"type": ["string", "null"]}}},
+        {"type": "object", "required": ["type", "parent", "child"], "properties": {"type": {"const": "parent_child"}, "parent": {"$ref": "#/$defs/expression"}, "child": {"$ref": "#/$defs/expression"}}}
+      ]
+    }
+  }
+}

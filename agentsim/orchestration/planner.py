@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Mapping
 
 from agentsim.models.ability import AbilityDefinition
@@ -54,6 +55,7 @@ def plan_campaign(
     manifest: AuthorizationManifest,
     allow_network: bool = False,
     policy: SafetyPolicy | None = None,
+    now: datetime | None = None,
 ) -> CampaignPlan:
     if len(campaign.steps) > manifest.max_actions:
         raise ValueError("campaign exceeds the authorization action limit")
@@ -71,6 +73,7 @@ def plan_campaign(
             target=target,
             manifest=manifest,
             run_allows_network=allow_network,
+            now=now,
         )
         telemetry = tuple(
             str(item.get("source"))

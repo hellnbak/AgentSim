@@ -60,6 +60,24 @@ class RunStore:
                     UNIQUE (event_id),
                     FOREIGN KEY (run_id) REFERENCES runs(run_id)
                 );
+                CREATE TABLE IF NOT EXISTS detection_evaluations (
+                    run_id TEXT NOT NULL,
+                    rule_id TEXT NOT NULL,
+                    ability_id TEXT,
+                    matched INTEGER NOT NULL,
+                    evaluation_json TEXT NOT NULL,
+                    PRIMARY KEY (run_id, rule_id, ability_id),
+                    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+                );
+                CREATE TABLE IF NOT EXISTS artifacts (
+                    run_id TEXT NOT NULL,
+                    artifact_type TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    sha256 TEXT,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    PRIMARY KEY (run_id, artifact_type),
+                    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+                );
                 """
             )
 
@@ -129,6 +147,44 @@ class RunStore:
                 (finished_at, status, json.dumps(summary, sort_keys=True), run_id),
             )
 
+    def append_detection(
+        self,
+        run_id: str,
+        *,
+        rule_id: str,
+        ability_id: str | None,
+        matched: bool,
+        evaluation: Mapping[str, object],
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO detection_evaluations
+                    (run_id, rule_id, ability_id, matched, evaluation_json)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (run_id, rule_id, ability_id or "", int(matched), json.dumps(evaluation, sort_keys=True)),
+            )
+
+    def record_artifact(
+        self,
+        run_id: str,
+        *,
+        artifact_type: str,
+        path: str,
+        sha256: str | None = None,
+        metadata: Mapping[str, object] | None = None,
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO artifacts
+                    (run_id, artifact_type, path, sha256, metadata_json)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (run_id, artifact_type, path, sha256, json.dumps(metadata or {}, sort_keys=True)),
+            )
+
     def history(self, limit: int = 25) -> list[dict[str, object]]:
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
             raise ValueError("history limit must be between 1 and 500")
@@ -157,3 +213,19 @@ class RunStore:
                 (run_id,),
             ).fetchall()
         return [json.loads(row["event_json"]) for row in rows]
+
+    def artifacts_for_run(self, run_id: str) -> list[dict[str, object]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT artifact_type, path, sha256, metadata_json FROM artifacts WHERE run_id = ? ORDER BY artifact_type",
+                (run_id,),
+            ).fetchall()
+        return [
+            {
+                "artifact_type": row["artifact_type"],
+                "path": row["path"],
+                "sha256": row["sha256"],
+                "metadata": json.loads(row["metadata_json"]),
+            }
+            for row in rows
+        ]

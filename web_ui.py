@@ -27,10 +27,15 @@ from flask import (
 
 from core import AgentSim
 from agentsim.content import load_ability_registry, load_campaign_registry
+from agentsim.defense import analyze_gaps, generate_runbook
+from agentsim.detection import analyze_coverage, evaluate_rule, generate_candidate
+from agentsim.external import adapter_names
+from agentsim.lab import list_fixtures, run_fixture, run_lab_suite
 from agentsim.models.target import TargetProfile
 from agentsim.orchestration.runner import CampaignRunner
 from agentsim.safety.authorization import AuthorizationManifest
 from agentsim.storage import RunStore
+from agentsim.telemetry.normalization import normalize_records
 from scenarios import (
     DEFAULT_BUNDLE_PATH,
     DEFAULT_COVERAGE_PATH,
@@ -1132,7 +1137,7 @@ HTML_TEMPLATE = """
                         <h2>Authorized campaign foundation</h2>
                         <p>Run a directed campaign through authorization, provider preparation, lifecycle-v3 ground truth, cleanup verification, defense recommendations, and persistent history. The dashboard exposes simulation only.</p>
                     </div>
-                    <span class="campaign-version">v0.4.0</span>
+                    <span class="campaign-version">v1.0.0</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="campaign-select" aria-label="Campaign">
@@ -1153,6 +1158,29 @@ HTML_TEMPLATE = """
                             <div class="debug-placeholder">No campaign runs recorded yet.</div>
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <section class="card campaign-card" id="defense-validation" aria-label="Detection and agentic validation">
+                <div class="campaign-header">
+                    <div>
+                        <div class="eyebrow">Detection validation engine</div>
+                        <h2>Validate visibility and agent safeguards</h2>
+                        <p>Exercise a generated candidate against redacted synthetic telemetry, inspect field coverage and gaps, or run all ten disposable agentic control fixtures. Nothing here starts a process or opens a network connection.</p>
+                    </div>
+                    <span class="campaign-version">v1 stable</span>
+                </div>
+                <div class="campaign-controls">
+                    <select id="v1-ability-select" aria-label="Detection validation ability">
+                        {% for ability in abilities %}
+                        <option value="{{ ability.ability_id }}"{% if ability.ability_id == "endpoint.discovery.processes" %} selected{% endif %}>{{ ability.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="primary-button campaign-run" id="v1-detection-run" type="button">Validate detection</button>
+                    <button class="tool-button" id="v1-lab-run" type="button">Run agentic lab</button>
+                </div>
+                <div class="campaign-result" id="v1-validation-result">
+                    <div class="debug-placeholder">Choose an ability to inspect a candidate rule, evidence, field coverage, and defensive guidance.</div>
                 </div>
             </section>
 
@@ -1339,6 +1367,10 @@ HTML_TEMPLATE = """
             campaignRun: document.getElementById("campaign-run"),
             campaignResult: document.getElementById("campaign-result"),
             campaignHistory: document.getElementById("campaign-history"),
+            v1Ability: document.getElementById("v1-ability-select"),
+            v1DetectionRun: document.getElementById("v1-detection-run"),
+            v1LabRun: document.getElementById("v1-lab-run"),
+            v1Result: document.getElementById("v1-validation-result"),
             eventStreamHeading: document.getElementById("event-stream-heading"),
             commandFilter: document.getElementById("command-filter"),
             emptyHeading: document.getElementById("empty-heading"),
@@ -1463,7 +1495,7 @@ HTML_TEMPLATE = """
 
         async function loadCampaignFoundation() {
             try {
-                const response = await fetch("/api/v0.4/catalog", {headers: {"Accept": "application/json"}});
+                const response = await fetch("/api/v1/catalog", {headers: {"Accept": "application/json"}});
                 if (!response.ok) throw new Error();
                 const payload = await response.json();
                 renderCampaignHistory(payload.history);
@@ -1479,7 +1511,7 @@ HTML_TEMPLATE = """
             elements.campaignRun.textContent = "Running lifecycle…";
             setCampaignPlaceholder(elements.campaignResult, "Authorizing and simulating the campaign…");
             try {
-                const response = await fetch("/api/v0.4/campaign/simulate", {
+                const response = await fetch("/api/v1/campaign/simulate", {
                     method: "POST",
                     headers: {
                         "Accept": "application/json",
@@ -1497,6 +1529,72 @@ HTML_TEMPLATE = """
                 state.campaignLoading = false;
                 elements.campaignRun.disabled = false;
                 elements.campaignRun.textContent = "Run safe campaign";
+            }
+        }
+
+        function renderV1Detection(payload) {
+            const container = document.createDocumentFragment();
+            const evaluation = payload.evaluation || {};
+            const coverage = payload.coverage || {};
+            const findings = Array.isArray(payload.findings) ? payload.findings : [];
+            container.appendChild(textNode("div", "campaign-section-label", "Synthetic validation · human review candidate"));
+            const stats = document.createElement("div");
+            stats.className = "campaign-summary";
+            [
+                [evaluation.matched ? "yes" : "no", "candidate matched"],
+                [coverage.coverage_percent || 0, "field coverage %"],
+                [evaluation.match_count || 0, "evidence events"],
+                [findings.length, "open gaps"]
+            ].forEach(function (item) {
+                const stat = document.createElement("div");
+                stat.className = "campaign-stat";
+                stat.appendChild(textNode("strong", "", item[0]));
+                stat.appendChild(textNode("span", "", item[1]));
+                stats.appendChild(stat);
+            });
+            container.appendChild(stats);
+            container.appendChild(textNode("div", "debug-placeholder", findings.length
+                ? findings.map(function (item) { return item.title; }).join(" · ")
+                : "Expected telemetry fields are present and the candidate matched. Tune against real benign baselines before deployment."));
+            elements.v1Result.replaceChildren(container);
+        }
+
+        async function runV1Detection() {
+            elements.v1DetectionRun.disabled = true;
+            setCampaignPlaceholder(elements.v1Result, "Evaluating a candidate against redacted synthetic telemetry…");
+            try {
+                const response = await fetch("/api/v1/detection/demo", {
+                    method: "POST",
+                    headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                    body: JSON.stringify({ability_id: elements.v1Ability.value})
+                });
+                if (!response.ok) throw new Error();
+                renderV1Detection(await response.json());
+            } catch (_error) {
+                setCampaignPlaceholder(elements.v1Result, "Detection validation failed inside the synthetic boundary.");
+            } finally {
+                elements.v1DetectionRun.disabled = false;
+            }
+        }
+
+        async function runV1Lab() {
+            elements.v1LabRun.disabled = true;
+            setCampaignPlaceholder(elements.v1Result, "Running ten disposable in-memory agentic fixtures…");
+            try {
+                const response = await fetch("/api/v1/lab/run", {
+                    method: "POST",
+                    headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                    body: JSON.stringify({fixture_id: "all"})
+                });
+                if (!response.ok) throw new Error();
+                const payload = await response.json();
+                const results = Array.isArray(payload.results) ? payload.results : [];
+                setCampaignPlaceholder(elements.v1Result, results.filter(function (item) { return item.passed; }).length
+                    + " / " + results.length + " agentic control fixtures passed; all actions remained synthetic and non-executing.");
+            } catch (_error) {
+                setCampaignPlaceholder(elements.v1Result, "Agentic lab validation failed inside the disposable fixture boundary.");
+            } finally {
+                elements.v1LabRun.disabled = false;
             }
         }
 
@@ -2139,6 +2237,8 @@ HTML_TEMPLATE = """
             loadDebugSummary(true);
         });
         elements.campaignRun.addEventListener("click", runSafeCampaign);
+        elements.v1DetectionRun.addEventListener("click", runV1Detection);
+        elements.v1LabRun.addEventListener("click", runV1Lab);
         elements.form.addEventListener("submit", submitRun);
         elements.stop.addEventListener("click", stopRun);
         elements.clear.addEventListener("click", clearEvents);
@@ -2242,6 +2342,7 @@ def index() -> str:
         form_token=form_token,
         scenarios=[SCENARIOS[scenario_id] for scenario_id in sorted(SCENARIOS)],
         campaigns=[CAMPAIGNS[campaign_id] for campaign_id in sorted(CAMPAIGNS)],
+        abilities=[ABILITIES[ability_id] for ability_id in sorted(ABILITIES)],
         scenario_counts=scenario_counts,
         scenario_total=len(SCENARIOS),
     )
@@ -2253,12 +2354,22 @@ def api_status() -> Response:
 
 
 @app.route("/api/v0.4/catalog")
+@app.route("/api/v1/catalog")
 def api_foundation_catalog() -> Response:
     history = RunStore(CAMPAIGN_DATABASE_PATH).history(25) if CAMPAIGN_DATABASE_PATH.exists() else []
     return jsonify(
         {
-            "version": "0.4.0",
+            "version": "1.0.0",
             "workflow": ["emulate", "observe", "detect", "defend", "retest"],
+            "capabilities": {
+                "offline_collectors": ["jsonl", "otel", "sysmon", "auditd", "cloudtrail", "crowdstrike", "splunk", "agent_runtime"],
+                "detection_formats": ["sigma", "kql", "splunk", "crowdstrike", "elastic", "panther", "graylog"],
+                "agentic_fixtures": len(list_fixtures()),
+                "external_adapters": list(adapter_names()),
+                "external_execution_supported_by_core": False,
+                "signed_builtin_content": True,
+                "plugin_api_version": "1.0",
+            },
             "abilities": [
                 {
                     "ability_id": ability.ability_id,
@@ -2287,6 +2398,7 @@ def api_foundation_catalog() -> Response:
 
 
 @app.route("/api/v0.4/campaign/simulate", methods=["POST"])
+@app.route("/api/v1/campaign/simulate", methods=["POST"])
 def api_simulate_campaign() -> Response:
     _validate_api_token()
     payload = request.get_json(silent=True)
@@ -2342,6 +2454,79 @@ def api_simulate_campaign() -> Response:
             "summary": result.summary,
             "events": store.events_for_run(result.run_id),
             "history": store.history(25),
+        }
+    )
+
+
+@app.route("/api/v1/detection/demo", methods=["POST"])
+def api_detection_demo() -> Response:
+    """Run a synthetic, non-executing detection validation for one reviewed ability."""
+
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400, description="JSON request body is required")
+    ability_id = payload.get("ability_id", "endpoint.discovery.processes")
+    if not isinstance(ability_id, str) or ability_id not in ABILITIES:
+        abort(400, description="unknown ability")
+    ability = ABILITIES[ability_id]
+    candidate = generate_candidate(ability)
+    process_names = candidate.process_names or ("synthetic-tool",)
+    source = str(ability.expected_telemetry[0].get("source", "agent_runtime"))
+    records = [
+        {
+            "timestamp": f"2026-01-01T00:00:0{index}Z",
+            "source": source,
+            "event_type": source,
+            "host_id": "synthetic-dashboard-host",
+            "user_id": "synthetic-dashboard-user",
+            "process_name": process_names[(index - 1) % len(process_names)],
+            "command_line": "<redacted synthetic command>",
+            "parent_process_name": "agentsim-synthetic-parent",
+            "parent_process_id": "100",
+            "account_id": "synthetic-account",
+            "principal_id": "synthetic-principal",
+            "service": "synthetic-service",
+            "operation": "synthetic-read",
+            "source_ip": "192.0.2.10",
+        }
+        for index in (1, 2)
+    ]
+    events = normalize_records(records, synthetic=True)
+    evaluation = evaluate_rule(candidate.rule, events)
+    coverage = analyze_coverage(ability, events)
+    findings = analyze_gaps(ABILITIES, (coverage,), {ability_id: evaluation})
+    return jsonify(
+        {
+            "execution_mode": "synthetic_detection_demo",
+            "process_started": False,
+            "network_opened": False,
+            "candidate": candidate.to_dict(),
+            "evaluation": evaluation.to_dict(),
+            "coverage": coverage.to_dict(),
+            "findings": [finding.to_dict() for finding in findings],
+            "runbook": generate_runbook(ability, findings),
+        }
+    )
+
+
+@app.route("/api/v1/lab/run", methods=["POST"])
+def api_v1_lab_run() -> Response:
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400, description="JSON request body is required")
+    fixture_id = payload.get("fixture_id", "all")
+    if not isinstance(fixture_id, str):
+        abort(400, description="fixture_id must be a string")
+    try:
+        results = run_lab_suite() if fixture_id == "all" else (run_fixture(fixture_id),)
+    except ValueError as exc:
+        abort(400, description=str(exc))
+    return jsonify(
+        {
+            "passed": all(result.passed for result in results),
+            "results": [result.to_dict() for result in results],
         }
     )
 

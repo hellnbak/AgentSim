@@ -1,4 +1,4 @@
-"""Legacy endpoint catalog view derived from reviewed v0.4 ability content.
+"""Legacy endpoint catalog view derived from reviewed v1 ability content.
 
 New code should use :mod:`agentsim.content`. This compatibility module keeps
 the v0.3 random telemetry simulator working while removing its duplicate,

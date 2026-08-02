@@ -36,7 +36,7 @@ def authorization(**overrides):
         "authorized_by": "AgentSim test operator",
         "scope": "Synthetic and localhost test targets only",
         "issued_at": "2026-08-01T11:00:00Z",
-        "expires_at": "2026-08-02T11:00:00Z",
+        "expires_at": "2030-08-02T11:00:00Z",
         "allowed_modes": ["simulate", "emulate", "lab"],
         "allowed_targets": ["synthetic://ci", "localhost://test-host", "docker://test-container"],
         "allowed_ability_ids": ["*"],
@@ -61,7 +61,7 @@ class FoundationTests(unittest.TestCase):
         self.campaigns = load_campaign_registry()
 
     def test_version_and_reviewed_content_catalogs(self):
-        self.assertEqual(__version__, "0.4.0")
+        self.assertEqual(__version__, "1.0.0")
         self.assertEqual(len(self.abilities), 8)
         self.assertEqual(len(self.campaigns), 2)
         for ability in self.abilities.values():
@@ -90,7 +90,7 @@ class FoundationTests(unittest.TestCase):
         pack = json.loads(source.read_text(encoding="utf-8"))
         pack["abilities"][0]["execution"]["command"] = "arbitrary shell text"
         pack["integrity"]["digest"] = content_digest(pack["abilities"])
-        with self.assertRaisesRegex(ValueError, "unsupported fields: command"):
+        with self.assertRaisesRegex(ValueError, "signature verification"):
             parse_ability_pack(pack, "unsafe-pack")
 
     def test_catalog_and_campaign_content_are_strict_and_checksummed(self):
@@ -107,7 +107,7 @@ class FoundationTests(unittest.TestCase):
         campaign_pack = json.loads(campaign_path.read_text(encoding="utf-8"))
         campaign_pack["campaigns"][0]["steps"][0]["script"] = "embedded"
         campaign_pack["integrity"]["digest"] = content_digest(campaign_pack["campaigns"])
-        with self.assertRaisesRegex(ValueError, "unsupported fields: script"):
+        with self.assertRaisesRegex(ValueError, "signature verification"):
             parse_campaign_pack(campaign_pack, "unsafe-campaign")
 
     def test_authorization_and_target_scope_are_enforced(self):
@@ -278,7 +278,15 @@ class FoundationTests(unittest.TestCase):
         with zipfile.ZipFile(result.bundle_path) as bundle:
             self.assertEqual(
                 set(bundle.namelist()),
-                {"run-manifest.json", "action-lifecycle.jsonl", "campaign-report.json"},
+                {
+                    "run-manifest.json",
+                    "action-lifecycle.jsonl",
+                    "campaign-report.json",
+                    "defense-scorecard.json",
+                    "defense-runbooks.json",
+                    "detection-candidates.json",
+                    "attack-flow.json",
+                },
             )
 
     def test_kill_switch_stops_campaign_and_preserves_cleanup_reserve(self):
@@ -359,7 +367,7 @@ class FoundationTests(unittest.TestCase):
         stdout.seek(0)
         stdout.truncate(0)
         self.assertEqual(cli_main(["--version"]), 0)
-        self.assertIn("0.4.0", stdout.getvalue())
+        self.assertIn("1.0.0", stdout.getvalue())
 
 
 if __name__ == "__main__":

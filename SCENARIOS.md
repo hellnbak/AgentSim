@@ -4,7 +4,7 @@ AgentSim produces safe, labeled traces for validating detections at AI-agent
 trust boundaries. It records what an agent observed, proposed, delegated, and
 was allowed or blocked from doing. It never invokes an AI model or tool.
 
-In v1.2, scenario packs remain a separate non-executing content contract.
+In v1.3, scenario packs remain a separate non-executing content contract.
 Gated endpoint or lab behavior belongs in ability packs and directed campaign
 packs documented in [`ABILITIES.md`](ABILITIES.md) and
 [`CAMPAIGNS.md`](CAMPAIGNS.md). A scenario pack cannot opt into lifecycle-v3
@@ -84,7 +84,7 @@ loading a plugin, or executing a tool.
 This boundary differs from endpoint behavior mode, which runs the documented
 read-only command catalog unless `--dry-run` is selected.
 
-## v1.2 disposable and reference-agent fixtures
+## v1.3 disposable and reference-agent fixtures
 
 `agentsim lab run all` adds twenty smaller in-memory controls alongside the
 declarative benchmark. The original prompt, memory, RAG, MCP, delegation,
@@ -96,9 +96,10 @@ twin against a deterministic synthetic policy.
 
 `agentsim lab reference all` runs those controls through an instrumented
 reference agent. It emits causal requested → policy → outcome events using the
-canonical agent trace contract. Only benign twins invoke a fixed synthetic
-tool, and that invocation changes an in-memory dictionary only. State is reset
-and verified after each fixture. The guarded HTTP form is packaged in a
+canonical agent trace contract. MCP fixtures add explicit authorization
+checkpoints for audience and per-client consent, with malicious/benign values.
+Only benign twins invoke a fixed synthetic tool, and that invocation changes an
+in-memory dictionary only. State is reset and verified after each fixture. The guarded HTTP form is packaged in a
 read-only, capability-free Docker profile under `labs/reference-agent/`.
 
 ## Event schema v2
@@ -239,6 +240,11 @@ Elastic EQL, and Sigma are documented in [`DETECTIONS.md`](DETECTIONS.md).
 Treat blocked requests as high-value observations: they show an attack reached
 a control boundary. Keep allowed/simulated outcomes too, so prevention can be
 distinguished from possible exposure.
+
+The v1.3 detection-pack sweep is a separate, answer-key-free view over
+normalized evidence. It is useful for exploratory signal coverage, but it does
+not replace malicious/benign benchmark scoring. Run `agentsim telemetry doctor`
+first so a broken trace cannot be interpreted as a quiet rule.
 
 ## Framework references
 

@@ -1,4 +1,4 @@
-# AgentSim v1.2 architecture
+# AgentSim v1.3 architecture
 
 AgentSim separates content, execution, authorization, telemetry, detection,
 and defensive evaluation so synthetic traces cannot silently become executable
@@ -22,9 +22,12 @@ flowchart TD
     Runtime["Agent / OTel GenAI / MCP audit"] --> Contract["Content-safe agent trace contract"]
     Contract --> Collect
     Collect --> Normalize["Normalized event model"]
-    Normalize --> Correlate["Ground-truth correlation"]
+    Normalize --> Assure["Telemetry assurance and causal integrity"]
+    Assure --> Correlate["Ground-truth correlation"]
+    Assure --> Sweep["Answer-key-free detection-pack sweep"]
     Timeline --> Correlate
     Correlate --> Detect["Detection AST and coverage analysis"]
+    Sweep --> Detect
     Detect --> Candidate["Human-review candidate renderers"]
     Detect --> Defense["Gaps, runbooks, scorecards, regression"]
     Candidate --> Bundle["Portable evidence bundle"]
@@ -44,8 +47,8 @@ agentsim/
 ├── execution/             simulate, local, and Docker provider interfaces
 ├── external/              non-executing Atomic, Stratus, CALDERA plans
 ├── safety/                authorization, target scope, policy, limits, cleanup
-├── telemetry/             contracts, collectors, live connectors, correlation
-├── detection/             AST, evaluator, coverage, generator, renderers
+├── telemetry/             contracts, collectors, assurance, live connectors, correlation
+├── detection/             AST, packs, evaluator, coverage, generator, renderers
 ├── defense/               recommendations, gaps, runbooks, regression, scorecard
 ├── lab/                   in-memory controls and instrumented reference agent
 ├── reporting/             bundles and Attack Flow STIX interchange
@@ -128,6 +131,12 @@ agent runtimes, OpenTelemetry GenAI spans, and MCP audit records. Raw prompts,
 messages, tool arguments/results, and model responses are excluded by design.
 Live connector responses pass through the same normalized/redacted event model.
 
+Telemetry assurance runs before interpretation. It checks source timestamps,
+stable record IDs, native agent identities, causal edge resolution, cross-trace
+links, temporal inversions, and the content-redaction boundary. It never reads
+or emits prompt/tool content. A degraded or unusable report is evidence about
+observability quality, not evidence that an attack occurred.
+
 The detection AST is data, not executable code. Evaluation is deterministic and
 bounded. Regex values are length-limited; evidence is capped and contains only
 record identity, time, source, type, and synthetic status. Grouping prevents
@@ -136,6 +145,12 @@ cross-host or cross-principal sequence matches.
 Candidate generation uses reviewed ability metadata and static command names.
 It does not inspect raw command output or deploy a rule. Rendered content is
 marked experimental/candidate and includes known limitations.
+
+Detection packs are strict JSON data. The loader rejects answer-key fields,
+duplicate rule IDs, undeclared rule fields, unknown pack fields, oversized
+packs, and executable expressions. A sweep reports `detected`,
+`not_detected`, or `visibility_gap`; it does not claim malicious/benign ground
+truth and does not deploy vendor content.
 
 ## Persistence and evidence
 
@@ -151,4 +166,5 @@ evidence is persisted.
 
 The public schemas are in [schemas](schemas/), including normalized events,
 detection rules, external plans, agent trace events, live query plans,
-reference-lab results, signed packs, authorization, and lifecycle v3.
+reference-lab results, telemetry-assurance reports, detection packs and sweep
+reports, signed packs, authorization, and lifecycle v3.

@@ -249,6 +249,10 @@ class AgentTraceEvent:
                 "agent_trace_schema_version": AGENT_TRACE_SCHEMA_VERSION,
                 "content_recorded": False,
                 "redacted": True,
+                "timestamp_present": True,
+                "timestamp_valid": True,
+                "source_record_id_present": True,
+                "generated_identity_fields": [],
             },
         )
 

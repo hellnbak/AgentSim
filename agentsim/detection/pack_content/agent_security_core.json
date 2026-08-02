@@ -1,0 +1,185 @@
+{
+  "pack_schema_version": "1.0",
+  "pack_id": "agentsim.agent-security-core",
+  "name": "AgentSim Agent Security Core",
+  "version": "1.0.0",
+  "description": "Content-safe investigative signals for agent, tool, policy, and MCP telemetry.",
+  "metadata": {
+    "maintainer": "AgentSim contributors",
+    "content_values_required": false,
+    "production_status": "tuning_required",
+    "license": "MIT"
+  },
+  "rules": [
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.untrusted-high-risk-tool",
+      "name": "Untrusted input reached a high-risk tool request",
+      "description": "Surfaces high-risk tool proposals derived from explicitly untrusted input.",
+      "severity": "high",
+      "group_by": ["trace_id"],
+      "mappings": ["agent-input-trust", "tool-misuse"],
+      "required_fields": ["event_type", "input_trust", "tool_risk", "trace_id"],
+      "expected_sources": ["agent_runtime", "mcp"],
+      "expression": {"type": "match", "predicates": [
+        {"field": "event_type", "operator": "eq", "value": "agent.tool.requested"},
+        {"field": "input_trust", "operator": "eq", "value": "untrusted"},
+        {"field": "tool_risk", "operator": "eq", "value": "high"}
+      ]},
+      "metadata": {"disposition": "investigate policy outcome and causal parents"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.tainted-tool-request",
+      "name": "Tainted context reached a tool request",
+      "description": "Finds tool requests carrying one or more bounded taint classifications.",
+      "severity": "high",
+      "group_by": ["trace_id"],
+      "mappings": ["prompt-injection", "memory-poisoning", "rag-poisoning"],
+      "required_fields": ["event_type", "taint_labels", "trace_id"],
+      "expected_sources": ["agent_runtime", "mcp"],
+      "expression": {"type": "match", "predicates": [
+        {"field": "event_type", "operator": "eq", "value": "agent.tool.requested"},
+        {"field": "taint_labels", "operator": "exists", "value": true}
+      ]},
+      "metadata": {"disposition": "confirm taint-aware authorization ran before tool execution"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.high-risk-tool-allowed",
+      "name": "High-risk agent tool was allowed",
+      "description": "Correlates a high-risk request with an allow decision in the same causal trace.",
+      "severity": "critical",
+      "group_by": ["trace_id"],
+      "mappings": ["excessive-agency", "tool-misuse"],
+      "required_fields": ["event_type", "parent_event_id", "policy_decision", "source_record_id", "tool_risk", "trace_id"],
+      "expected_sources": ["agent_runtime", "mcp"],
+      "expression": {"type": "causal_graph", "link_field": "parent_event_id", "steps": [
+        {"type": "match", "predicates": [
+          {"field": "event_type", "operator": "eq", "value": "agent.tool.requested"},
+          {"field": "tool_risk", "operator": "eq", "value": "high"}
+        ]},
+        {"type": "match", "predicates": [
+          {"field": "event_type", "operator": "eq", "value": "agent.policy.decision"},
+          {"field": "policy_decision", "operator": "eq", "value": "allow"}
+        ]}
+      ]},
+      "metadata": {"disposition": "validate authorization, approval, and intended operator scope"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.invalid-auth-audience",
+      "name": "Agent or MCP authorization audience mismatch",
+      "description": "Finds an explicit failed authorization audience validation.",
+      "severity": "critical",
+      "group_by": ["trace_id"],
+      "mappings": ["token-misuse", "mcp-authorization"],
+      "required_fields": ["auth_audience_valid", "trace_id"],
+      "expected_sources": ["agent_runtime", "mcp"],
+      "expression": {"type": "match", "predicates": [
+        {"field": "auth_audience_valid", "operator": "eq", "value": false}
+      ]},
+      "metadata": {"disposition": "reject the request and inspect token audience/resource binding"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.invalid-client-consent",
+      "name": "Agent or MCP client consent validation failed",
+      "description": "Finds absent or invalid per-client consent at an authorization checkpoint.",
+      "severity": "high",
+      "group_by": ["trace_id"],
+      "mappings": ["confused-deputy", "mcp-authorization"],
+      "required_fields": ["consent_valid", "trace_id"],
+      "expected_sources": ["agent_runtime", "mcp"],
+      "expression": {"type": "match", "predicates": [
+        {"field": "consent_valid", "operator": "eq", "value": false}
+      ]},
+      "metadata": {"disposition": "require explicit per-client consent before forwarding authorization"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.high-risk-tool-without-policy",
+      "name": "High-risk tool request lacks policy identity",
+      "description": "Surfaces high-risk requests without a named policy control.",
+      "severity": "high",
+      "group_by": ["trace_id"],
+      "mappings": ["policy-bypass", "excessive-agency"],
+      "required_fields": ["event_type", "policy_id", "tool_risk", "trace_id"],
+      "expected_sources": ["agent_runtime", "mcp"],
+      "expression": {"type": "match", "predicates": [
+        {"field": "event_type", "operator": "eq", "value": "agent.tool.requested"},
+        {"field": "tool_risk", "operator": "eq", "value": "high"},
+        {"field": "policy_id", "operator": "exists", "value": false}
+      ]},
+      "metadata": {"disposition": "verify policy enforcement occurred and instrument policy identity"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.untrusted-memory-write",
+      "name": "Untrusted context attempted a memory write",
+      "description": "Finds memory-oriented tool requests derived from untrusted input.",
+      "severity": "high",
+      "group_by": ["trace_id"],
+      "mappings": ["memory-poisoning"],
+      "required_fields": ["event_type", "input_trust", "tool_name", "trace_id"],
+      "expected_sources": ["agent_runtime"],
+      "expression": {"type": "match", "predicates": [
+        {"field": "event_type", "operator": "eq", "value": "agent.tool.requested"},
+        {"field": "tool_name", "operator": "contains", "value": "memory"},
+        {"field": "input_trust", "operator": "eq", "value": "untrusted"}
+      ]},
+      "metadata": {"disposition": "inspect memory provenance, retention, and future retrieval scope"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.mcp-high-risk-request",
+      "name": "High-risk MCP tool request",
+      "description": "Finds high-risk requests routed to an MCP-namespaced tool.",
+      "severity": "medium",
+      "group_by": ["trace_id"],
+      "mappings": ["mcp-tool-misuse"],
+      "required_fields": ["event_type", "tool_name", "tool_risk", "trace_id"],
+      "expected_sources": ["agent_runtime", "mcp"],
+      "expression": {"type": "match", "predicates": [
+        {"field": "event_type", "operator": "eq", "value": "agent.tool.requested"},
+        {"field": "tool_name", "operator": "startswith", "value": "mcp."},
+        {"field": "tool_risk", "operator": "eq", "value": "high"}
+      ]},
+      "metadata": {"disposition": "review server trust, scopes, audience, and operator intent"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.high-risk-tool-without-principal",
+      "name": "High-risk tool request lacks principal attribution",
+      "description": "Surfaces requests that cannot be tied to an initiating principal.",
+      "severity": "high",
+      "group_by": ["trace_id"],
+      "mappings": ["accountability-gap"],
+      "required_fields": ["event_type", "principal_id", "tool_risk", "trace_id"],
+      "expected_sources": ["agent_runtime", "mcp"],
+      "expression": {"type": "match", "predicates": [
+        {"field": "event_type", "operator": "eq", "value": "agent.tool.requested"},
+        {"field": "tool_risk", "operator": "eq", "value": "high"},
+        {"field": "principal_id", "operator": "exists", "value": false}
+      ]},
+      "metadata": {"disposition": "preserve initiating principal identity through delegation"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.policy-denied-agent-action",
+      "name": "Agent policy denied a high-risk action",
+      "description": "Records defended high-risk attempts for triage and control-volume baselining.",
+      "severity": "medium",
+      "group_by": ["trace_id"],
+      "mappings": ["prevented-agent-action"],
+      "required_fields": ["event_type", "policy_decision", "tool_risk", "trace_id"],
+      "expected_sources": ["agent_runtime", "mcp"],
+      "expression": {"type": "match", "predicates": [
+        {"field": "event_type", "operator": "eq", "value": "agent.policy.decision"},
+        {"field": "policy_decision", "operator": "eq", "value": "deny"},
+        {"field": "tool_risk", "operator": "eq", "value": "high"}
+      ]},
+      "metadata": {"disposition": "baseline expected denials and investigate anomalous principals or volume"}
+    }
+  ]
+}

@@ -31,7 +31,7 @@ CANONICAL_ALIASES: Mapping[str, tuple[str, ...]] = {
     ),
     "source": ("source", "data_source", "event.dataset", "event.module", "SourceName"),
     "event_type": ("event_type", "event.action", "event.category", "EventType", "name"),
-    "record_id": ("event.id", "id", "EventRecordID", "_id"),
+    "record_id": ("record_id", "event_id", "event.id", "id", "EventRecordID", "_id"),
     "host_id": ("host_id", "host.id", "host.name", "Computer", "aid", "device_id"),
     "user_id": ("user_id", "user.id", "user.name", "User", "AccountName"),
     "process_name": (
@@ -64,6 +64,7 @@ CANONICAL_ALIASES: Mapping[str, tuple[str, ...]] = {
     "run_id": ("run_id", "agentsim.run_id", "attributes.run_id"),
     "ability_id": ("ability_id", "agentsim.ability_id", "attributes.ability_id"),
     "parent_event_id": ("parent_event_id", "event.parent_id", "caused_by"),
+    "caused_by_event_ids": ("caused_by_event_ids", "event.caused_by_ids"),
     "trace_id": ("trace_id", "trace.id", "TraceId"),
     "conversation_id": ("conversation_id", "gen_ai.conversation.id"),
     "turn_id": ("turn_id", "gen_ai.turn.id"),
@@ -137,26 +138,35 @@ def _first(value: Mapping[str, object], paths: Sequence[str]) -> object:
     return None
 
 
-def _timestamp(value: object) -> str:
+def _timestamp_with_status(value: object) -> tuple[str, bool, bool]:
+    present = value not in (None, "")
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         numeric = float(value)
         if numeric > 10**14:
             numeric /= 10**9
         elif numeric > 10**11:
             numeric /= 1000
-        return datetime.fromtimestamp(numeric, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+        try:
+            rendered = datetime.fromtimestamp(numeric, tz=timezone.utc).isoformat()
+        except (OverflowError, OSError, ValueError):
+            return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"), present, False
+        return rendered.replace("+00:00", "Z"), present, True
     if isinstance(value, str) and value.strip():
         candidate = value.strip()
         if candidate.isdigit():
-            return _timestamp(int(candidate))
+            return _timestamp_with_status(int(candidate))
         try:
             parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
         except ValueError:
-            return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"), True, False
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"), True, True
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"), present, False
+
+
+def _timestamp(value: object) -> str:
+    return _timestamp_with_status(value)[0]
 
 
 def _safe_scalar(value: object) -> object:
@@ -201,8 +211,9 @@ def normalize_record(
         record, tuple(profile.get("timestamp", ())) + CANONICAL_ALIASES["timestamp"]
     )
     record_id = _first(record, CANONICAL_ALIASES["record_id"])
+    normalized_timestamp, timestamp_present, timestamp_valid = _timestamp_with_status(timestamp)
     return NormalizedEvent(
-        timestamp=_timestamp(timestamp),
+        timestamp=normalized_timestamp,
         source=str(source or collector),
         event_type=str(event_type or "unknown"),
         fields=values,
@@ -216,7 +227,12 @@ def normalize_record(
         collector=collector,
         synthetic=synthetic,
         source_record_id=str(record_id) if record_id is not None else None,
-        metadata={"redacted": True},
+        metadata={
+            "redacted": True,
+            "timestamp_present": timestamp_present,
+            "timestamp_valid": timestamp_valid,
+            "source_record_id_present": record_id is not None,
+        },
     )
 
 

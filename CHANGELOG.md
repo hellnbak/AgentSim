@@ -3,6 +3,30 @@
 Notable changes to AgentSim are documented here. The project follows semantic
 versioning while its public interfaces mature.
 
+## 1.3.0 - 2026-08-02
+
+- Added a telemetry-assurance doctor with `healthy`, `degraded`, and `unusable`
+  outcomes, a 0–100 score, bounded remediation findings, and CI-configurable
+  exit behavior.
+- Added checks for invalid/substituted timestamps, missing or duplicate event
+  IDs, incomplete/generated agent identity, unresolved and cross-trace causal
+  links, causal time inversion, and accidental content-field exposure.
+- Preserved multi-parent `caused_by_event_ids` through agent, OTel GenAI, and
+  MCP normalization and recorded source timestamp/identity provenance without
+  retaining raw sensitive values.
+- Added a strict detection-pack contract, ten-rule built-in agent-security
+  pack, and answer-key-free sweeps that distinguish `detected`,
+  `not_detected`, and `visibility_gap`.
+- Added stable Python and CLI entry points, three public JSON schemas, packaged
+  built-in content, and dashboard assurance results over the disposable
+  reference-agent corpus.
+- Added explicit malicious/benign MCP authorization checkpoints for audience,
+  resource, scopes, and per-client consent, closing the two default-pack
+  visibility gaps in the reference corpus.
+- Added a versioned README roadmap centered on multi-agent graph analytics,
+  detection feedback and schema mapping, signed community content, and stable
+  defensive evidence contracts while reaffirming exploitation/C2 non-goals.
+
 ## 1.2.0 - 2026-08-02
 
 - Added a canonical, content-safe agent trace contract with trace, session,

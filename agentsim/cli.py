@@ -19,7 +19,9 @@ from agentsim.detection import (
     evaluate_live_registry,
     evaluate_rule,
     generate_candidate,
+    load_detection_pack,
     load_rule,
+    sweep_detection_pack,
 )
 from agentsim.detection.renderers import FORMATS, render_candidate, write_candidate_bundle
 from agentsim.external import adapter_names, build_external_plan
@@ -40,6 +42,7 @@ from agentsim.reporting.attack_flow import export_campaign, import_campaign
 from agentsim.safety.authorization import load_authorization_manifest
 from agentsim.storage import RunStore
 from agentsim.telemetry.collectors import COLLECTOR_NAMES, collector_for
+from agentsim.telemetry.assurance import assess_telemetry
 from agentsim.telemetry.connectors import CONNECTOR_NAMES, QuerySpec, build_query_plan, execute_query_plan
 
 
@@ -112,6 +115,15 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     telemetry_inspect = telemetry_commands.add_parser("inspect", help="Summarize a telemetry export.")
     telemetry_inspect.add_argument("path")
     telemetry_inspect.add_argument("--collector", choices=COLLECTOR_NAMES, default="jsonl")
+    telemetry_doctor = telemetry_commands.add_parser(
+        "doctor", help="Assess redaction, identity, timestamp, and causal-link integrity."
+    )
+    telemetry_doctor.add_argument("path")
+    telemetry_doctor.add_argument("--collector", choices=COLLECTOR_NAMES, default="jsonl")
+    telemetry_doctor.add_argument("--output")
+    telemetry_doctor.add_argument(
+        "--fail-on", choices=("never", "degraded", "unusable"), default="unusable"
+    )
     telemetry_query = telemetry_commands.add_parser(
         "query", help="Plan or explicitly execute an exact-target, read-only SIEM query."
     )
@@ -144,6 +156,14 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     detection_evaluate.add_argument("rule")
     detection_evaluate.add_argument("telemetry")
     detection_evaluate.add_argument("--collector", choices=COLLECTOR_NAMES, default="jsonl")
+    detection_sweep = detection_commands.add_parser(
+        "sweep", help="Run an answer-key-free detection pack across normalized evidence."
+    )
+    detection_sweep.add_argument("telemetry")
+    detection_sweep.add_argument("--collector", choices=COLLECTOR_NAMES, default="jsonl")
+    detection_sweep.add_argument("--pack")
+    detection_sweep.add_argument("--output")
+    detection_sweep.add_argument("--fail-on-visibility-gap", action="store_true")
     detection_generate = detection_commands.add_parser("generate", help="Generate a candidate detection.")
     detection_generate.add_argument("ability_id")
     detection_generate.add_argument("--format", choices=FORMATS)
@@ -281,6 +301,14 @@ def _run_v1(args: argparse.Namespace) -> int | None:
             }
         )
         return 0
+    if args.command == "telemetry" and args.telemetry_command == "doctor":
+        report = assess_telemetry(collector_for(args.collector).collect(args.path))
+        _emit_json(report.to_dict(), args.output)
+        if args.fail_on == "never":
+            return 0
+        if args.fail_on == "degraded":
+            return 0 if report.status == "healthy" else 1
+        return 1 if report.status == "unusable" else 0
     if args.command == "telemetry" and args.telemetry_command == "query-history":
         _emit_json(RunStore(args.database).telemetry_query_history(args.limit))
         return 0
@@ -355,6 +383,16 @@ def _run_v1(args: argparse.Namespace) -> int | None:
         )
         _emit_json(result.to_dict())
         return 0 if result.matched else 1
+    if args.command == "detection" and args.detection_command == "sweep":
+        report = sweep_detection_pack(
+            load_detection_pack(args.pack),
+            collector_for(args.collector).collect(args.telemetry),
+        )
+        value = report.to_dict()
+        _emit_json(value, args.output)
+        if args.fail_on_visibility_gap and value["summary"]["visibility_gap"]:
+            return 1
+        return 0
     if args.command == "detection" and args.detection_command == "generate":
         abilities = load_ability_registry(args.ability_pack)
         if args.ability_id not in abilities:

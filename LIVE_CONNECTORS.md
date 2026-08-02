@@ -1,6 +1,6 @@
 # Live read-only telemetry connectors
 
-AgentSim 1.2 can validate candidate detections against a narrowly scoped live
+AgentSim 1.3 can validate candidate detections against a narrowly scoped live
 telemetry query. This is not a SIEM administration surface: connectors cannot
 create, update, deploy, or delete detections, dashboards, indexes, users, or
 policies.
@@ -90,6 +90,12 @@ A candidate match does not prove the production vendor rule is deployed or
 syntactically correct. It validates AgentSim's vendor-neutral AST against the
 normalized query result. Review and test the vendor-native rendering before
 deployment.
+
+When `--include-events` is appropriate for local retention, the resulting
+artifact can also be passed to `agentsim telemetry doctor` using the same
+collector mapping. Run assurance before interpreting quiet candidate results;
+missing identity, invalid time, or broken causal links are observability gaps,
+not clean security outcomes.
 
 ## Python and testing
 

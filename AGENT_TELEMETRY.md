@@ -1,6 +1,6 @@
 # Agent and MCP telemetry contract
 
-AgentSim 1.2 defines a content-safe event contract for correlating agent,
+AgentSim 1.3 defines a content-safe event contract for correlating agent,
 model, tool, policy, and MCP activity without retaining prompts, reasoning,
 messages, tool arguments/results, model responses, payloads, credentials, or
 unsafe token values.
@@ -18,6 +18,7 @@ The offline collector and Python API accept three agent-oriented profiles:
 ```bash
 agentsim telemetry inspect agent-spans.jsonl --collector otel_genai
 agentsim telemetry inspect mcp-audit.jsonl --collector mcp_audit
+agentsim telemetry doctor mcp-audit.jsonl --collector mcp_audit
 ```
 
 Python callers can project a single record before normalizing it:
@@ -49,6 +50,11 @@ OpenTelemetry GenAI and MCP field names into the canonical columns and retain
 bounded, non-content security attributes such as token counts, error type,
 delegation depth, and remaining budget.
 
+Adapters preserve `caused_by_event_ids` in addition to `parent_event_id`.
+Normalization metadata records whether the source timestamp and record ID were
+present and valid and which core identities had to be generated. These are
+quality facts only; raw missing values are not retained.
+
 ## Privacy and security boundary
 
 `content_recorded` is always `false`; attempts to construct an event with it
@@ -73,7 +79,17 @@ agent.tool.requested
   → agent.tool.completed | agent.tool.blocked
 ```
 
+MCP-mediated requests should also emit `mcp.authorization.checked` with client,
+server, audience/resource, bounded scopes, audience validity, and per-client
+consent. The v1.3 reference corpus emits malicious/benign authorization twins
+so absence of those fields is no longer a detection-pack visibility gap.
+
 Memory writes, retrieval, delegation, approval, configuration, and MCP
 authorization should likewise emit the observable decision separately from the
 requested action. Blocked events remain valuable: they prove hostile or unsafe
 intent reached a control boundary without implying compromise.
+
+Run [`telemetry doctor`](TELEMETRY_ASSURANCE.md) on every new runtime mapping.
+A deterministic fallback keeps malformed exports parseable, but the assurance
+report marks substituted timestamps and generated identities so they cannot be
+mistaken for native correlation evidence.

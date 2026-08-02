@@ -5,6 +5,11 @@ checkpoints over loopback HTTP. It never executes a host command, reads a host
 file, opens an outbound connection, or accepts a prompt, token, payload, or
 arbitrary tool definition.
 
+MCP fixtures emit a separate `mcp.authorization.checked` checkpoint with fixed
+synthetic client/server IDs, audience, resource, bounded scopes, audience
+validity, and per-client-consent validity. Malicious and benign twins exercise
+both failing and passing authorization outcomes without accepting a token.
+
 Start the hardened container:
 
 ```sh

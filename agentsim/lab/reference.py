@@ -89,6 +89,10 @@ def _trace(
     tool_effect_applied: bool,
 ) -> tuple[AgentTraceEvent, ...]:
     trace_id = f"{run_id}:{variant}"
+    request = fixture.malicious_request if variant == "malicious" else fixture.benign_request
+    mcp_authorization = fixture.tool_name.startswith("mcp.")
+    audience_valid = bool(request.get("audience_valid", True)) if mcp_authorization else None
+    consent_valid = bool(request.get("consent", True)) if mcp_authorization else None
     common = {
         "timestamp": _timestamp(),
         "trace_id": trace_id,
@@ -101,59 +105,88 @@ def _trace(
         "tool_name": fixture.tool_name,
         "tool_risk": "low" if variant == "benign" else "high",
         "policy_id": fixture.control,
-        "policy_version": "1.2",
+        "policy_version": "1.3",
         "synthetic": True,
         "content_recorded": False,
     }
     requested_id = f"{trace_id}:requested"
     policy_id = f"{trace_id}:policy"
-    return (
+    requested = AgentTraceEvent(
+        **common,
+        event_id=requested_id,
+        event_type="agent.tool.requested",
+        input_trust="trusted" if variant == "benign" else "untrusted",
+        taint_labels=() if variant == "benign" else (fixture.attack_class,),
+        outcome="proposed",
+        attributes={
+            "fixture_id": fixture.fixture_id,
+            "variant": variant,
+            "attack_class": fixture.attack_class,
+            "arguments_recorded": False,
+        },
+    )
+    authorization = (
         AgentTraceEvent(
             **common,
-            event_id=requested_id,
-            event_type="agent.tool.requested",
-            input_trust="trusted" if variant == "benign" else "untrusted",
-            taint_labels=() if variant == "benign" else (fixture.attack_class,),
-            outcome="proposed",
-            attributes={
-                "fixture_id": fixture.fixture_id,
-                "variant": variant,
-                "attack_class": fixture.attack_class,
-                "arguments_recorded": False,
-            },
-        ),
-        AgentTraceEvent(
-            **common,
-            event_id=policy_id,
+            event_id=f"{trace_id}:authorization",
+            event_type="mcp.authorization.checked",
+            source="mcp",
             parent_event_id=requested_id,
             caused_by_event_ids=(requested_id,),
-            event_type="agent.policy.decision",
-            policy_decision="allow" if allowed else "deny",
-            outcome="allowed" if allowed else "prevented",
+            mcp_client_id="agentsim-reference-client",
+            mcp_server_id="agentsim-reference-server",
+            auth_audience="agentsim-reference-server",
+            auth_resource="synthetic://mcp/reference-resource",
+            auth_scopes=("read", "publish") if request.get("scope_expansion") else ("read",),
+            auth_audience_valid=audience_valid,
+            consent_valid=consent_valid,
+            policy_decision="allow" if audience_valid and consent_valid else "deny",
+            outcome="validated" if audience_valid and consent_valid else "prevented",
             attributes={
                 "fixture_id": fixture.fixture_id,
                 "variant": variant,
-                "decision_reason": reason,
-                "control": fixture.control,
+                "authorization_checkpoint": True,
             },
-        ),
-        AgentTraceEvent(
-            **common,
-            event_id=f"{trace_id}:outcome",
-            parent_event_id=policy_id,
-            caused_by_event_ids=(policy_id,),
-            event_type="agent.tool.completed" if allowed else "agent.tool.blocked",
-            policy_decision="allow" if allowed else "deny",
-            outcome="simulated" if allowed else "prevented",
-            attributes={
-                "fixture_id": fixture.fixture_id,
-                "variant": variant,
-                "tool_effect_applied": tool_effect_applied,
-                "external_state_changed": False,
-                "result_recorded": False,
-            },
-        ),
+        )
+        if mcp_authorization
+        else None
     )
+    policy = AgentTraceEvent(
+        **common,
+        event_id=policy_id,
+        parent_event_id=requested_id,
+        caused_by_event_ids=(requested_id,),
+        event_type="agent.policy.decision",
+        policy_decision="allow" if allowed else "deny",
+        outcome="allowed" if allowed else "prevented",
+        attributes={
+            "fixture_id": fixture.fixture_id,
+            "variant": variant,
+            "decision_reason": reason,
+            "control": fixture.control,
+        },
+    )
+    outcome = AgentTraceEvent(
+        **common,
+        event_id=f"{trace_id}:outcome",
+        parent_event_id=policy_id,
+        caused_by_event_ids=(policy_id,),
+        event_type="agent.tool.completed" if allowed else "agent.tool.blocked",
+        policy_decision="allow" if allowed else "deny",
+        outcome="simulated" if allowed else "prevented",
+        attributes={
+            "fixture_id": fixture.fixture_id,
+            "variant": variant,
+            "tool_effect_applied": tool_effect_applied,
+            "external_state_changed": False,
+            "result_recorded": False,
+        },
+    )
+    events = [requested]
+    if authorization is not None:
+        events.append(authorization)
+    events.extend((policy, outcome))
+    return tuple(events)
 
 
 def run_reference_fixture(fixture_id: str) -> ReferenceLabRun:

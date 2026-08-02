@@ -60,6 +60,13 @@ and bounded evidence must remain fail closed. Report any path that evaluates
 telemetry as code, records sensitive field values, or silently contacts a
 vendor as a security issue.
 
+Detection packs are also untrusted input. They must remain bounded declarative
+data, declare every field used by a rule, reject duplicate identifiers and
+scenario answer keys, and never import code or deploy vendor rules. Telemetry
+assurance must not retain raw invalid timestamps or content-bearing values, and
+must report—rather than hide—generated identities, broken causal links, and
+redaction-boundary violations.
+
 Live telemetry connectors are read-only query clients and are disabled until
 both execution and network access are explicitly enabled. Wildcard datasets or
 targets, windows over 24 hours, limits over 10,000 records, responses over 32

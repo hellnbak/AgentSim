@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentsim"
-version = "1.2.0"
+version = "1.3.0"
 description = "Detection-first adversary emulation for endpoints, cloud, and agentic AI"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -43,6 +43,7 @@ include = ["agentsim*", "agentsim_scenarios*"]
 "agentsim.content.campaigns" = ["*.json"]
 "agentsim.content.catalogs" = ["*.json"]
 "agentsim.content" = ["trusted_keys.json"]
+"agentsim.detection.pack_content" = ["*.json"]
 
 [tool.setuptools.data-files]
 "share/agentsim/schemas" = [
@@ -59,4 +60,7 @@ include = ["agentsim*", "agentsim_scenarios*"]
     "schemas/agent-trace-event.schema.json",
     "schemas/live-query-plan.schema.json",
     "schemas/reference-lab-result.schema.json",
+    "schemas/telemetry-assurance-report.schema.json",
+    "schemas/detection-pack.schema.json",
+    "schemas/detection-sweep-report.schema.json",
 ]

@@ -28,7 +28,13 @@ from flask import (
 from core import AgentSim
 from agentsim.content import load_ability_registry, load_campaign_registry
 from agentsim.defense import analyze_gaps, generate_runbook
-from agentsim.detection import analyze_coverage, evaluate_rule, generate_candidate
+from agentsim.detection import (
+    analyze_coverage,
+    evaluate_rule,
+    generate_candidate,
+    load_detection_pack,
+    sweep_detection_pack,
+)
 from agentsim.external import adapter_names
 from agentsim.lab import (
     list_fixtures,
@@ -43,6 +49,7 @@ from agentsim.orchestration.runner import CampaignRunner
 from agentsim.safety.authorization import AuthorizationManifest
 from agentsim.storage import RunStore
 from agentsim.telemetry.normalization import normalize_records
+from agentsim.telemetry.assurance import assess_telemetry
 from scenarios import (
     DEFAULT_BUNDLE_PATH,
     DEFAULT_COVERAGE_PATH,
@@ -1144,7 +1151,7 @@ HTML_TEMPLATE = """
                         <h2>Authorized campaign foundation</h2>
                         <p>Run a directed campaign through authorization, provider preparation, lifecycle-v3 ground truth, cleanup verification, defense recommendations, and persistent history. The dashboard exposes simulation only.</p>
                     </div>
-                    <span class="campaign-version">v1.2.0</span>
+                    <span class="campaign-version">v1.3.0</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="campaign-select" aria-label="Campaign">
@@ -1175,7 +1182,7 @@ HTML_TEMPLATE = """
                         <h2>Validate visibility and agent safeguards</h2>
                         <p>Exercise a generated candidate against redacted synthetic telemetry, inspect field coverage and gaps, or run twenty instrumented malicious/benign agentic control pairs. Nothing here starts a host process or opens an external network connection.</p>
                     </div>
-                    <span class="campaign-version">v1.2 stable</span>
+                    <span class="campaign-version">v1.3 stable</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="v1-ability-select" aria-label="Detection validation ability">
@@ -1184,6 +1191,7 @@ HTML_TEMPLATE = """
                         {% endfor %}
                     </select>
                     <button class="primary-button campaign-run" id="v1-detection-run" type="button">Validate detection</button>
+                    <button class="tool-button" id="v1-assurance-run" type="button">Check telemetry assurance</button>
                     <button class="tool-button" id="v1-lab-run" type="button">Run reference lab</button>
                 </div>
                 <div class="campaign-result" id="v1-validation-result">
@@ -1376,6 +1384,7 @@ HTML_TEMPLATE = """
             campaignHistory: document.getElementById("campaign-history"),
             v1Ability: document.getElementById("v1-ability-select"),
             v1DetectionRun: document.getElementById("v1-detection-run"),
+            v1AssuranceRun: document.getElementById("v1-assurance-run"),
             v1LabRun: document.getElementById("v1-lab-run"),
             v1Result: document.getElementById("v1-validation-result"),
             eventStreamHeading: document.getElementById("event-stream-heading"),
@@ -1581,6 +1590,52 @@ HTML_TEMPLATE = """
                 setCampaignPlaceholder(elements.v1Result, "Detection validation failed inside the synthetic boundary.");
             } finally {
                 elements.v1DetectionRun.disabled = false;
+            }
+        }
+
+        function renderV1Assurance(payload) {
+            const assurance = payload.assurance || {};
+            const sweep = payload.sweep || {};
+            const summary = sweep.summary || {};
+            const findings = Array.isArray(assurance.findings) ? assurance.findings : [];
+            const container = document.createDocumentFragment();
+            container.appendChild(textNode("div", "campaign-section-label", "Telemetry assurance · synthetic reference corpus"));
+            const stats = document.createElement("div");
+            stats.className = "campaign-summary";
+            [
+                [assurance.score || 0, "assurance score"],
+                [assurance.status || "unknown", "evidence status"],
+                [summary.detected || 0, "pack rules detected"],
+                [summary.visibility_gap || 0, "visibility gaps"]
+            ].forEach(function (item) {
+                const stat = document.createElement("div");
+                stat.className = "campaign-stat";
+                stat.appendChild(textNode("strong", "", item[0]));
+                stat.appendChild(textNode("span", "", item[1]));
+                stats.appendChild(stat);
+            });
+            container.appendChild(stats);
+            container.appendChild(textNode("div", "debug-placeholder", findings.length
+                ? findings.map(function (item) { return item.title; }).join(" · ")
+                : "Correlation links, source identities, timestamps, and content-redaction boundaries passed. Visibility gaps identify fields the corpus does not provide; they are not treated as clean results."));
+            elements.v1Result.replaceChildren(container);
+        }
+
+        async function runV1Assurance() {
+            elements.v1AssuranceRun.disabled = true;
+            setCampaignPlaceholder(elements.v1Result, "Checking trace integrity and sweeping the built-in agent-security detection pack…");
+            try {
+                const response = await fetch("/api/v1/telemetry/assurance", {
+                    method: "POST",
+                    headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                    body: JSON.stringify({corpus: "reference-agent"})
+                });
+                if (!response.ok) throw new Error();
+                renderV1Assurance(await response.json());
+            } catch (_error) {
+                setCampaignPlaceholder(elements.v1Result, "Telemetry assurance failed inside the synthetic boundary.");
+            } finally {
+                elements.v1AssuranceRun.disabled = false;
             }
         }
 
@@ -2245,6 +2300,7 @@ HTML_TEMPLATE = """
         });
         elements.campaignRun.addEventListener("click", runSafeCampaign);
         elements.v1DetectionRun.addEventListener("click", runV1Detection);
+        elements.v1AssuranceRun.addEventListener("click", runV1Assurance);
         elements.v1LabRun.addEventListener("click", runV1Lab);
         elements.form.addEventListener("submit", submitRun);
         elements.stop.addEventListener("click", stopRun);
@@ -2366,7 +2422,7 @@ def api_foundation_catalog() -> Response:
     history = RunStore(CAMPAIGN_DATABASE_PATH).history(25) if CAMPAIGN_DATABASE_PATH.exists() else []
     return jsonify(
         {
-            "version": "1.2.0",
+            "version": "1.3.0",
             "workflow": ["emulate", "observe", "detect", "defend", "retest"],
             "capabilities": {
                 "offline_collectors": ["jsonl", "otel", "otel_genai", "sysmon", "auditd", "cloudtrail", "crowdstrike", "splunk", "elastic", "sentinel", "logscale", "panther", "graylog", "agent_runtime", "mcp_audit"],
@@ -2379,6 +2435,8 @@ def api_foundation_catalog() -> Response:
                 "signed_builtin_content": True,
                 "plugin_api_version": "1.0",
                 "reference_agent_lab": True,
+                "telemetry_assurance": True,
+                "detection_pack_rules": len(load_detection_pack().rules),
             },
             "abilities": [
                 {
@@ -2520,6 +2578,32 @@ def api_detection_demo() -> Response:
     )
 
 
+@app.route("/api/v1/telemetry/assurance", methods=["POST"])
+def api_telemetry_assurance() -> Response:
+    """Assess the content-safe reference corpus and run answer-key-free pack rules."""
+
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400, description="JSON request body is required")
+    if payload.get("corpus", "reference-agent") != "reference-agent":
+        abort(400, description="unsupported assurance corpus")
+    runs = run_reference_suite()
+    events = tuple(event.to_normalized_event() for run in runs for event in run.events)
+    assurance = assess_telemetry(events)
+    sweep = sweep_detection_pack(load_detection_pack(), events)
+    return jsonify(
+        {
+            "execution_mode": "synthetic_telemetry_assurance",
+            "process_started": False,
+            "network_opened": False,
+            "trace_count": assurance.trace_count,
+            "assurance": assurance.to_dict(),
+            "sweep": sweep.to_dict(),
+        }
+    )
+
+
 @app.route("/api/v1/lab/run", methods=["POST"])
 def api_v1_lab_run() -> Response:
     _validate_api_token()
@@ -2542,7 +2626,7 @@ def api_v1_lab_run() -> Response:
 
 
 @app.route("/api/v1/lab/reference", methods=["POST"])
-def api_v12_reference_lab_run() -> Response:
+def api_v1_reference_lab_run() -> Response:
     _validate_api_token()
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
@@ -2560,7 +2644,7 @@ def api_v12_reference_lab_run() -> Response:
         abort(400, description=str(exc))
     return jsonify(
         {
-            "version": "1.2.0",
+            "version": "1.3.0",
             "passed": all(result.passed for result in results),
             "results": [result.to_dict() for result in results],
         }

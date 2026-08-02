@@ -1,6 +1,6 @@
 # Detection validation engine
 
-AgentSim v1.2 validates defensive assumptions against exported telemetry or an
+AgentSim v1.3 validates defensive assumptions against exported telemetry or an
 explicitly authorized, read-only live query. Offline operation remains the
 default and requires no vendor credential.
 
@@ -8,6 +8,7 @@ default and requires no vendor credential.
 
 ```text
 vendor export OR bounded live query → normalized/redacted events
+             → assurance and causal-integrity checks
              → lifecycle correlation → field/source coverage
              → detection AST → evidence → gaps/runbook/regression
              → candidate vendor renderers (human review required)
@@ -34,6 +35,24 @@ The normalized record contract is
 Agent-specific input is projected through the stricter
 [`schemas/agent-trace-event.schema.json`](schemas/agent-trace-event.schema.json)
 contract described in [AGENT_TELEMETRY.md](AGENT_TELEMETRY.md).
+
+## Telemetry assurance
+
+Run assurance before treating an unmatched rule as meaningful:
+
+```bash
+agentsim telemetry doctor agent-events.jsonl \
+  --collector agent_runtime \
+  --output telemetry-assurance.json
+```
+
+The doctor checks invalid or substituted timestamps, missing/duplicate event
+IDs, incomplete or generated agent correlation identity, unresolved causal
+parents, cross-trace links, causal time inversion, unknown redaction provenance,
+and accidental content-field exposure. Reports follow
+[`schemas/telemetry-assurance-report.schema.json`](schemas/telemetry-assurance-report.schema.json)
+and return `healthy`, `degraded`, or `unusable` plus a 0–100 score and bounded
+remediation findings. `--fail-on degraded` is the strict CI mode.
 
 ## Live query connectors
 
@@ -102,6 +121,36 @@ agentsim detection evaluate rule.json events.jsonl --collector jsonl
 ```
 
 Evidence is bounded to 100 record references and excludes raw fields.
+
+## Detection packs and sweeps
+
+A detection pack adds explicit `required_fields` and `expected_sources` to
+each AST rule. The built-in `agentsim.agent-security-core` pack contains ten
+content-safe investigative rules for untrusted/tainted high-risk tool requests,
+policy outcomes, MCP requests, authorization audience and consent failures,
+memory writes, and attribution gaps.
+
+```bash
+agentsim detection sweep agent-events.jsonl --collector agent_runtime
+agentsim detection sweep agent-events.jsonl \
+  --collector agent_runtime \
+  --pack reviewed-pack.json \
+  --fail-on-visibility-gap
+```
+
+The loader rejects scenario answer keys such as `expected_detection` and
+`ground_truth`, duplicate rule IDs, unknown pack fields, and rules whose
+declared requirements omit fields used by their AST. Sweep outcomes mean:
+
+- `detected`: the AST matched bounded normalized evidence;
+- `not_detected`: the declared evidence was available but the AST did not
+  match; or
+- `visibility_gap`: the AST did not match and one or more declared sources or
+  fields were absent.
+
+Sweep reports explicitly record `ground_truth_used: false`. The public schemas
+are [`detection-pack.schema.json`](schemas/detection-pack.schema.json) and
+[`detection-sweep-report.schema.json`](schemas/detection-sweep-report.schema.json).
 
 ## Coverage and defensive analysis
 

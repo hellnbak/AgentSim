@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from typing import Iterable, Mapping, Sequence
 
 from agentsim.models.agent_trace import AgentTraceEvent, sanitize_agent_attributes
@@ -29,6 +30,7 @@ _ALIASES: Mapping[str, tuple[str, ...]] = {
     "tool_name": ("tool_name", "gen_ai.tool.name", "mcp.tool.name", "params.name"),
     "tool_risk": ("tool_risk", "agent.tool.risk"),
     "parent_event_id": ("parent_event_id", "parent_span_id", "event.parent_id"),
+    "caused_by_event_ids": ("caused_by_event_ids", "event.caused_by_ids", "caused_by"),
     "delegation_id": ("delegation_id", "agent.delegation.id"),
     "data_lineage_id": ("data_lineage_id", "gen_ai.data_source.id"),
     "memory_id": ("memory_id", "agent.memory.id"),
@@ -162,6 +164,7 @@ def agent_trace_from_record(
         tool_name=_string(record, "tool_name"),
         tool_risk=_string(record, "tool_risk"),
         parent_event_id=_string(record, "parent_event_id"),
+        caused_by_event_ids=_strings(record, "caused_by_event_ids"),
         delegation_id=_string(record, "delegation_id"),
         data_lineage_id=_string(record, "data_lineage_id"),
         memory_id=_string(record, "memory_id"),
@@ -191,9 +194,30 @@ def agent_trace_from_record(
 def normalize_agent_records(
     records: Iterable[Mapping[str, object]], *, collector: str, synthetic: bool = False
 ) -> tuple[NormalizedEvent, ...]:
-    return tuple(
-        agent_trace_from_record(record, collector=collector, synthetic=synthetic).to_normalized_event(
-            collector=collector
+    events: list[NormalizedEvent] = []
+    for record in records:
+        generic = normalize_record(
+            record,
+            collector="otel" if collector == "otel_genai" else "agent_runtime",
+            synthetic=synthetic,
         )
-        for record in records
-    )
+        trace = agent_trace_from_record(record, collector=collector, synthetic=synthetic)
+        event = trace.to_normalized_event(collector=collector)
+        generated = [
+            name
+            for name in ("event_id", "trace_id", "session_id", "agent_id")
+            if _string(record, name) is None
+        ]
+        events.append(
+            replace(
+                event,
+                metadata={
+                    **event.metadata,
+                    "timestamp_present": generic.metadata.get("timestamp_present", False),
+                    "timestamp_valid": generic.metadata.get("timestamp_valid", False),
+                    "source_record_id_present": "event_id" not in generated,
+                    "generated_identity_fields": generated,
+                },
+            )
+        )
+    return tuple(events)

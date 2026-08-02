@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentsim.dev/schemas/telemetry-assurance-report.schema.json",
+  "title": "AgentSim Telemetry Assurance Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "status", "score", "record_count", "trace_count", "finding_counts", "metrics", "findings", "content_values_recorded"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "telemetry-assurance-report"},
+    "status": {"enum": ["healthy", "degraded", "unusable"]},
+    "score": {"type": "integer", "minimum": 0, "maximum": 100},
+    "record_count": {"type": "integer", "minimum": 0},
+    "trace_count": {"type": "integer", "minimum": 0},
+    "finding_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["critical", "high", "medium", "low"],
+      "properties": {
+        "critical": {"type": "integer", "minimum": 0},
+        "high": {"type": "integer", "minimum": 0},
+        "medium": {"type": "integer", "minimum": 0},
+        "low": {"type": "integer", "minimum": 0}
+      }
+    },
+    "metrics": {"type": "object"},
+    "findings": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "title", "detail", "count", "event_indexes", "remediation"],
+        "properties": {
+          "code": {"type": "string", "minLength": 1},
+          "severity": {"enum": ["low", "medium", "high", "critical"]},
+          "title": {"type": "string", "minLength": 1},
+          "detail": {"type": "string", "minLength": 1},
+          "count": {"type": "integer", "minimum": 1},
+          "event_indexes": {"type": "array", "maxItems": 25, "items": {"type": "integer", "minimum": 0}},
+          "remediation": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "content_values_recorded": {"type": "boolean"}
+  }
+}

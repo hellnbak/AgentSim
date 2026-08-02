@@ -127,6 +127,19 @@ security fields and include a benign event test.
 Detection examples must use obvious placeholders for environment-specific
 indexes and tables.
 
+Reusable detection packs belong under `agentsim/detection/pack_content/` or in
+a separately reviewed JSON file. Each packed rule must declare all
+`required_fields` used by its expression/grouping and the acceptable source
+profiles. Packs may not contain `expected_detection`, `expected_detected`,
+`ground_truth`, or `scenario_variant`. Include tests for `detected`,
+`not_detected`, and `visibility_gap` behavior and run telemetry assurance over
+the fixture before interpreting the result.
+
+Changes to normalization must add assurance tests for timestamp provenance,
+stable IDs, causal links, generated identity metadata, and content redaction.
+Do not make a malformed timestamp silently look native or preserve the raw
+invalid value in a report.
+
 Detection-AST contributions must include malicious and benign normalized-event
 fixtures, group/time-boundary tests, required-field coverage, and renderer
 limitations. Generated rules must remain candidates until a human reviewer

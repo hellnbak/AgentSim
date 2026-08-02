@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentsim.dev/schemas/detection-sweep-report.schema.json",
+  "title": "AgentSim Detection Sweep Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "pack_id", "pack_version", "record_count", "summary", "outcomes", "ground_truth_used"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "detection-sweep-report"},
+    "pack_id": {"type": "string", "minLength": 1},
+    "pack_version": {"type": "string", "minLength": 1},
+    "record_count": {"type": "integer", "minimum": 0},
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["detected", "not_detected", "visibility_gap"],
+      "properties": {
+        "detected": {"type": "integer", "minimum": 0},
+        "not_detected": {"type": "integer", "minimum": 0},
+        "visibility_gap": {"type": "integer", "minimum": 0}
+      }
+    },
+    "outcomes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rule_id", "name", "severity", "status", "field_coverage_percent", "missing_fields", "missing_sources", "evaluation"],
+        "properties": {
+          "rule_id": {"type": "string", "minLength": 1},
+          "name": {"type": "string", "minLength": 1},
+          "severity": {"enum": ["low", "medium", "high", "critical"]},
+          "status": {"enum": ["detected", "not_detected", "visibility_gap"]},
+          "field_coverage_percent": {"type": "number", "minimum": 0, "maximum": 100},
+          "missing_fields": {"type": "array", "items": {"type": "string"}},
+          "missing_sources": {"type": "array", "items": {"type": "string"}},
+          "evaluation": {"type": "object"}
+        }
+      }
+    },
+    "ground_truth_used": {"type": "boolean", "const": false}
+  }
+}

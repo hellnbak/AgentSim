@@ -12,6 +12,8 @@ from agentsim.detection import (
     evaluate_live_registry,
     evaluate_rule,
     generate_candidate,
+    load_detection_pack,
+    sweep_detection_pack,
 )
 from agentsim.detection.ast import DetectionRule
 from agentsim.external import ExternalPlan, build_external_plan
@@ -32,6 +34,7 @@ from agentsim.orchestration.runner import CampaignRunner
 from agentsim.safety.authorization import AuthorizationManifest
 from agentsim.telemetry.collectors import collector_for
 from agentsim.telemetry.agent_contract import agent_trace_from_record
+from agentsim.telemetry.assurance import assess_telemetry
 from agentsim.telemetry.connectors import (
     LiveQueryResult,
     QueryPlan,
@@ -106,6 +109,20 @@ def normalize_agent_telemetry(
     record: Mapping[str, object], *, collector: str = "agent_runtime"
 ) -> AgentTraceEvent:
     return agent_trace_from_record(record, collector=collector)
+
+
+def telemetry_assurance(events: Sequence[NormalizedEvent]) -> dict[str, object]:
+    """Assess content safety and correlation readiness without reading payload values."""
+
+    return assess_telemetry(events).to_dict()
+
+
+def detection_pack_sweep(
+    events: Sequence[NormalizedEvent], *, pack_path: str | Path | None = None
+) -> dict[str, object]:
+    """Evaluate reusable detection content without scenario answer keys."""
+
+    return sweep_detection_pack(load_detection_pack(pack_path), events).to_dict()
 
 
 def build_live_query(specification: QuerySpec) -> QueryPlan:

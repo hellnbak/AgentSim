@@ -88,6 +88,7 @@ class WebUiTests(unittest.TestCase):
         self.assertIn("Validate visibility and agent safeguards", page)
         self.assertIn("endpoint-discovery-baseline", page)
         self.assertIn("Detection debugger", page)
+        self.assertIn("Check telemetry assurance", page)
         self.assertIn("Agentic attack scenarios", page)
         self.assertIn("Indirect prompt injection", page)
         self.assertIn("message.textContent", page)
@@ -97,7 +98,7 @@ class WebUiTests(unittest.TestCase):
         catalog_response = self.client.get("/api/v1/catalog")
         self.assertEqual(catalog_response.status_code, 200)
         catalog = catalog_response.get_json()
-        self.assertEqual(catalog["version"], "1.2.0")
+        self.assertEqual(catalog["version"], "1.3.0")
         self.assertEqual(len(catalog["abilities"]), 8)
         self.assertEqual(len(catalog["campaigns"]), 2)
         self.assertEqual(catalog["capabilities"]["agentic_fixtures"], 20)
@@ -150,6 +151,19 @@ class WebUiTests(unittest.TestCase):
         self.assertTrue(
             all(not result["safety"]["tool_executed"] for result in lab_value["results"])
         )
+
+        assurance = self.client.post(
+            "/api/v1/telemetry/assurance",
+            json={"corpus": "reference-agent"},
+            headers=headers,
+        )
+        self.assertEqual(assurance.status_code, 200)
+        assurance_value = assurance.get_json()
+        self.assertEqual(assurance_value["assurance"]["status"], "healthy")
+        self.assertEqual(assurance_value["assurance"]["score"], 100)
+        self.assertEqual(assurance_value["sweep"]["summary"]["detected"], 7)
+        self.assertEqual(assurance_value["sweep"]["summary"]["visibility_gap"], 0)
+        self.assertFalse(assurance_value["sweep"]["ground_truth_used"])
 
     def test_classifies_command_cycle_and_anomaly_events(self):
         command = web_ui._classify_message("[*] EXECUTING: whoami (bash)")

@@ -17,6 +17,25 @@ analytics below remain fully supported. See
 [`DETECTION_ENGINE.md`](DETECTION_ENGINE.md) for the vendor-neutral rule format
 and CLI workflow.
 
+## Reusable v1.3 detection pack
+
+The packaged `agentsim.agent-security-core` pack provides ten answer-key-free
+AST rules for agent/tool/MCP telemetry. It is intended for exploratory
+validation before vendor-specific tuning:
+
+```bash
+agentsim telemetry doctor agent-events.jsonl --collector agent_runtime
+agentsim detection sweep agent-events.jsonl --collector agent_runtime
+```
+
+Each rule declares required fields and acceptable sources. An unmatched rule
+is reported as `not_detected` only when those requirements are present;
+otherwise it is a `visibility_gap`. The pack neither reads
+`scenario_variant`/`expected_detection` nor replaces the vendor examples and
+malicious/benign scoring below. See
+[`TELEMETRY_ASSURANCE.md`](TELEMETRY_ASSURANCE.md) for pack authoring and report
+semantics.
+
 ## Data requirements
 
 Collect process-creation events with, where available:

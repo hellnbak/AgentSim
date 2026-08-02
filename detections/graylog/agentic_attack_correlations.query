@@ -1,0 +1,12 @@
+streams:<agent-runtime-stream-id>
+AND execution_mode:simulation_only
+AND _exists_:trace_id
+AND event_type:(
+  "agent.input.observed" OR "agent.memory.retrieved" OR "agent.retrieval.result"
+  OR "agent.tool.requested" OR "agent.network.requested"
+  OR "agent.delegation.requested"
+)
+AND (
+  input_trust:untrusted OR _exists_:taint_labels
+  OR tool_risk:(high OR critical) OR attributes_recursive_depth:[3 TO *]
+)

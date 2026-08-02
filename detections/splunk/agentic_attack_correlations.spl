@@ -1,0 +1,17 @@
+index=<agent_runtime_index> sourcetype=agentsim:agent_event
+| spath path=attributes.recursive_depth output=recursive_depth
+| eval seq=tonumber(sequence), taint_count=mvcount(taint_labels)
+| eval untrusted_origin=if(
+    event_type IN ("agent.input.observed","agent.memory.retrieved","agent.retrieval.result")
+    AND (input_trust="untrusted" OR taint_count>0), seq, null())
+| eval risky_action=if(
+    event_type IN ("agent.tool.requested","agent.network.requested","agent.delegation.requested")
+    AND (tool_risk="high" OR tool_risk="critical" OR recursive_depth>=3), seq, null())
+| eventstats min(untrusted_origin) as origin_sequence min(risky_action) as action_sequence
+    values(eval(if(isnotnull(risky_action),tool_name,null()))) as risky_tools
+    values(eval(if(isnotnull(risky_action),agent_id,null()))) as acting_agents
+    by trace_id data_lineage_id
+| where isnotnull(origin_sequence) AND isnotnull(action_sequence) AND action_sequence>origin_sequence
+| stats min(_time) as first_seen max(_time) as last_seen values(risky_tools) as risky_tools
+    values(acting_agents) as acting_agents values(event_type) as event_types
+    by trace_id data_lineage_id

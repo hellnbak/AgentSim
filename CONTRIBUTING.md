@@ -20,10 +20,11 @@ python -m pip install -r requirements.txt
 Run the automated checks:
 
 ```bash
-python -m py_compile core.py scenarios.py tactics.py web_ui.py
+python -m py_compile core.py mcp_lab.py scenarios.py tactics.py web_ui.py
 python -m unittest discover -s tests -v
 python core.py --dry-run --iterations 6 --speed 0 --seed 42
-python core.py --scenario all --variant both --speed 0
+python core.py --scenario all --variant both --mutations 1 --mutation-seed 42 --speed 0
+python core.py --mcp-lab
 ```
 
 Tests must not execute commands from the catalog. Mock process execution or use
@@ -50,9 +51,11 @@ credentials it may use in the pull request.
 
 ## Agentic scenario safety policy
 
-Changes to `scenarios.py` must preserve simulation-only execution. Scenario
-fixtures may describe proposed file, tool, credential, or network activity,
-but they must not implement it. Every new malicious trace must:
+Add scenario content as a declarative JSON pack under
+`agentsim_scenarios/packs/`; change `scenarios.py` only when the engine or
+schema needs to evolve. Scenario fixtures may describe proposed file, tool,
+credential, or network activity, but they must not implement it. Every new
+malicious trace must:
 
 - use synthetic resources and redact prompt, argument, result, and payload data;
 - set execution metadata explicitly, including `executed: false` for proposed
@@ -62,6 +65,18 @@ but they must not implement it. Every new malicious trace must:
   its benign twin; and
 - document framework mappings as descriptive references, not claims of complete
   coverage or certification.
+
+Pack loading enforces additional invariants: action event types require
+`attributes.executed: false`, resources must be synthetic or loopback-only,
+tokens and payloads may not be recorded, IDs must be unique, and detector
+conditions may not inspect label fields. Use the ordered detector operators
+documented in [`SCENARIOS.md`](SCENARIOS.md). Update both JSON schemas when a
+public pack or event field changes.
+
+New scenarios should exercise meaningful combinations of session, agent,
+principal, delegation, approval, policy version, causal, and data-lineage fields
+rather than relying only on descriptions. Run at least one mutation per trace
+to verify that the detector is not overfit to exact fixture wording.
 
 Tests for scenario changes must write artifacts only to a temporary directory
 and must not patch around the simulation-only boundary.
@@ -75,6 +90,10 @@ Place rules under the relevant `detections/` subdirectory and document them in
 - ATT&CK mappings;
 - known false positives and tuning guidance; and
 - a sample or test showing that the rule matches AgentSim telemetry.
+
+Agent-event analytics must not query `expected_detection`, `scenario_variant`,
+`scenario_id`, or descriptive message text. Prefer ordered correlations on
+security fields and include a benign event test.
 
 Detection examples must use obvious placeholders for environment-specific
 indexes and tables.

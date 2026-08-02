@@ -25,6 +25,10 @@ Scenario mode supplies a separate, vendor-neutral JSONL dataset for agent
 workflow detections. Preserve these fields when mapping it into a SIEM:
 
 - `timestamp`, `run_id`, `trace_id`, `sequence`, and `event_type`;
+- `session_id`, `conversation_id`, `agent_id`, `agent_instance_id`, and
+  `principal_id`;
+- `parent_event_id`, `caused_by_event_ids`, `delegation_id`, `approval_id`,
+  `data_lineage_id`, and `taint_labels`;
 - `input_trust`, `tool_name`, `tool_risk`, and `policy_decision`;
 - `scenario_variant` and `expected_detection` in a ground-truth-only table; and
 - relevant `attributes`, especially permission expansion, signature validity,
@@ -45,6 +49,35 @@ schema and privacy boundary.
 | CrowdStrike Falcon LogScale / Next-Gen SIEM | High-velocity discovery burst | Falcon `ProcessRollup2` events |
 | Graylog | High-velocity discovery burst filter | Graylog Information Model process fields |
 | Panther | Thresholded Python detection | CrowdStrike Falcon Data Replicator process logs |
+
+## Agent-event platform coverage
+
+These examples target normalized AgentSim schema-v2 workflow events. They are
+correlation starting points and require the documented ingestion mapping.
+
+| Platform | Native content | File |
+| --- | --- | --- |
+| Microsoft Sentinel / Defender XDR | KQL trust-lineage join | [`detections/kql/agentic_attack_correlations.kql`](detections/kql/agentic_attack_correlations.kql) |
+| Splunk | SPL eventstats correlation | [`detections/splunk/agentic_attack_correlations.spl`](detections/splunk/agentic_attack_correlations.spl) |
+| CrowdStrike Falcon LogScale / Next-Gen SIEM | CQL grouped checkpoint correlation | [`detections/crowdstrike/agentic_attack_correlations.cql`](detections/crowdstrike/agentic_attack_correlations.cql) |
+| Graylog | Candidate filter for Filter & Aggregation | [`detections/graylog/agentic_attack_correlations.query`](detections/graylog/agentic_attack_correlations.query) |
+| Panther | Custom-log unique-value threshold rule | [`detections/panther/agentic_attack_lineage.py`](detections/panther/agentic_attack_lineage.py) and [metadata](detections/panther/agentic_attack_lineage.yml) |
+| Elastic Security | EQL sequence | [`detections/elastic/agentic_attack_lineage.eql`](detections/elastic/agentic_attack_lineage.eql) |
+| Sigma-compatible pipelines | High-risk action selector | [`detections/sigma/agentic_high_risk_action.yml`](detections/sigma/agentic_high_risk_action.yml) |
+
+The common analytic looks for untrusted input, memory, or retrieval context
+followed by a high-risk tool, network, or delegation action in the same trace
+and, where available, the same data lineage. Configure event ordering using
+`sequence`; grouped count alone is insufficient when ingestion can arrive out
+of order. The Panther streaming example uses `unique()` and a threshold to
+collect both checkpoint kinds, so its runbook explicitly requires ordering
+verification. The Graylog file is only the search filter: configure grouping
+and ordered-condition checks in a Filter & Aggregation event definition.
+
+Use a dedicated test index/repository/stream. Replace the visible table,
+index, repository, stream, and log-type placeholders before running any query.
+Do not map `expected_detection` or `scenario_variant` into the searchable view
+used by the analytic.
 
 These examples intentionally use each platform's native field names. Normalize
 or remap your source fields before evaluating a rule; changing only the query
@@ -148,10 +181,11 @@ and [unique-value threshold behavior](https://docs.panther.com/detections/rules)
 
 ### Agent trust-boundary correlations
 
-For indirect prompt injection, join an untrusted `agent.input.observed` event to
-a later high-risk `agent.tool.requested` event on `trace_id`, with increasing
-`sequence`. Goal drift is a useful intermediate signal but should not be
-required when the runtime cannot expose it safely.
+For indirect prompt injection, memory poisoning, and RAG poisoning, join an
+untrusted origin to a later high-risk action on `trace_id`, with increasing
+`sequence` and matching `data_lineage_id` where available. Goal drift is a
+useful intermediate signal but should not be required when the runtime cannot
+expose it safely.
 
 For MCP tool poisoning, baseline tool definition hashes, signatures, and
 capability sets. Alert when an unsigned permission expansion is followed by use
@@ -166,6 +200,20 @@ allowed request.
 Benign twins are essential tuning data. Trusted content, verified read-only
 tools, and public results intentionally resemble the malicious workflow without
 crossing the same trust boundary.
+
+For multi-agent attacks, validate message signature/peer identity before
+joining `delegation_id` across agents. Alert on taint propagation, scope
+expansion, depth/fan-out growth, or policy decisions that differ between the
+delegator and executor.
+
+For approval deception, bind `approval_id` to an immutable action fingerprint
+and compare the displayed summary to the proposed tool, scope, destination, and
+risk. A generic “approval granted” event is not enough.
+
+For MCP, detect wrong token audience, token passthrough, missing per-client
+consent, session-principal changes, and access to internal destinations. Keep
+authentication, authorization, and tool-call checkpoints distinct so a
+confused deputy is not mistaken for a valid user action.
 
 ### Nested shell execution
 
@@ -204,13 +252,13 @@ only with explicit authorization.
 
 ### Agentic scenario rules
 
-1. Run `python core.py --scenario all --variant both --speed 0`.
+1. Run `python core.py --scenario all --variant both --mutations 3 --mutation-seed 42 --speed 0`.
 2. Ingest `agent_sim_events.jsonl` into a test-only dataset.
 3. Run the analytic without exposing `expected_detection` to its query.
 4. Join alert results to the ground-truth label by `trace_id`.
 5. Require each malicious trace to alert and each benign twin to remain quiet.
-6. Compare with `agent_sim_validation.json`, then record field mappings and
-   false-positive tuning with the detection change.
+6. Compare with `agent_sim_validation.json`, import `agent_sim_junit.xml` in CI,
+   and retain `agent_sim_evidence.zip` with the detection change.
 
 The built-in report validates the reference correlations, not a vendor query.
 Your SIEM result must be scored separately after ingestion.

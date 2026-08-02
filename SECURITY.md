@@ -7,7 +7,7 @@ on the default branch.
 
 | Version | Supported |
 | --- | --- |
-| Latest `0.2.x` | Yes |
+| Latest `0.3.x` | Yes |
 | Older snapshots | No |
 
 ## Reporting a vulnerability
@@ -35,3 +35,9 @@ Agentic scenario mode has a stricter contract: it must never invoke a tool,
 read a real file or credential, or open a network connection. All resources,
 tool definitions, endpoints, results, and hashes in scenario artifacts must be
 synthetic. A regression that violates this contract is a security issue.
+
+Custom scenario packs are untrusted input. Their validation must remain
+fail-closed for non-synthetic resource identifiers, executable action events,
+token or payload recording, detector label leakage, and malicious/benign
+control separation. The MCP lab must remain transport-free, use only fixed
+synthetic authorization facts, and never accept or store a real bearer token.

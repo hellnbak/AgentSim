@@ -16,16 +16,22 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from scenarios import (
+    DEFAULT_BUNDLE_PATH,
+    DEFAULT_COVERAGE_PATH,
     DEFAULT_GROUND_TRUTH_PATH,
+    DEFAULT_JUNIT_PATH,
+    DEFAULT_OTEL_PATH,
+    DEFAULT_SARIF_PATH,
     DEFAULT_VALIDATION_PATH,
-    SCENARIOS,
     list_scenarios,
+    load_scenario_registry,
     run_scenario_suite,
 )
+from mcp_lab import DEFAULT_MCP_LAB_PATH, run_mcp_lab
 from tactics import SIMULATION_PHASES, LINUX_HALLUCINATIONS, WINDOWS_HALLUCINATIONS
 
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 ATTACK_VERSION = "19.1"
 NAVIGATOR_VERSION = "5.3.2"
 LAYER_VERSION = "4.5"
@@ -454,8 +460,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scenario_group.add_argument(
         "--scenario",
-        choices=["all", *sorted(SCENARIOS)],
+        metavar="ID|all",
         help="Run one safe agentic scenario, or all scenarios, instead of command simulation.",
+    )
+    scenario_group.add_argument(
+        "--scenario-pack",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help=(
+            "Load a declarative JSON scenario pack or directory. Repeat to load "
+            "multiple packs; built-in packs remain enabled."
+        ),
     )
     scenario_group.add_argument(
         "--variant",
@@ -474,6 +490,59 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_VALIDATION_PATH,
         metavar="PATH",
         help=f"Scenario validation report path (default: {DEFAULT_VALIDATION_PATH}).",
+    )
+    scenario_group.add_argument(
+        "--mutations",
+        type=_nonnegative_integer,
+        default=0,
+        metavar="COUNT",
+        help="Generate semantic-preserving mutations per malicious/benign trace (0-100).",
+    )
+    scenario_group.add_argument(
+        "--mutation-seed",
+        type=int,
+        help="Random seed for reproducible scenario mutations.",
+    )
+    scenario_group.add_argument(
+        "--junit-output",
+        default=DEFAULT_JUNIT_PATH,
+        metavar="PATH",
+        help=f"JUnit XML benchmark output (default: {DEFAULT_JUNIT_PATH}).",
+    )
+    scenario_group.add_argument(
+        "--sarif-output",
+        default=DEFAULT_SARIF_PATH,
+        metavar="PATH",
+        help=f"SARIF benchmark output (default: {DEFAULT_SARIF_PATH}).",
+    )
+    scenario_group.add_argument(
+        "--otel-output",
+        default=DEFAULT_OTEL_PATH,
+        metavar="PATH",
+        help=f"OpenTelemetry-compatible log output (default: {DEFAULT_OTEL_PATH}).",
+    )
+    scenario_group.add_argument(
+        "--coverage-output",
+        default=DEFAULT_COVERAGE_PATH,
+        metavar="PATH",
+        help=f"Framework and detector coverage report (default: {DEFAULT_COVERAGE_PATH}).",
+    )
+    scenario_group.add_argument(
+        "--bundle-output",
+        default=DEFAULT_BUNDLE_PATH,
+        metavar="PATH",
+        help=f"ZIP evidence bundle output (default: {DEFAULT_BUNDLE_PATH}).",
+    )
+    scenario_group.add_argument(
+        "--mcp-lab",
+        action="store_true",
+        help="Run the in-memory MCP authorization boundary lab and exit.",
+    )
+    scenario_group.add_argument(
+        "--mcp-lab-output",
+        default=DEFAULT_MCP_LAB_PATH,
+        metavar="PATH",
+        help=f"MCP lab JSON report path (default: {DEFAULT_MCP_LAB_PATH}).",
     )
     parser.add_argument(
         "-i",
@@ -540,11 +609,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    try:
+        scenario_registry = load_scenario_registry(args.scenario_pack)
+    except (FileNotFoundError, ValueError) as exc:
+        parser.error(str(exc))
+
     if args.list_scenarios:
-        for definition in list_scenarios():
+        for definition in list_scenarios(scenario_registry):
             print(f"{definition.scenario_id}\t{definition.name}")
             print(f"  {definition.description}")
         return 0
+
+    if args.mcp_lab:
+        try:
+            path = run_mcp_lab(args.mcp_lab_output)
+            report = json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, ValueError) as exc:
+            parser.error(str(exc))
+        return 0 if report["summary"]["all_passed"] else 1
 
     if args.scenario:
         try:
@@ -553,7 +635,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 variant=args.variant,
                 ground_truth_path=args.ground_truth_output,
                 validation_path=args.validation_output,
+                junit_path=args.junit_output,
+                sarif_path=args.sarif_output,
+                otel_path=args.otel_output,
+                coverage_path=args.coverage_output,
+                bundle_path=args.bundle_output,
+                mutation_count=args.mutations,
+                mutation_seed=args.mutation_seed,
                 speed_ms=args.speed,
+                registry=scenario_registry,
             )
         except (FileNotFoundError, ValueError) as exc:
             parser.error(str(exc))

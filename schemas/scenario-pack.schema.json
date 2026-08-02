@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/scenario-pack.schema.json",
+  "title": "AgentSim scenario pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pack_schema_version", "pack_id", "scenarios"],
+  "properties": {
+    "pack_schema_version": {"const": "1.0"},
+    "pack_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]+$"},
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/scenario"}
+    }
+  },
+  "$defs": {
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenario_id", "name", "description", "risk", "mappings",
+        "detector", "malicious_steps", "benign_steps"
+      ],
+      "properties": {
+        "scenario_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]+$"},
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "risk": {"enum": ["low", "medium", "high", "critical"]},
+        "mappings": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          }
+        },
+        "detector": {"$ref": "#/$defs/detector"},
+        "malicious_steps": {"$ref": "#/$defs/steps"},
+        "benign_steps": {"$ref": "#/$defs/steps"}
+      }
+    },
+    "detector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "conditions"],
+      "properties": {
+        "type": {"const": "ordered_sequence"},
+        "conditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/condition"}
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "event_type": {"type": "string", "pattern": "^agent\\."},
+        "equals": {"type": "object"},
+        "not_equals": {"type": "object"},
+        "contains": {"type": "object"},
+        "gte": {
+          "type": "object",
+          "additionalProperties": {"type": "number"}
+        },
+        "exists": {
+          "type": "object",
+          "additionalProperties": {"type": "boolean"}
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/step"}
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_type", "stage", "message"],
+      "properties": {
+        "event_type": {"type": "string", "pattern": "^agent\\."},
+        "stage": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1},
+        "input_trust": {"enum": ["trusted", "untrusted", "mixed", "not_applicable"]},
+        "tool_name": {"type": ["string", "null"]},
+        "tool_action": {"type": ["string", "null"]},
+        "tool_risk": {"enum": ["none", "low", "medium", "high", "critical"]},
+        "policy_decision": {"type": "string"},
+        "outcome": {"type": "string"},
+        "session_id": {"type": "string", "minLength": 1},
+        "conversation_id": {"type": "string", "minLength": 1},
+        "agent_id": {"type": "string", "minLength": 1},
+        "agent_instance_id": {"type": "string", "minLength": 1},
+        "principal_id": {"type": "string", "minLength": 1},
+        "delegation_id": {"type": ["string", "null"]},
+        "data_lineage_id": {"type": ["string", "null"]},
+        "taint_labels": {"type": "array", "items": {"type": "string"}},
+        "policy_id": {"type": "string", "minLength": 1},
+        "policy_version": {"type": "string", "minLength": 1},
+        "approval_id": {"type": ["string", "null"]},
+        "caused_by_sequences": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 1}
+        },
+        "attributes": {"type": "object"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "enum": [
+                  "agent.approval.granted",
+                  "agent.configuration.requested",
+                  "agent.delegation.accepted",
+                  "agent.delegation.requested",
+                  "agent.memory.written",
+                  "agent.network.requested",
+                  "agent.tool.requested"
+                ]
+              }
+            },
+            "required": ["event_type"]
+          },
+          "then": {
+            "required": ["attributes"],
+            "properties": {
+              "attributes": {
+                "required": ["executed"],
+                "properties": {"executed": {"const": false}}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

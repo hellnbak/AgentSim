@@ -157,13 +157,34 @@ class AgentSimTests(unittest.TestCase):
         )
 
         self.assertEqual(result, 0)
-        run_suite.assert_called_once_with(
-            "decoy-secret-exfiltration",
-            variant="both",
-            ground_truth_path=str(Path(self.temp_dir.name) / "events.jsonl"),
-            validation_path=str(Path(self.temp_dir.name) / "validation.json"),
-            speed_ms=0,
+        run_suite.assert_called_once()
+        args, kwargs = run_suite.call_args
+        self.assertEqual(args, ("decoy-secret-exfiltration",))
+        self.assertEqual(kwargs["variant"], "both")
+        self.assertEqual(
+            kwargs["ground_truth_path"],
+            str(Path(self.temp_dir.name) / "events.jsonl"),
         )
+        self.assertEqual(
+            kwargs["validation_path"],
+            str(Path(self.temp_dir.name) / "validation.json"),
+        )
+        self.assertEqual(kwargs["mutation_count"], 0)
+        self.assertEqual(kwargs["speed_ms"], 0)
+        self.assertIn("decoy-secret-exfiltration", kwargs["registry"])
+
+    @mock.patch("core.run_mcp_lab")
+    def test_cli_dispatches_mcp_lab(self, run_lab):
+        output = Path(self.temp_dir.name) / "mcp.json"
+        output.write_text(
+            json.dumps({"summary": {"all_passed": True}}), encoding="utf-8"
+        )
+        run_lab.return_value = output
+
+        result = core.main(["--mcp-lab", "--mcp-lab-output", str(output)])
+
+        self.assertEqual(result, 0)
+        run_lab.assert_called_once_with(str(output))
 
 
 if __name__ == "__main__":

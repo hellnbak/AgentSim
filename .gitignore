@@ -11,4 +11,10 @@ dist/
 agent_sim_layer.json
 agent_sim_events.jsonl
 agent_sim_validation.json
+agent_sim_junit.xml
+agent_sim_results.sarif
+agent_sim_otel.jsonl
+agent_sim_coverage.json
+agent_sim_evidence.zip
+agent_sim_mcp_lab.json
 .DS_Store

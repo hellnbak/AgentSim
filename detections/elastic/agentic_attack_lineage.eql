@@ -1,0 +1,9 @@
+/* Elastic Security EQL over an AgentSim v2 custom event index.
+ * Adjust index/data-view and flattened field mappings before use. */
+sequence by trace_id, data_lineage_id with maxspan=5m
+  [any where event_type in (
+      "agent.input.observed", "agent.memory.retrieved", "agent.retrieval.result"
+    ) and (input_trust == "untrusted" or taint_labels : "*")]
+  [any where event_type in (
+      "agent.tool.requested", "agent.network.requested", "agent.delegation.requested"
+    ) and tool_risk in ("high", "critical")]

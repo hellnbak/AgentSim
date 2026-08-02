@@ -1,0 +1,28 @@
+title: Untrusted Agent Context Followed by High-Risk Action
+id: 09ccbc2e-a985-4211-8b45-f36de8fcae5c
+status: experimental
+description: >
+  Selects high-risk AgentSim-compatible action checkpoints influenced by
+  untrusted context. Use a backend correlation rule to enforce trace ordering.
+author: AgentSim contributors
+date: 2026-08-01
+logsource:
+  category: application
+  product: agentsim
+detection:
+  action:
+    event_type:
+      - agent.tool.requested
+      - agent.network.requested
+      - agent.delegation.requested
+  risk:
+    tool_risk:
+      - high
+      - critical
+  untrusted:
+    input_trust: untrusted
+  condition: action and risk and untrusted
+falsepositives:
+  - Authorized adversarial testing and synthetic benchmark runs
+  - Runtimes that conservatively retain untrusted labels after sanitization
+level: high

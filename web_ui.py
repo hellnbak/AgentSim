@@ -25,7 +25,16 @@ from flask import (
 )
 
 from core import AgentSim
-from scenarios import SCENARIOS, run_scenario_suite
+from scenarios import (
+    DEFAULT_BUNDLE_PATH,
+    DEFAULT_COVERAGE_PATH,
+    DEFAULT_JUNIT_PATH,
+    DEFAULT_OTEL_PATH,
+    DEFAULT_SARIF_PATH,
+    SCENARIOS,
+    estimate_event_count,
+    run_scenario_suite,
+)
 
 
 app = Flask(__name__)
@@ -40,6 +49,8 @@ stop_event = threading.Event()
 last_layer_path: Path | None = None
 last_ground_truth_path: Path | None = None
 last_validation_path: Path | None = None
+last_bundle_path: Path | None = None
+last_benchmark_metrics: dict[str, Any] = {}
 run_started_at: float | None = None
 run_finished_at: float | None = None
 current_params: dict[str, Any] = {}
@@ -47,6 +58,11 @@ last_outcome = "ready"
 LAYER_OUTPUT_PATH = Path.cwd() / "agent_sim_layer.json"
 GROUND_TRUTH_OUTPUT_PATH = Path.cwd() / "agent_sim_events.jsonl"
 VALIDATION_OUTPUT_PATH = Path.cwd() / "agent_sim_validation.json"
+JUNIT_OUTPUT_PATH = Path.cwd() / DEFAULT_JUNIT_PATH
+SARIF_OUTPUT_PATH = Path.cwd() / DEFAULT_SARIF_PATH
+OTEL_OUTPUT_PATH = Path.cwd() / DEFAULT_OTEL_PATH
+COVERAGE_OUTPUT_PATH = Path.cwd() / DEFAULT_COVERAGE_PATH
+BUNDLE_OUTPUT_PATH = Path.cwd() / DEFAULT_BUNDLE_PATH
 MAX_EVENTS = 2000
 
 
@@ -85,23 +101,35 @@ def _classify_message(message: str) -> dict[str, Any]:
         return event
 
     checkpoint_match = re.match(
-        r"\[(input|decision|pre_tool|post_tool|tool_discovery|network|policy)\]\s+(.+)",
+        r"\[(input|decision|pre_tool|post_tool|tool_discovery|network|policy|"
+        r"memory|inter_agent|delegation|approval|authorization|budget|retrieval|"
+        r"configuration|observation)\]\s+(.+)",
         clean_message,
     )
     if checkpoint_match:
         stage = checkpoint_match.group(1)
         lower_message = clean_message.lower()
-        blocked = stage in {"policy", "network"} and "block" in lower_message
+        blocked = stage in {"policy", "network", "authorization", "budget"} and (
+            "block" in lower_message or "denied" in lower_message
+        )
         risky = any(
             marker in lower_message
-            for marker in ("untrusted", "changed", "decoy", "goal drift", "block")
+            for marker in (
+                "untrusted", "changed", "decoy", "goal drift", "block", "spoof",
+                "taint", "exceeded", "mismatch", "denied", "different audience",
+                "recursive", "poison", "failed its integrity", "disabling",
+            )
         )
         event.update(
             kind="blocked" if blocked else (
-                "tool" if stage in {"pre_tool", "tool_discovery", "network"} else "checkpoint"
+                "tool"
+                if stage in {"pre_tool", "tool_discovery", "network", "delegation"}
+                else "checkpoint"
             ),
             category="anomaly" if risky else (
-                "command" if stage in {"pre_tool", "tool_discovery", "network"} else "system"
+                "command"
+                if stage in {"pre_tool", "tool_discovery", "network", "delegation"}
+                else "system"
             ),
             stage=stage,
         )
@@ -211,6 +239,10 @@ def _status_snapshot() -> dict[str, Any]:
             "validation_available": bool(
                 last_validation_path is not None and last_validation_path.exists()
             ),
+            "bundle_available": bool(
+                last_bundle_path is not None and last_bundle_path.exists()
+            ),
+            "benchmark_metrics": dict(last_benchmark_metrics),
             "started_at": run_started_at,
             "finished_at": run_finished_at,
             "params": dict(current_params),
@@ -257,8 +289,8 @@ def run_sim_background(**kwargs: Any) -> None:
 
 
 def run_scenario_background(**kwargs: Any) -> None:
-    global is_running, last_ground_truth_path, last_validation_path, run_finished_at
-    global last_outcome
+    global is_running, last_ground_truth_path, last_validation_path, last_bundle_path
+    global last_benchmark_metrics, run_finished_at, last_outcome
     status_message = "[*] Scenario suite failed before validation completed."
     outcome = "error"
     result = None
@@ -268,6 +300,13 @@ def run_scenario_background(**kwargs: Any) -> None:
             variant=kwargs["variant"],
             ground_truth_path=GROUND_TRUTH_OUTPUT_PATH,
             validation_path=VALIDATION_OUTPUT_PATH,
+            junit_path=JUNIT_OUTPUT_PATH,
+            sarif_path=SARIF_OUTPUT_PATH,
+            otel_path=OTEL_OUTPUT_PATH,
+            coverage_path=COVERAGE_OUTPUT_PATH,
+            bundle_path=BUNDLE_OUTPUT_PATH,
+            mutation_count=kwargs["mutations"],
+            mutation_seed=kwargs["mutation_seed"],
             speed_ms=kwargs["speed"],
             stop_callback=stop_event.is_set,
             log_callback=log_callback,
@@ -292,6 +331,9 @@ def run_scenario_background(**kwargs: Any) -> None:
                     last_ground_truth_path = result.ground_truth_path
                 if result.validation_path.exists():
                     last_validation_path = result.validation_path
+                if result.bundle_path is not None and result.bundle_path.exists():
+                    last_bundle_path = result.bundle_path
+                last_benchmark_metrics = dict(result.metrics)
             state_changed.notify_all()
         log_callback(status_message)
 
@@ -816,6 +858,20 @@ HTML_TEMPLATE = """
                             <option value="benign">Benign controls only</option>
                         </select>
                     </div>
+                    <div class="field-block">
+                        <label for="mutations">Mutations per trace</label>
+                        <select class="scenario-select" id="mutations" name="mutations">
+                            <option value="0">Baseline only</option>
+                            <option value="1">1 mutation</option>
+                            <option value="3">3 mutations</option>
+                            <option value="5">5 mutations</option>
+                            <option value="10">10 mutations</option>
+                        </select>
+                    </div>
+                    <div class="field-block">
+                        <label for="mutation-seed">Mutation seed (optional)</label>
+                        <input class="scenario-select" type="number" id="mutation-seed" name="mutation_seed" step="1" placeholder="Random">
+                    </div>
                     <p class="scenario-copy">Simulation-only checkpoints. No tools, credentials, files, or network requests are executed.</p>
                 </section>
 
@@ -1035,6 +1091,7 @@ HTML_TEMPLATE = """
                         <strong>Scenario evidence</strong>
                         <p id="scenario-artifact-status">Available after the scenario suite completes or is stopped.</p>
                         <div class="artifact-actions">
+                            <a class="download-button disabled" id="download-bundle" href="/download-bundle" aria-disabled="true">Download evidence bundle</a>
                             <a class="download-button disabled" id="download-ground-truth" href="/download-ground-truth" aria-disabled="true">Download ground truth JSONL</a>
                             <a class="download-button disabled" id="download-validation" href="/download-validation" aria-disabled="true">Download validation report</a>
                         </div>
@@ -1106,6 +1163,8 @@ HTML_TEMPLATE = """
             runMode: document.getElementById("run-mode"),
             scenario: document.getElementById("scenario"),
             variant: document.getElementById("variant"),
+            mutations: document.getElementById("mutations"),
+            mutationSeed: document.getElementById("mutation-seed"),
             scenarioControls: document.getElementById("scenario-controls"),
             download: document.getElementById("download-layer"),
             layerStatus: document.getElementById("layer-status"),
@@ -1113,6 +1172,7 @@ HTML_TEMPLATE = """
             scenarioArtifacts: document.getElementById("scenario-artifacts"),
             groundTruthDownload: document.getElementById("download-ground-truth"),
             validationDownload: document.getElementById("download-validation"),
+            bundleDownload: document.getElementById("download-bundle"),
             scenarioArtifactStatus: document.getElementById("scenario-artifact-status"),
             eventStreamHeading: document.getElementById("event-stream-heading"),
             commandFilter: document.getElementById("command-filter"),
@@ -1157,7 +1217,11 @@ HTML_TEMPLATE = """
 
         function selectedScenarioCount() {
             const counts = SCENARIO_COUNTS[elements.scenario.value] || SCENARIO_COUNTS.all;
-            return Number(counts[elements.variant.value] || counts.both || 1);
+            const baseline = Number(counts[elements.variant.value] || counts.both || 1);
+            const mutationCount = Number(elements.mutations.value || 0);
+            const scenarioCount = elements.scenario.value === "all" ? {{ scenario_total }} : 1;
+            const variantsPerScenario = elements.variant.value === "both" ? 2 : 1;
+            return baseline * (mutationCount + 1) + scenarioCount * variantsPerScenario * mutationCount;
         }
 
         function setRunMode(mode) {
@@ -1260,7 +1324,11 @@ HTML_TEMPLATE = """
             const selectedScenario = elements.scenario.options[elements.scenario.selectedIndex];
             document.getElementById("detail-profile").textContent = scenarioMode ? selectedScenario.textContent : document.getElementById("profile-name").textContent;
             document.getElementById("detail-mode").textContent = scenarioMode ? "Simulation only" : (elements.dryRun.checked ? "Dry run" : "Execute local");
-            document.getElementById("detail-seed").textContent = scenarioMode ? elements.variant.options[elements.variant.selectedIndex].textContent : (elements.seed.value || "Random");
+            document.getElementById("detail-seed").textContent = scenarioMode
+                ? elements.variant.options[elements.variant.selectedIndex].textContent + " · "
+                    + elements.mutations.value + " mutation"
+                    + (elements.mutations.value === "1" ? "" : "s")
+                : (elements.seed.value || "Random");
             document.getElementById("detail-speed").textContent = document.getElementById("speed").value + " ms";
             document.getElementById("detail-cloud").textContent = scenarioMode ? "Never executed" : (elements.network.checked ? "Allowed" : "Guarded");
         }
@@ -1330,9 +1398,9 @@ HTML_TEMPLATE = """
         }
 
         function checkpointPhase(stage) {
-            if (stage === "input" || stage === "decision") return 0;
-            if (stage === "tool_discovery" || stage === "pre_tool" || stage === "post_tool") return 1;
-            if (stage === "network" || stage === "policy") return 2;
+            if (["input", "decision", "retrieval", "memory", "observation"].includes(stage)) return 0;
+            if (["tool_discovery", "pre_tool", "post_tool", "inter_agent", "delegation", "approval"].includes(stage)) return 1;
+            if (["network", "policy", "authorization", "budget", "configuration"].includes(stage)) return 2;
             return -1;
         }
 
@@ -1467,8 +1535,11 @@ HTML_TEMPLATE = """
                 elements.groundTruthDownload.setAttribute("aria-disabled", String(!status.ground_truth_available));
                 elements.validationDownload.classList.toggle("disabled", !status.validation_available);
                 elements.validationDownload.setAttribute("aria-disabled", String(!status.validation_available));
+                elements.bundleDownload.classList.toggle("disabled", !status.bundle_available);
+                elements.bundleDownload.setAttribute("aria-disabled", String(!status.bundle_available));
+                const benchmark = status.benchmark_metrics || {};
                 elements.scenarioArtifactStatus.textContent = status.ground_truth_available && status.validation_available
-                    ? "Labeled events and validation checks are ready."
+                    ? "Evidence ready · precision " + Math.round(Number(benchmark.precision || 0) * 100) + "% · recall " + Math.round(Number(benchmark.recall || 0) * 100) + "%"
                     : "Available after the scenario suite completes or is stopped.";
                 if (!status.running && status.outcome === "complete") {
                     elements.runHeading.textContent = state.mode === "scenario" ? "Scenario suite complete" : "Simulation complete";
@@ -1493,7 +1564,7 @@ HTML_TEMPLATE = """
         async function submitRun(event) {
             event.preventDefault();
             elements.error.textContent = "";
-            state.totalIterations = state.mode === "scenario" ? 1 : Number(document.getElementById("iterations").value);
+            state.totalIterations = state.mode === "scenario" ? selectedScenarioCount() : Number(document.getElementById("iterations").value);
             resetRunMetrics(true);
             state.startedAt = Date.now();
             state.finishedAt = null;
@@ -1504,6 +1575,7 @@ HTML_TEMPLATE = """
             elements.layerStatus.textContent = "Generating after the run completes…";
             elements.groundTruthDownload.classList.add("disabled");
             elements.validationDownload.classList.add("disabled");
+            elements.bundleDownload.classList.add("disabled");
             elements.scenarioArtifactStatus.textContent = "Generating labeled evidence and validation checks…";
 
             try {
@@ -1605,7 +1677,7 @@ HTML_TEMPLATE = """
             setRunMode(elements.runMode.value);
             resetRunMetrics(false);
         });
-        [elements.scenario, elements.variant].forEach(function (input) {
+        [elements.scenario, elements.variant, elements.mutations, elements.mutationSeed].forEach(function (input) {
             input.addEventListener("change", function () {
                 if (!state.running) state.totalIterations = selectedScenarioCount();
                 updateRunDetails();
@@ -1636,7 +1708,7 @@ HTML_TEMPLATE = """
         elements.download.addEventListener("click", function (event) {
             if (elements.download.classList.contains("disabled")) event.preventDefault();
         });
-        [elements.groundTruthDownload, elements.validationDownload].forEach(function (link) {
+        [elements.groundTruthDownload, elements.validationDownload, elements.bundleDownload].forEach(function (link) {
             link.addEventListener("click", function (event) {
                 if (link.classList.contains("disabled")) event.preventDefault();
             });
@@ -1725,6 +1797,7 @@ def index() -> str:
         form_token=form_token,
         scenarios=[SCENARIOS[scenario_id] for scenario_id in sorted(SCENARIOS)],
         scenario_counts=scenario_counts,
+        scenario_total=len(SCENARIOS),
     )
 
 
@@ -1736,7 +1809,8 @@ def api_status() -> Response:
 @app.route("/start", methods=["POST"])
 def start_sim() -> Response:
     global is_running, sim_thread, last_layer_path
-    global last_ground_truth_path, last_validation_path
+    global last_ground_truth_path, last_validation_path, last_bundle_path
+    global last_benchmark_metrics
     global run_started_at, run_finished_at, current_params, last_outcome
     _validate_form_token()
 
@@ -1744,16 +1818,20 @@ def start_sim() -> Response:
     if run_mode == "scenario":
         scenario_id = request.form.get("scenario", "all")
         variant = request.form.get("variant", "both")
+        mutations = _parse_int("mutations", 0, 0, 100)
+        mutation_seed_value = request.form.get("mutation_seed", "").strip()
+        try:
+            mutation_seed = int(mutation_seed_value) if mutation_seed_value else None
+        except ValueError:
+            abort(400, description="mutation_seed must be an integer")
         if scenario_id != "all" and scenario_id not in SCENARIOS:
             abort(400, description="unknown scenario")
         if variant not in {"malicious", "benign", "both"}:
             abort(400, description="variant must be malicious, benign, or both")
-        selected = list(SCENARIOS) if scenario_id == "all" else [scenario_id]
-        selected_variants = ("malicious", "benign") if variant == "both" else (variant,)
-        checkpoints = sum(
-            len(SCENARIOS[selected_id].steps_for(selected_variant))
-            for selected_id in selected
-            for selected_variant in selected_variants
+        checkpoints = estimate_event_count(
+            scenario_id,
+            variant=variant,
+            mutation_count=mutations,
         )
         params = {
             "run_mode": "scenario",
@@ -1761,6 +1839,8 @@ def start_sim() -> Response:
             "variant": variant,
             "speed": _parse_int("speed", 100, 0, 1000),
             "checkpoints": checkpoints,
+            "mutations": mutations,
+            "mutation_seed": mutation_seed,
         }
         worker = run_scenario_background
     elif run_mode == "behavior":
@@ -1797,6 +1877,8 @@ def start_sim() -> Response:
         last_layer_path = None
         last_ground_truth_path = None
         last_validation_path = None
+        last_bundle_path = None
+        last_benchmark_metrics = {}
         run_started_at = time.time()
         run_finished_at = None
         current_params = dict(params)
@@ -1892,6 +1974,21 @@ def download_validation() -> Response:
         mimetype="application/json",
         as_attachment=True,
         download_name="agent_sim_validation.json",
+        max_age=0,
+    )
+
+
+@app.route("/download-bundle")
+def download_bundle() -> Response:
+    with state_lock:
+        artifact_path = last_bundle_path
+    if artifact_path is None or not artifact_path.exists():
+        abort(404, description="no scenario evidence bundle is available")
+    return send_file(
+        artifact_path,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="agent_sim_evidence.zip",
         max_age=0,
     )
 

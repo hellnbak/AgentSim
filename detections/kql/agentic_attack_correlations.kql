@@ -1,0 +1,23 @@
+// AgentSim schema-v2 agent event correlations.
+// Replace AgentSimEvents with the table used for your normalized agent-runtime logs.
+// Never expose expected_detection or scenario_variant to production analytics.
+let AgentEvents = AgentSimEvents
+| where execution_mode == "simulation_only" or isempty(execution_mode)
+| extend attrs = todynamic(attributes), taint = todynamic(taint_labels);
+let UntrustedOrigins = AgentEvents
+| where event_type in ("agent.input.observed", "agent.memory.retrieved", "agent.retrieval.result")
+| where input_trust == "untrusted" or array_length(taint) > 0
+| project trace_id, OriginTime=timestamp, OriginSequence=toint(sequence),
+          OriginType=event_type, data_lineage_id;
+let RiskyActions = AgentEvents
+| where event_type in ("agent.tool.requested", "agent.network.requested", "agent.delegation.requested")
+| where tool_risk in ("high", "critical") or toint(attrs.recursive_depth) >= 3
+| project trace_id, ActionTime=timestamp, ActionSequence=toint(sequence),
+          ActionType=event_type, tool_name, tool_risk, policy_decision,
+          ActionLineage=data_lineage_id, agent_id, session_id;
+UntrustedOrigins
+| join kind=inner RiskyActions on trace_id
+| where ActionSequence > OriginSequence
+| where isempty(data_lineage_id) or isempty(ActionLineage) or data_lineage_id == ActionLineage
+| project ActionTime, trace_id, agent_id, session_id, OriginType, ActionType,
+          tool_name, tool_risk, policy_decision, data_lineage_id

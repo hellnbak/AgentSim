@@ -1,0 +1,241 @@
+{
+  "pack_schema_version": "1.0",
+  "pack_id": "agentsim.mcp-security",
+  "scenarios": [
+    {
+      "scenario_id": "mcp-identity-abuse",
+      "name": "MCP token and session identity abuse",
+      "description": "Models token passthrough, audience mismatch, and cross-principal session reuse before a tool call.",
+      "risk": "critical",
+      "mappings": {
+        "mitre_atlas": ["Valid Accounts", "Use Alternate Authentication Material", "AI Agent Tool Credential Harvesting"],
+        "owasp_agentic": ["ASI03 Identity and Privilege Abuse", "ASI02 Tool Misuse"],
+        "nist_ai_100_2": ["Generative AI misuse attack"]
+      },
+      "detector": {
+        "type": "ordered_sequence",
+        "conditions": [
+          {
+            "event_type": "agent.auth.token.observed",
+            "equals": {"attributes.audience_valid": false, "attributes.token_passthrough": true}
+          },
+          {
+            "event_type": "agent.auth.session.observed",
+            "equals": {"attributes.principal_binding_valid": false}
+          },
+          {"event_type": "agent.tool.requested", "equals": {"tool_risk": "high"}}
+        ]
+      },
+      "malicious_steps": [
+        {
+          "event_type": "agent.auth.token.observed",
+          "stage": "authorization",
+          "message": "Synthetic MCP request presented a token issued for a different audience.",
+          "agent_id": "mcp-client",
+          "principal_id": "synthetic-user-a",
+          "input_trust": "untrusted",
+          "attributes": {
+            "token_fingerprint": "sha256:synthetic-wrong-audience-token",
+            "token_recorded": false,
+            "issuer": "synthetic://identity/issuer",
+            "audience": "synthetic-downstream-api",
+            "expected_audience": "agentsim-mcp",
+            "audience_valid": false,
+            "token_passthrough": true,
+            "scopes": ["catalog.read", "catalog.publish"]
+          }
+        },
+        {
+          "event_type": "agent.auth.session.observed",
+          "stage": "authorization",
+          "message": "Synthetic session was reused by a principal other than the bound user.",
+          "agent_id": "mcp-client",
+          "principal_id": "synthetic-user-b",
+          "session_id": "mcp-session-bound-to-user-a",
+          "input_trust": "untrusted",
+          "attributes": {
+            "bound_principal_id": "synthetic-user-a",
+            "observed_principal_id": "synthetic-user-b",
+            "principal_binding_valid": false,
+            "session_id_predictable": false
+          }
+        },
+        {
+          "event_type": "agent.tool.requested",
+          "stage": "pre_tool",
+          "message": "Mismatched identity context proposed a high-risk MCP publish action.",
+          "agent_id": "mcp-client",
+          "principal_id": "synthetic-user-b",
+          "session_id": "mcp-session-bound-to-user-a",
+          "input_trust": "untrusted",
+          "tool_name": "mcp.synthetic.publish",
+          "tool_action": "publish synthetic restricted catalog entry",
+          "tool_risk": "high",
+          "policy_decision": "block",
+          "outcome": "blocked",
+          "attributes": {"server_id": "agentsim-mcp", "arguments_redacted": true, "executed": false}
+        }
+      ],
+      "benign_steps": [
+        {
+          "event_type": "agent.auth.token.observed",
+          "stage": "authorization",
+          "message": "Synthetic MCP request presented a token issued for the MCP server.",
+          "agent_id": "mcp-client",
+          "principal_id": "synthetic-user-a",
+          "input_trust": "trusted",
+          "attributes": {
+            "token_fingerprint": "sha256:synthetic-correct-audience-token",
+            "token_recorded": false,
+            "issuer": "synthetic://identity/issuer",
+            "audience": "agentsim-mcp",
+            "expected_audience": "agentsim-mcp",
+            "audience_valid": true,
+            "token_passthrough": false,
+            "scopes": ["catalog.read"]
+          }
+        },
+        {
+          "event_type": "agent.auth.session.observed",
+          "stage": "authorization",
+          "message": "Synthetic session remained bound to the authenticated principal.",
+          "agent_id": "mcp-client",
+          "principal_id": "synthetic-user-a",
+          "session_id": "mcp-session-bound-to-user-a",
+          "input_trust": "trusted",
+          "attributes": {
+            "bound_principal_id": "synthetic-user-a",
+            "observed_principal_id": "synthetic-user-a",
+            "principal_binding_valid": true,
+            "session_id_predictable": false
+          }
+        },
+        {
+          "event_type": "agent.tool.requested",
+          "stage": "pre_tool",
+          "message": "Valid identity context proposed an authorized read-only MCP action.",
+          "agent_id": "mcp-client",
+          "principal_id": "synthetic-user-a",
+          "session_id": "mcp-session-bound-to-user-a",
+          "input_trust": "trusted",
+          "tool_name": "mcp.synthetic.search",
+          "tool_action": "read synthetic public catalog",
+          "tool_risk": "low",
+          "policy_decision": "allow",
+          "outcome": "simulated",
+          "attributes": {"server_id": "agentsim-mcp", "arguments_redacted": true, "executed": false}
+        }
+      ]
+    },
+    {
+      "scenario_id": "mcp-confused-deputy-ssrf",
+      "name": "MCP confused deputy and SSRF intent",
+      "description": "Models missing per-client consent followed by a request for a synthetic internal metadata resource.",
+      "risk": "critical",
+      "mappings": {
+        "mitre_atlas": ["AI Agent Tool Invocation", "Credentials from AI Agent Configuration"],
+        "owasp_agentic": ["ASI03 Identity and Privilege Abuse", "ASI02 Tool Misuse"],
+        "nist_ai_100_2": ["Generative AI privacy attack", "Generative AI misuse attack"]
+      },
+      "detector": {
+        "type": "ordered_sequence",
+        "conditions": [
+          {"event_type": "agent.auth.consent.observed", "equals": {"attributes.per_client_consent": false}},
+          {"event_type": "agent.network.requested", "equals": {"attributes.destination_class": "internal_metadata"}}
+        ]
+      },
+      "malicious_steps": [
+        {
+          "event_type": "agent.auth.consent.observed",
+          "stage": "authorization",
+          "message": "MCP proxy lacked synthetic per-client consent for the requesting client.",
+          "agent_id": "mcp-proxy",
+          "principal_id": "synthetic-user-a",
+          "input_trust": "untrusted",
+          "attributes": {
+            "client_id": "synthetic-unapproved-client",
+            "client_registered": true,
+            "per_client_consent": false,
+            "requested_scopes": ["metadata.read"]
+          }
+        },
+        {
+          "event_type": "agent.network.requested",
+          "stage": "network",
+          "message": "Unapproved client proposed access to a synthetic internal metadata resource.",
+          "agent_id": "mcp-proxy",
+          "principal_id": "synthetic-user-a",
+          "input_trust": "untrusted",
+          "tool_name": "mcp.synthetic.fetch",
+          "tool_action": "fetch synthetic internal metadata",
+          "tool_risk": "critical",
+          "policy_decision": "block",
+          "outcome": "blocked",
+          "attributes": {
+            "destination": "synthetic://network/internal-metadata",
+            "destination_class": "internal_metadata",
+            "network_scope": "synthetic",
+            "arguments_redacted": true,
+            "executed": false
+          }
+        },
+        {
+          "event_type": "agent.policy.decision",
+          "stage": "policy",
+          "message": "Consent and destination policy blocked the confused-deputy request.",
+          "agent_id": "mcp-proxy",
+          "policy_decision": "block",
+          "outcome": "blocked",
+          "policy_id": "mcp-client-consent-and-destination",
+          "attributes": {"executed": false}
+        }
+      ],
+      "benign_steps": [
+        {
+          "event_type": "agent.auth.consent.observed",
+          "stage": "authorization",
+          "message": "MCP proxy found explicit synthetic consent for the requesting client.",
+          "agent_id": "mcp-proxy",
+          "principal_id": "synthetic-user-a",
+          "input_trust": "trusted",
+          "attributes": {
+            "client_id": "synthetic-approved-client",
+            "client_registered": true,
+            "per_client_consent": true,
+            "requested_scopes": ["catalog.read"]
+          }
+        },
+        {
+          "event_type": "agent.network.requested",
+          "stage": "network",
+          "message": "Approved client proposed a simulated read from a public synthetic resource.",
+          "agent_id": "mcp-proxy",
+          "principal_id": "synthetic-user-a",
+          "input_trust": "trusted",
+          "tool_name": "mcp.synthetic.fetch",
+          "tool_action": "fetch synthetic public catalog",
+          "tool_risk": "low",
+          "policy_decision": "allow",
+          "outcome": "simulated",
+          "attributes": {
+            "destination": "synthetic://network/public-catalog",
+            "destination_class": "public",
+            "network_scope": "synthetic",
+            "arguments_redacted": true,
+            "executed": false
+          }
+        },
+        {
+          "event_type": "agent.policy.decision",
+          "stage": "policy",
+          "message": "Consent and destination policy allowed the synthetic public read.",
+          "agent_id": "mcp-proxy",
+          "policy_decision": "allow",
+          "outcome": "simulated",
+          "policy_id": "mcp-client-consent-and-destination",
+          "attributes": {"executed": false}
+        }
+      ]
+    }
+  ]
+}

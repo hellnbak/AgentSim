@@ -1,154 +1,200 @@
 # Agentic Scenario Lab
 
-AgentSim's scenario lab produces safe, labeled traces for validating detections
-at AI-agent trust boundaries. It records what an agent observed, proposed, and
+AgentSim produces safe, labeled traces for validating detections at AI-agent
+trust boundaries. It records what an agent observed, proposed, delegated, and
 was allowed or blocked from doing. It never invokes an AI model or tool.
 
 ## Quick start
 
-List scenarios:
-
 ```bash
 python core.py --list-scenarios
+python core.py --scenario all --variant both --mutations 3 --mutation-seed 42 --speed 0
+python core.py --mcp-lab
 ```
 
-Run all malicious traces and their benign twins:
-
-```bash
-python core.py \
-  --scenario all \
-  --variant both \
-  --speed 0 \
-  --ground-truth-output agent_sim_events.jsonl \
-  --validation-output agent_sim_validation.json
-```
-
-The command returns 0 when every built-in check has the expected result, 1 when
-a check fails, and 130 when interrupted. An interrupted run still exports its
-completed checkpoints and a report marked `stopped: true`.
+The benchmark exits 0 when every trace has the expected detector result, 1 on a
+mismatch, and 130 when interrupted. Interrupted runs still export completed
+checkpoints and a report marked `stopped: true`.
 
 ## Included scenarios
 
-| ID | Malicious behavior | Benign twin | Detection correlation |
-| --- | --- | --- | --- |
-| `indirect-prompt-injection` | Untrusted retrieved content causes goal drift and a proposed high-risk file tool request. | Trusted documentation keeps the authorized goal and proposes a public synthetic read. | Untrusted input precedes a high-risk tool request in the same trace. |
-| `mcp-tool-poisoning` | An unsigned synthetic MCP definition expands from read to network-write before proposed invocation. | A signed definition matches the trusted read-only baseline. | Permission expansion plus an invalid signature precedes a tool request. |
-| `decoy-secret-exfiltration` | A synthetic decoy-secret result is transformed and followed by blocked egress intent. | Public synthetic data is followed by an approved simulated health check. | A decoy-secret result precedes a blocked network request. |
+Every malicious workflow has a closely matched benign twin. Reference
+detectors inspect observable event fields and never query `scenario_variant`,
+`expected_detection`, or another answer-key field.
 
-The built-in detectors deliberately do not read `expected_detection`. That
-field is a ground-truth label for external evaluation; the checks correlate the
-observable security fields instead.
+| ID | Detection objective |
+| --- | --- |
+| `indirect-prompt-injection` | Untrusted input followed by a high-risk tool request. |
+| `memory-context-poisoning` | Untrusted content persisted in one session and acted on in another. |
+| `rag-integrity-poisoning` | Retrieval integrity failure followed by goal drift and risky action. |
+| `mcp-tool-poisoning` | Unsigned MCP permission expansion followed by proposed use. |
+| `mcp-identity-abuse` | Wrong token audience and session-principal mismatch preceding a risky MCP action. |
+| `mcp-confused-deputy-ssrf` | Missing per-client consent followed by synthetic internal-resource access intent. |
+| `inter-agent-spoofing` | Unsigned peer message followed by over-scoped delegation. |
+| `cascading-agent-failure` | Tainted result propagated through multiple delegated agents. |
+| `human-approval-deception` | Approval summary does not match the high-risk proposed action. |
+| `rogue-policy-evasion` | Denied intent retried through another tool plus monitoring-disable intent. |
+| `unexpected-code-execution` | Untrusted content followed by interpreter/tool execution intent. |
+| `resource-cost-abuse` | Tool budget exceeded followed by deep, high-fan-out delegation. |
+| `decoy-secret-exfiltration` | Decoy-secret lineage followed by transformed, blocked loopback egress intent. |
+
+The catalog is declarative JSON under `agentsim_scenarios/packs/`; adding a
+scenario does not require editing the engine.
 
 ## Safety boundary
 
 Scenario mode is simulation-only by construction:
 
-- all resources use the `synthetic://` namespace;
-- prompt bodies, reasoning, tool arguments, tool results, and payloads are not
+- action checkpoints must include `attributes.executed: false`;
+- resources must use `synthetic://` or an explicit loopback URL;
+- prompt bodies, reasoning, arguments, results, tokens, and payloads are not
   recorded;
-- sensitive and network events explicitly include `executed: false`;
-- the network examples contain loopback URLs only, and no socket is opened;
-- fingerprints are fixed fixture identifiers, not hashes of local data; and
-- the engine imports no agent SDK, MCP client, HTTP client, or subprocess API.
+- fixed fingerprints identify fixtures and are not hashes of local data;
+- pack loading rejects label-dependent detectors and detectors that fire on
+  their own benign control; and
+- the engine imports no agent SDK, HTTP client, or subprocess API.
 
-This boundary is different from endpoint behavior mode, which runs the
-documented read-only command catalog unless `--dry-run` is selected.
+The MCP lab in `mcp_lab.py` serializes protocol-shaped JSON-RPC in memory. It
+tests token audience, passthrough rejection, client consent, session binding,
+scopes, and tool allowlisting without starting a server, opening a socket,
+loading a plugin, or executing a tool.
 
-## Ground-truth JSONL schema
+This boundary differs from endpoint behavior mode, which runs the documented
+read-only command catalog unless `--dry-run` is selected.
 
-`agent_sim_events.jsonl` contains one JSON object per checkpoint. Schema version
-`1.0` uses these stable top-level fields:
+## Event schema v2
 
-| Field | Purpose |
+`agent_sim_events.jsonl` contains one JSON object per checkpoint. The complete
+machine-readable contract is [`schemas/agent-event.schema.json`](schemas/agent-event.schema.json).
+The loader remains compatible with v1 JSONL.
+
+Important correlation fields include:
+
+| Fields | Purpose |
 | --- | --- |
-| `schema_version` | Event schema version. |
-| `timestamp` | UTC ISO 8601 time. |
-| `event_id`, `parent_event_id` | Ordered event lineage within a trace. |
-| `run_id`, `trace_id`, `sequence` | Suite, trace, and checkpoint correlation. |
-| `producer`, `execution_mode` | Always `AgentSim` and `simulation_only`. |
-| `scenario_id`, `scenario_name`, `scenario_variant`, `scenario_risk` | Scenario context and malicious/benign control identity. |
-| `expected_detection` | Ground-truth label; true only for malicious traces. |
-| `stage`, `event_type`, `message` | Workflow checkpoint and safe description. |
-| `input_trust` | `trusted`, `untrusted`, or `not_applicable`. |
-| `tool_name`, `tool_action`, `tool_risk` | Proposed tool context; values may be null. |
-| `policy_decision`, `outcome` | Pending, allow, block, observe, proposed, simulated, or observed state. |
-| `attributes` | Event-specific, non-secret correlation fields. |
-| `mappings` | Descriptive MITRE ATLAS, OWASP Agentic, and NIST references. |
+| `run_id`, `trace_id`, `sequence`, `event_id` | Suite, trace, order, and checkpoint identity. |
+| `parent_event_id`, `caused_by_event_ids` | Sequential and explicit causal graph edges. |
+| `session_id`, `conversation_id` | Cross-session and conversational boundaries. |
+| `agent_id`, `agent_instance_id`, `principal_id` | Logical agent, runtime instance, and authenticated principal. |
+| `delegation_id`, `approval_id` | Delegation and human-approval correlation. |
+| `data_lineage_id`, `taint_labels` | Data provenance and trust propagation. |
+| `policy_id`, `policy_version`, `policy_decision` | Versioned control result. |
+| `event_type`, `stage`, `outcome` | Runtime checkpoint and disposition. |
+| `input_trust`, `tool_name`, `tool_risk` | Trust and proposed tool context. |
+| `scenario_variant`, `expected_detection` | Ground-truth answer key; evaluation datasets only. |
+| `attributes` | Event-specific, non-secret security facts. |
 
-Example, formatted for readability:
+Event types cover input, goal, memory, retrieval, tools, networks, delegation,
+approvals, authorization, budgets, configuration, policy, and observation.
+Production detections should ingest security facts but must not query the
+answer-key fields.
+
+## Mutations and scorecard
+
+`--mutations N` adds `N` semantic-preserving variants to every selected
+malicious and benign trace. Mutations can alias synthetic tool names, vary safe
+descriptions, add delay metadata, and insert benign noise. `--mutation-seed`
+makes the generated corpus reproducible. The scorecard reports:
+
+- true/false positives and negatives;
+- precision, recall, accuracy, and benign rejection rate;
+- mean and maximum checkpoints to detection;
+- baseline and mutation pass/fail counts;
+- per-scenario results; and
+- detector field and framework coverage.
+
+Use `--variant both` for regression testing. A malicious-only run cannot
+measure false-positive rejection.
+
+## Benchmark artifacts
+
+Scenario CLI runs create these files by default:
+
+| Artifact | Use |
+| --- | --- |
+| `agent_sim_events.jsonl` | Canonical labeled ground-truth events. |
+| `agent_sim_validation.json` | Detailed results and scorecard. |
+| `agent_sim_junit.xml` | CI test reporting. |
+| `agent_sim_results.sarif` | Code-scanning-compatible mismatch reporting. |
+| `agent_sim_otel.jsonl` | OpenTelemetry-compatible log records for collector testing. |
+| `agent_sim_coverage.json` | Framework mappings, event types, agents, risks, and detector fields. |
+| `agent_sim_evidence.zip` | Portable bundle containing all artifacts above. |
+
+The OpenTelemetry export contains fixed synthetic descriptions, never raw
+prompts, tool arguments, or results. Review privacy and retention before
+adapting the pattern to production telemetry.
+
+## Custom scenario packs
+
+Pass a JSON file or directory with repeatable `--scenario-pack PATH`. Built-in
+packs remain enabled. The machine-readable pack contract is
+[`schemas/scenario-pack.schema.json`](schemas/scenario-pack.schema.json).
+
+Minimal structure:
 
 ```json
 {
-  "schema_version": "1.0",
-  "execution_mode": "simulation_only",
-  "scenario_id": "indirect-prompt-injection",
-  "scenario_variant": "malicious",
-  "expected_detection": true,
-  "stage": "pre_tool",
-  "event_type": "agent.tool.requested",
-  "input_trust": "untrusted",
-  "tool_name": "filesystem.read_file",
-  "tool_risk": "high",
-  "policy_decision": "pending",
-  "attributes": {
-    "arguments_redacted": true,
-    "data_classification": "decoy_secret"
-  }
+  "pack_schema_version": "1.0",
+  "pack_id": "example.agent-security",
+  "scenarios": [
+    {
+      "scenario_id": "example-risk",
+      "name": "Example risk",
+      "description": "Synthetic trust-boundary example.",
+      "risk": "high",
+      "mappings": {
+        "owasp_agentic": ["ASI02 Tool Misuse"],
+        "mitre_atlas": ["AI Agent Tool Invocation"]
+      },
+      "detector": {
+        "type": "ordered_sequence",
+        "conditions": [
+          {"event_type": "agent.input.observed", "equals": {"input_trust": "untrusted"}},
+          {"event_type": "agent.tool.requested", "equals": {"tool_risk": "high"}}
+        ]
+      },
+      "malicious_steps": [],
+      "benign_steps": []
+    }
+  ]
 }
 ```
 
-Event types are namespaced around runtime checkpoints:
-`agent.input.*`, `agent.goal.*`, `agent.tool.*`, `agent.network.*`, and
-`agent.policy.*`. Preserve `run_id`, `trace_id`, `sequence`, trust,
-classification, and policy fields when normalizing into a SIEM. Raw prompt and
-tool content is neither required nor recommended for these correlations.
+Populate both step arrays; the abbreviated empty arrays above only illustrate
+the document shape. Conditions support `equals`, `not_equals`, `contains`,
+`gte`, and `exists` against dotted field paths. All conditions must occur in
+order within one trace. Pack IDs and scenario IDs must be unique across loaded
+packs.
 
-## Validation report
+Validate a pack by listing it, then run its controls:
 
-`agent_sim_validation.json` contains one result for each scenario/variant trace:
+```bash
+python core.py --scenario-pack ./my-pack.json --list-scenarios
+python core.py --scenario-pack ./my-pack.json --scenario example-risk --variant both --speed 0
+```
 
-- `expected_detected` is true for a malicious trace and false for its benign
-  twin;
-- `detected` is the built-in correlation result;
-- `passed` means the result matched that expectation; and
-- `signal_event_ids` identifies the events used by the check.
+## SIEM and runtime integration
 
-Running `--variant both` is the recommended regression mode because it measures
-both true-positive behavior and the matching benign control. A malicious-only
-run cannot demonstrate false-positive rejection.
+Ingest JSONL into a test-only dataset, preserve `trace_id`, `sequence`, lineage,
+agent, session, and policy fields, and keep the answer key in a separate table.
+Join SIEM alerts to ground truth by `trace_id` only after the analytic runs.
+Vendor examples for CrowdStrike, Graylog, Microsoft KQL, Splunk, Panther,
+Elastic EQL, and Sigma are documented in [`DETECTIONS.md`](DETECTIONS.md).
 
-## SIEM and agent-runtime integration
-
-For a product integration, ingest JSONL as a custom dataset and correlate on
-`trace_id` in ascending `sequence` order. Start with three analytics:
-
-1. untrusted input followed by goal drift or a high-risk tool request;
-2. tool-definition hash, signature, or capability change followed by use; and
-3. sensitive tool output followed by transform or network intent.
-
-Treat policy blocks as high-value detections, not harmless noise: they show the
-attack reached a control boundary. Also retain allowed outcomes so detections
-can distinguish prevention from exposure. Before recording production agent
-telemetry, review privacy and retention requirements; tool arguments and
-results can contain sensitive data.
+Treat blocked requests as high-value observations: they show an attack reached
+a control boundary. Keep allowed/simulated outcomes too, so prevention can be
+distinguished from possible exposure.
 
 ## Framework references
 
-Scenario mappings are descriptive cross-references based on the current public
-frameworks. They are not control attestations and may need revision as catalogs
-change:
+Mappings are descriptive cross-references, not certifications or complete
+coverage claims:
 
-- [MITRE ATLAS](https://atlas.mitre.org/) for AI-system adversary tactics and
-  agent-specific techniques;
-- [OWASP Top 10 for Agentic Applications 2026](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
-  for goal hijack, tool misuse, identity/privilege abuse, and agentic supply
-  chain risks;
-- [NIST AI 100-2 E2025](https://csrc.nist.gov/pubs/ai/100/2/e2025/final) for
-  adversarial machine-learning terminology and attack taxonomy;
-- [OpenTelemetry generative AI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/)
-  for interoperability guidance; and
-- [Model Context Protocol security best practices](https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices)
-  for MCP authorization and tool-security considerations.
+- [MITRE ATLAS](https://atlas.mitre.org/);
+- [OWASP Top 10 for Agentic Applications 2026](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/);
+- [NIST AI 100-2 E2025](https://csrc.nist.gov/pubs/ai/100/2/e2025/final);
+- [OpenTelemetry generative AI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/); and
+- [Model Context Protocol security best practices](https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices).
 
-Review mappings and field normalization before using AgentSim evidence in an
-audit, benchmark, or production detection claim.
+Review mapping names and field normalization before using AgentSim evidence in
+an audit, benchmark, or production detection claim.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentsim"
-version = "0.2.0"
+version = "0.3.0"
 description = "Defensive telemetry and ground-truth simulation for autonomous agents"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -18,9 +18,19 @@ classifiers = [
 ]
 dependencies = ["Flask>=3.1,<4.0"]
 
+[project.urls]
+Homepage = "https://github.com/hellnbak/AgentSim"
+Repository = "https://github.com/hellnbak/AgentSim.git"
+Issues = "https://github.com/hellnbak/AgentSim/issues"
+Changelog = "https://github.com/hellnbak/AgentSim/blob/main/CHANGELOG.md"
+
 [project.scripts]
 agentsim = "core:main"
 agentsim-web = "web_ui:main"
 
 [tool.setuptools]
-py-modules = ["core", "scenarios", "tactics", "web_ui"]
+py-modules = ["core", "mcp_lab", "scenarios", "tactics", "web_ui"]
+packages = ["agentsim_scenarios", "agentsim_scenarios.packs"]
+
+[tool.setuptools.package-data]
+"agentsim_scenarios.packs" = ["*.json"]

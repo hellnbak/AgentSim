@@ -14,13 +14,15 @@ README = Path(__file__).with_name("README.md").read_text(encoding="utf-8")
 
 setup(
     name="agentsim",
-    version="0.2.0",
+    version="0.3.0",
     description="Defensive telemetry and ground-truth simulation for autonomous agents",
     long_description=README,
     long_description_content_type="text/markdown",
     python_requires=">=3.9",
     license="MIT",
-    py_modules=["core", "scenarios", "tactics", "web_ui"],
+    py_modules=["core", "mcp_lab", "scenarios", "tactics", "web_ui"],
+    packages=["agentsim_scenarios", "agentsim_scenarios.packs"],
+    package_data={"agentsim_scenarios.packs": ["*.json"]},
     install_requires=["Flask>=3.1,<4.0"],
     entry_points={
         "console_scripts": [

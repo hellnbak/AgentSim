@@ -20,6 +20,11 @@ class WebUiTests(unittest.TestCase):
         self.original_layer_path = web_ui.LAYER_OUTPUT_PATH
         self.original_ground_truth_path = web_ui.GROUND_TRUTH_OUTPUT_PATH
         self.original_validation_path = web_ui.VALIDATION_OUTPUT_PATH
+        self.original_junit_path = web_ui.JUNIT_OUTPUT_PATH
+        self.original_sarif_path = web_ui.SARIF_OUTPUT_PATH
+        self.original_otel_path = web_ui.OTEL_OUTPUT_PATH
+        self.original_coverage_path = web_ui.COVERAGE_OUTPUT_PATH
+        self.original_bundle_path = web_ui.BUNDLE_OUTPUT_PATH
         with web_ui.state_lock:
             web_ui.is_running = False
             web_ui.log_queue.clear()
@@ -27,6 +32,8 @@ class WebUiTests(unittest.TestCase):
             web_ui.last_layer_path = None
             web_ui.last_ground_truth_path = None
             web_ui.last_validation_path = None
+            web_ui.last_bundle_path = None
+            web_ui.last_benchmark_metrics = {}
             web_ui.run_started_at = None
             web_ui.run_finished_at = None
             web_ui.current_params = {}
@@ -37,6 +44,11 @@ class WebUiTests(unittest.TestCase):
         web_ui.LAYER_OUTPUT_PATH = self.original_layer_path
         web_ui.GROUND_TRUTH_OUTPUT_PATH = self.original_ground_truth_path
         web_ui.VALIDATION_OUTPUT_PATH = self.original_validation_path
+        web_ui.JUNIT_OUTPUT_PATH = self.original_junit_path
+        web_ui.SARIF_OUTPUT_PATH = self.original_sarif_path
+        web_ui.OTEL_OUTPUT_PATH = self.original_otel_path
+        web_ui.COVERAGE_OUTPUT_PATH = self.original_coverage_path
+        web_ui.BUNDLE_OUTPUT_PATH = self.original_bundle_path
 
     def valid_form(self):
         return {
@@ -96,6 +108,12 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(tool["stage"], "pre_tool")
         self.assertEqual(blocked["kind"], "blocked")
         self.assertEqual(blocked["category"], "anomaly")
+
+        delegation = web_ui._classify_message(
+            "    [delegation] Agent accepted a spoofed recursive delegation."
+        )
+        self.assertEqual(delegation["kind"], "tool")
+        self.assertEqual(delegation["category"], "anomaly")
 
     def test_status_reports_host_and_run_state(self):
         with web_ui.state_lock:
@@ -172,6 +190,8 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(kwargs["scenario"], "mcp-tool-poisoning")
         self.assertEqual(kwargs["variant"], "both")
         self.assertEqual(kwargs["checkpoints"], 6)
+        self.assertEqual(kwargs["mutations"], 0)
+        self.assertIsNone(kwargs["mutation_seed"])
         self.assertNotIn("allow_network", kwargs)
 
     def test_start_rejects_unknown_scenario(self):
@@ -192,6 +212,11 @@ class WebUiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             web_ui.GROUND_TRUTH_OUTPUT_PATH = Path(temp_dir) / "events.jsonl"
             web_ui.VALIDATION_OUTPUT_PATH = Path(temp_dir) / "validation.json"
+            web_ui.JUNIT_OUTPUT_PATH = Path(temp_dir) / "junit.xml"
+            web_ui.SARIF_OUTPUT_PATH = Path(temp_dir) / "results.sarif"
+            web_ui.OTEL_OUTPUT_PATH = Path(temp_dir) / "otel.jsonl"
+            web_ui.COVERAGE_OUTPUT_PATH = Path(temp_dir) / "coverage.json"
+            web_ui.BUNDLE_OUTPUT_PATH = Path(temp_dir) / "evidence.zip"
             with web_ui.state_lock:
                 web_ui.is_running = True
                 web_ui.last_outcome = "running"
@@ -202,12 +227,16 @@ class WebUiTests(unittest.TestCase):
                 variant="both",
                 speed=0,
                 checkpoints=8,
+                mutations=0,
+                mutation_seed=None,
             )
 
             self.assertFalse(web_ui.is_running)
             self.assertEqual(web_ui.last_outcome, "complete")
             self.assertTrue(web_ui.last_ground_truth_path.exists())
             self.assertTrue(web_ui.last_validation_path.exists())
+            self.assertTrue(web_ui.last_bundle_path.exists())
+            self.assertEqual(web_ui.last_benchmark_metrics["precision"], 1.0)
             report = json.loads(
                 web_ui.last_validation_path.read_text(encoding="utf-8")
             )
@@ -271,31 +300,41 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(self.client.get("/download-ground-truth").status_code, 404)
         self.assertEqual(self.client.get("/download-validation").status_code, 404)
+        self.assertEqual(self.client.get("/download-bundle").status_code, 404)
 
     def test_download_returns_scenario_artifacts(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             events_path = Path(temp_dir) / "events.jsonl"
             report_path = Path(temp_dir) / "report.json"
+            bundle_path = Path(temp_dir) / "evidence.zip"
             events_path.write_text('{"schema_version":"1.0"}\n', encoding="utf-8")
             report_path.write_text('{"summary":{}}\n', encoding="utf-8")
+            bundle_path.write_bytes(b"PK synthetic")
             with web_ui.state_lock:
                 web_ui.last_ground_truth_path = events_path
                 web_ui.last_validation_path = report_path
+                web_ui.last_bundle_path = bundle_path
 
             status = self.client.get("/api/status").get_json()
             self.assertTrue(status["ground_truth_available"])
             self.assertTrue(status["validation_available"])
+            self.assertTrue(status["bundle_available"])
 
             ground_truth = self.client.get("/download-ground-truth")
             validation = self.client.get("/download-validation")
+            bundle = self.client.get("/download-bundle")
             self.assertEqual(ground_truth.status_code, 200)
             self.assertEqual(ground_truth.mimetype, "application/x-ndjson")
             self.assertIn("agent_sim_events.jsonl", ground_truth.headers["Content-Disposition"])
             self.assertEqual(validation.status_code, 200)
             self.assertEqual(validation.mimetype, "application/json")
             self.assertIn("agent_sim_validation.json", validation.headers["Content-Disposition"])
+            self.assertEqual(bundle.status_code, 200)
+            self.assertEqual(bundle.mimetype, "application/zip")
+            self.assertIn("agent_sim_evidence.zip", bundle.headers["Content-Disposition"])
             ground_truth.close()
             validation.close()
+            bundle.close()
 
 
 if __name__ == "__main__":

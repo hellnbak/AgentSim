@@ -1,0 +1,36 @@
+AnalysisType: rule
+DisplayName: AgentSim Agent Trust-Boundary Sequence
+Enabled: false
+Filename: agentic_attack_lineage.py
+RuleID: AgentSim.AgentTrustBoundarySequence
+Severity: High
+LogTypes:
+  - Custom.AgentSimAgentEvent
+Threshold: 2
+DedupPeriodMinutes: 5
+Description: >
+  Correlates an untrusted input, memory, or retrieval checkpoint with a risky
+  tool, network, or delegation action in the same agent trace and lineage.
+Runbook: >
+  Validate event ordering by sequence, inspect the originating trust label and
+  acting agent, confirm the policy outcome, and isolate the agent session when
+  the action was allowed or execution state is unknown.
+Tags:
+  - AgentSim
+  - Agentic AI
+  - Trust Boundary
+Tests:
+  - Name: Untrusted memory origin candidate
+    ExpectedResult: true
+    Log:
+      event_type: agent.memory.retrieved
+      trace_id: synthetic-trace
+      data_lineage_id: synthetic-lineage
+      input_trust: untrusted
+      taint_labels: [untrusted_instruction]
+  - Name: Trusted public input
+    ExpectedResult: false
+    Log:
+      event_type: agent.input.observed
+      trace_id: synthetic-trace
+      input_trust: trusted

@@ -1,6 +1,8 @@
 import json
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
@@ -35,6 +37,7 @@ class ScenarioEngineTests(unittest.TestCase):
         scenario_ids = [definition.scenario_id for definition in scenarios.list_scenarios()]
 
         self.assertEqual(scenario_ids, sorted(scenarios.SCENARIOS))
+        self.assertEqual(len(scenario_ids), 13)
         for definition in scenarios.list_scenarios():
             with self.subTest(scenario_id=definition.scenario_id):
                 self.assertTrue(definition.malicious_steps)
@@ -47,28 +50,34 @@ class ScenarioEngineTests(unittest.TestCase):
 
         self.assertTrue(result.passed)
         self.assertFalse(result.stopped)
-        self.assertEqual(result.event_count, 21)
-        self.assertEqual(result.check_count, 6)
+        self.assertEqual(result.event_count, 84)
+        self.assertEqual(result.trace_count, 26)
+        self.assertEqual(result.check_count, 26)
 
         events = scenarios.load_ground_truth(self.events_path)
-        self.assertEqual(len(events), 21)
+        self.assertEqual(len(events), 84)
         self.assertEqual(
             {event["scenario_variant"] for event in events},
             {"malicious", "benign"},
         )
         self.assertTrue(all(event["execution_mode"] == "simulation_only" for event in events))
+        self.assertTrue(all(event["schema_version"] == "2.0" for event in events))
         self.assertTrue(all(event["run_id"] == "test-run" for event in events))
-        requested_tools = [
-            event for event in events if event["event_type"] == "agent.tool.requested"
+        action_events = [
+            event for event in events if event["event_type"] in scenarios.ACTION_EVENT_TYPES
         ]
         self.assertTrue(
-            all(event["attributes"]["executed"] is False for event in requested_tools)
+            all(event["attributes"]["executed"] is False for event in action_events)
         )
 
         report = json.loads(self.report_path.read_text(encoding="utf-8"))
-        self.assertEqual(report["summary"]["passed"], 6)
+        self.assertEqual(report["summary"]["passed"], 26)
         self.assertEqual(report["summary"]["failed"], 0)
         self.assertTrue(report["summary"]["all_passed"])
+        self.assertEqual(report["metrics"]["true_positive"], 13)
+        self.assertEqual(report["metrics"]["true_negative"], 13)
+        self.assertEqual(report["metrics"]["precision"], 1.0)
+        self.assertEqual(report["metrics"]["recall"], 1.0)
 
     def test_each_malicious_trace_detects_and_benign_trace_does_not(self):
         self.run_suite()
@@ -136,6 +145,121 @@ class ScenarioEngineTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "line 1"):
             scenarios.load_ground_truth(self.events_path)
+
+    def test_mutations_preserve_detection_and_benign_controls(self):
+        result = self.run_suite(
+            "indirect-prompt-injection", mutation_count=2, mutation_seed=17
+        )
+
+        self.assertTrue(result.passed)
+        self.assertEqual(result.trace_count, 6)
+        self.assertEqual(result.check_count, 6)
+        self.assertEqual(result.mutation_count, 2)
+        report = json.loads(self.report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["mutation_summary"]["checks"], 4)
+        self.assertEqual(report["mutation_summary"]["failed"], 0)
+
+    def test_portable_artifacts_and_evidence_bundle(self):
+        paths = {
+            "junit_path": Path(self.temp_dir.name) / "junit.xml",
+            "sarif_path": Path(self.temp_dir.name) / "results.sarif",
+            "otel_path": Path(self.temp_dir.name) / "otel.jsonl",
+            "coverage_path": Path(self.temp_dir.name) / "coverage.json",
+            "bundle_path": Path(self.temp_dir.name) / "evidence.zip",
+        }
+
+        result = self.run_suite("mcp-tool-poisoning", **paths)
+
+        self.assertTrue(result.passed)
+        suite = ET.parse(paths["junit_path"]).getroot()
+        self.assertEqual(suite.attrib["tests"], "2")
+        sarif = json.loads(paths["sarif_path"].read_text(encoding="utf-8"))
+        self.assertEqual(sarif["version"], "2.1.0")
+        self.assertEqual(sarif["runs"][0]["results"], [])
+        otel = [
+            json.loads(line)
+            for line in paths["otel_path"].read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertEqual(len(otel), result.event_count)
+        self.assertTrue(all("traceId" in record for record in otel))
+        coverage = json.loads(paths["coverage_path"].read_text(encoding="utf-8"))
+        self.assertEqual(coverage["scenario_count"], 1)
+        with zipfile.ZipFile(paths["bundle_path"]) as bundle:
+            self.assertEqual(
+                set(bundle.namelist()),
+                {
+                    "events.jsonl",
+                    "validation.json",
+                    "junit.xml",
+                    "results.sarif",
+                    "otel.jsonl",
+                    "coverage.json",
+                },
+            )
+
+    def test_custom_pack_loading_and_detector_label_leakage_rejection(self):
+        built_in = json.loads(
+            (
+                Path(scenarios.__file__).parent
+                / "agentsim_scenarios"
+                / "packs"
+                / "existing.json"
+            ).read_text(encoding="utf-8")
+        )
+        definition = built_in["scenarios"][0]
+        definition["scenario_id"] = "custom-indirect-prompt-injection"
+        custom_pack = {
+            "pack_schema_version": "1.0",
+            "pack_id": "example.custom",
+            "scenarios": [definition],
+        }
+        pack_path = Path(self.temp_dir.name) / "custom.json"
+        pack_path.write_text(json.dumps(custom_pack), encoding="utf-8")
+
+        registry = scenarios.load_scenario_registry([pack_path])
+        self.assertIn("custom-indirect-prompt-injection", registry)
+        result = self.run_suite(
+            "custom-indirect-prompt-injection", registry=registry
+        )
+        self.assertTrue(result.passed)
+
+        definition["malicious_steps"][0]["attributes"]["source"] = "/etc/passwd"
+        pack_path.write_text(json.dumps(custom_pack), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "synthetic or loopback URI"):
+            scenarios.load_scenario_registry([pack_path])
+        definition["malicious_steps"][0]["attributes"]["source"] = (
+            "synthetic://documents/untrusted-support-note.html"
+        )
+
+        definition["detector"]["conditions"][0]["typo_operator"] = {
+            "input_trust": "untrusted"
+        }
+        pack_path.write_text(json.dumps(custom_pack), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "unsupported detector keys"):
+            scenarios.load_scenario_registry([pack_path])
+        del definition["detector"]["conditions"][0]["typo_operator"]
+
+        definition["detector"]["conditions"][0]["equals"] = {
+            "scenario_id": "custom-indirect-prompt-injection"
+        }
+        pack_path.write_text(json.dumps(custom_pack), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "ground-truth field"):
+            scenarios.load_scenario_registry([pack_path])
+
+    def test_loader_accepts_v1_ground_truth_for_backwards_compatibility(self):
+        self.events_path.write_text(
+            json.dumps({"schema_version": "1.0", "event_type": "legacy.event"})
+            + "\n",
+            encoding="utf-8",
+        )
+
+        events = scenarios.load_ground_truth(self.events_path)
+
+        self.assertEqual(events[0]["schema_version"], "1.0")
+
+    def test_event_estimate_rejects_invalid_mutation_count(self):
+        with self.assertRaisesRegex(ValueError, "between 0 and 100"):
+            scenarios.estimate_event_count("all", mutation_count=101)
 
 
 if __name__ == "__main__":

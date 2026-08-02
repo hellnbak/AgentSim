@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/ability-pack.schema.json",
+  "title": "AgentSim Ability Pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "pack_id", "abilities"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "ability-pack"},
+    "pack_id": {"type": "string", "minLength": 3, "maxLength": 128},
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "abilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/ability"}
+    }
+  },
+  "$defs": {
+    "stringArray": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "ability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "description", "risk", "platforms", "mappings", "execution", "target_constraints", "expected_telemetry", "validation", "defenses"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{2,127}$"},
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "risk": {"enum": ["low", "medium", "high"]},
+        "platforms": {"$ref": "#/$defs/stringArray"},
+        "mappings": {"type": "object", "additionalProperties": {"$ref": "#/$defs/stringArray"}},
+        "execution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["supported_providers", "default_provider", "requires_elevation", "network_access", "timeout_seconds", "command_ref", "cleanup_ref", "state_changes"],
+          "properties": {
+            "supported_providers": {"type": "array", "minItems": 1, "items": {"enum": ["simulate", "local", "docker"]}},
+            "default_provider": {"enum": ["simulate", "local", "docker"]},
+            "requires_elevation": {"type": "boolean"},
+            "network_access": {"enum": ["denied", "required"]},
+            "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 600},
+            "command_ref": {"type": "string", "pattern": "^catalog://"},
+            "cleanup_ref": {"type": ["string", "null"], "pattern": "^catalog://"},
+            "state_changes": {"type": "boolean"}
+          }
+        },
+        "target_constraints": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allowed_target_types", "production_allowed"],
+          "properties": {
+            "allowed_target_types": {"$ref": "#/$defs/stringArray"},
+            "production_allowed": {"type": "boolean"}
+          }
+        },
+        "expected_telemetry": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["detection_objectives", "benign_controls"],
+          "properties": {
+            "detection_objectives": {"$ref": "#/$defs/stringArray"},
+            "benign_controls": {"$ref": "#/$defs/stringArray"}
+          }
+        },
+        "defenses": {"$ref": "#/$defs/stringArray"},
+        "metadata": {"type": "object"}
+      }
+    }
+  }
+}

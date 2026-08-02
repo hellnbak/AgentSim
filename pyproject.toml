@@ -4,16 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentsim"
-version = "0.3.0"
-description = "Defensive telemetry and ground-truth simulation for autonomous agents"
+version = "0.4.0"
+description = "Detection-first adversary emulation for endpoints, cloud, and agentic AI"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
-keywords = ["agentic-ai", "detection-engineering", "security", "simulation", "mitre-attack"]
+authors = [{name = "AgentSim contributors"}]
+keywords = ["adversary-emulation", "agentic-ai", "detection-engineering", "purple-team", "security", "mitre-attack"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Topic :: Security",
 ]
 dependencies = ["Flask>=3.1,<4.0"]
@@ -25,12 +28,28 @@ Issues = "https://github.com/hellnbak/AgentSim/issues"
 Changelog = "https://github.com/hellnbak/AgentSim/blob/main/CHANGELOG.md"
 
 [project.scripts]
-agentsim = "core:main"
-agentsim-web = "web_ui:main"
+agentsim = "agentsim.cli:main"
+agentsim-web = "agentsim.web.app:main"
 
 [tool.setuptools]
 py-modules = ["core", "mcp_lab", "scenarios", "tactics", "web_ui"]
-packages = ["agentsim_scenarios", "agentsim_scenarios.packs"]
+
+[tool.setuptools.packages.find]
+include = ["agentsim*", "agentsim_scenarios*"]
 
 [tool.setuptools.package-data]
 "agentsim_scenarios.packs" = ["*.json"]
+"agentsim.content.packs" = ["*.json"]
+"agentsim.content.campaigns" = ["*.json"]
+"agentsim.content.catalogs" = ["*.json"]
+
+[tool.setuptools.data-files]
+"share/agentsim/schemas" = [
+    "schemas/action-event-v3.schema.json",
+    "schemas/ability-pack.schema.json",
+    "schemas/authorization-manifest.schema.json",
+    "schemas/campaign-pack.schema.json",
+    "schemas/command-catalog.schema.json",
+    "schemas/agent-event.schema.json",
+    "schemas/scenario-pack.schema.json",
+]

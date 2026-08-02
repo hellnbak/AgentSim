@@ -1,0 +1,29 @@
+// AgentSim schema-v2 high-confidence control-plane signals.
+// Replace AgentSimEvents with your normalized agent-runtime table.
+AgentSimEvents
+| extend attrs = todynamic(attributes)
+| extend SignalType = case(
+    event_type == "agent.model.fallback"
+        and tobool(attrs.safety_profile_changed)
+        and not(tobool(attrs.policy_binding_valid)), "model_safety_downgrade",
+    event_type == "agent.policy.decision"
+        and policy_decision == "allow"
+        and tostring(attrs.policy_scope) == "executor"
+        and tobool(attrs.intent_equivalent)
+        and not(tobool(attrs.policy_version_match)), "planner_executor_policy_gap",
+    event_type == "agent.approval.reused"
+        and not(tobool(attrs.action_fingerprint_match)), "approval_replay",
+    event_type == "agent.authorization.context_changed"
+        and tobool(attrs.tenant_changed)
+        and not(tobool(attrs.tenant_binding_valid)), "cross_tenant_context_confusion",
+    event_type == "agent.tool.requested"
+        and tobool(attrs.egress_capable)
+        and tostring(attrs.composite_risk) == "high", "tool_chain_capability_escalation",
+    event_type == "agent.registry.entry.changed"
+        and tobool(attrs.capability_expansion)
+        and not(tobool(attrs.signature_valid)), "agent_registry_poisoning",
+    "")
+| where isnotempty(SignalType)
+| project timestamp, SignalType, trace_id, sequence, session_id, agent_id,
+          principal_id, policy_id, policy_version, approval_id, delegation_id,
+          tool_name, tool_risk, policy_decision, data_lineage_id, attrs

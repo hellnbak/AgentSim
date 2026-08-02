@@ -9,6 +9,7 @@ import re
 import secrets
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,11 @@ from flask import (
 )
 
 from core import AgentSim
+from agentsim.content import load_ability_registry, load_campaign_registry
+from agentsim.models.target import TargetProfile
+from agentsim.orchestration.runner import CampaignRunner
+from agentsim.safety.authorization import AuthorizationManifest
+from agentsim.storage import RunStore
 from scenarios import (
     DEFAULT_BUNDLE_PATH,
     DEFAULT_COVERAGE_PATH,
@@ -33,6 +39,7 @@ from scenarios import (
     DEFAULT_SARIF_PATH,
     SCENARIOS,
     estimate_event_count,
+    load_ground_truth,
     run_scenario_suite,
 )
 
@@ -63,6 +70,10 @@ SARIF_OUTPUT_PATH = Path.cwd() / DEFAULT_SARIF_PATH
 OTEL_OUTPUT_PATH = Path.cwd() / DEFAULT_OTEL_PATH
 COVERAGE_OUTPUT_PATH = Path.cwd() / DEFAULT_COVERAGE_PATH
 BUNDLE_OUTPUT_PATH = Path.cwd() / DEFAULT_BUNDLE_PATH
+CAMPAIGN_DATABASE_PATH = Path.cwd() / "agent_sim_runs.db"
+CAMPAIGN_OUTPUT_DIRECTORY = Path.cwd() / "agent_sim_campaign_runs"
+ABILITIES = load_ability_registry()
+CAMPAIGNS = load_campaign_registry()
 MAX_EVENTS = 2000
 
 
@@ -345,7 +356,7 @@ HTML_TEMPLATE = """
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <title>AgentSim · Agent Detection Lab</title>
+    <title>AgentSim · Detection-First Adversary Emulation</title>
     <style>
         :root {
             --bg: #071017;
@@ -656,6 +667,68 @@ HTML_TEMPLATE = """
         .metric.anomalies .metric-value { color: var(--amber); }
         .metric.skipped .metric-value { color: var(--violet); }
 
+        .campaign-card { min-width: 0; overflow: hidden; }
+        .campaign-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 18px; border-bottom: 1px solid var(--line); }
+        .campaign-header h2 { margin: 5px 0 4px; font-size: 15px; }
+        .campaign-header p { margin: 0; max-width: 720px; color: var(--subtle); font-size: 10px; line-height: 1.5; }
+        .campaign-version { color: var(--accent); font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+        .campaign-controls { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.6fr) auto; gap: 9px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+        .campaign-controls select, .campaign-target { height: 38px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; color: var(--text); background: rgba(7, 16, 23, 0.65); }
+        .campaign-target { display: flex; align-items: center; color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .campaign-run { min-width: 150px; min-height: 38px; }
+        .campaign-body { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr); min-height: 150px; }
+        .campaign-result, .campaign-history { padding: 16px 18px; min-width: 0; }
+        .campaign-history { border-left: 1px solid var(--line); }
+        .campaign-section-label { margin-bottom: 10px; color: var(--subtle); font: 700 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.1em; text-transform: uppercase; }
+        .campaign-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+        .campaign-stat { padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: rgba(7, 16, 23, 0.42); }
+        .campaign-stat strong { display: block; color: var(--accent); font: 700 15px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .campaign-stat span { display: block; margin-top: 5px; color: var(--subtle); font-size: 9px; }
+        .campaign-timeline { display: grid; gap: 5px; margin-top: 10px; }
+        .campaign-event, .history-run { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px; padding: 7px 8px; border: 1px solid rgba(32, 57, 71, 0.7); border-radius: 7px; color: var(--muted); font-size: 9px; }
+        .campaign-event strong, .history-run strong { color: var(--blue); font: 700 9px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .history-list { display: grid; gap: 6px; }
+        .history-run { grid-template-columns: 1fr auto; }
+        .history-run > div { min-width: 0; display: grid; gap: 3px; }
+        .history-run > div > strong,
+        .history-run > div > span { display: block; min-width: 0; overflow-wrap: anywhere; }
+        .history-run span { color: var(--subtle); }
+
+        .debugger-card { min-width: 0; overflow: hidden; }
+        .debugger-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 17px 18px 14px; border-bottom: 1px solid var(--line); }
+        .debugger-header h2 { margin: 5px 0 4px; font-size: 15px; }
+        .debugger-header p { margin: 0; color: var(--subtle); font-size: 10px; line-height: 1.5; }
+        .debugger-score { flex: 0 0 auto; text-align: right; }
+        .debugger-score strong { display: block; color: var(--accent); font: 700 18px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .debugger-score span { display: block; margin-top: 5px; color: var(--subtle); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; }
+        .debugger-toolbar { display: grid; grid-template-columns: 170px minmax(160px, 1fr) auto; gap: 8px; padding: 11px 13px; border-bottom: 1px solid var(--line); background: rgba(7, 16, 23, 0.28); }
+        .debugger-toolbar select, .debugger-toolbar input { width: 100%; height: 32px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; color: var(--text); background: rgba(7, 16, 23, 0.62); font-size: 10px; }
+        .debugger-grid { display: grid; grid-template-columns: 285px minmax(0, 1fr); min-height: 390px; }
+        .debug-trace-list { max-height: 470px; overflow: auto; border-right: 1px solid var(--line); padding: 7px; scrollbar-color: var(--line-strong) transparent; }
+        .debug-placeholder { display: grid; place-items: center; min-height: 250px; padding: 28px; color: var(--subtle); font-size: 10px; line-height: 1.6; text-align: center; }
+        .debug-trace { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; margin-bottom: 5px; padding: 9px 10px; border: 1px solid transparent; border-radius: 9px; color: var(--muted); background: transparent; cursor: pointer; text-align: left; }
+        .debug-trace:hover { border-color: var(--line); background: rgba(23, 47, 59, 0.4); }
+        .debug-trace.active { border-color: rgba(66, 212, 181, 0.36); background: var(--accent-soft); }
+        .debug-trace-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 700; }
+        .debug-trace-meta { grid-column: 1 / -1; color: var(--subtle); font: 9px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .debug-badge { padding: 3px 6px; border-radius: 999px; color: var(--accent); background: var(--accent-soft); font-size: 8px; font-weight: 800; text-transform: uppercase; }
+        .debug-badge.fail { color: var(--red); background: var(--red-soft); }
+        .debug-detail { min-width: 0; padding: 16px; }
+        .debug-detail-head { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 13px; }
+        .debug-detail-head h3 { margin: 0 0 5px; font-size: 13px; }
+        .debug-detail-head p { margin: 0; color: var(--subtle); font: 9px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+        .debug-outcome { flex: 0 0 auto; display: grid; grid-template-columns: repeat(3, auto); gap: 6px; }
+        .debug-outcome span { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); background: rgba(7, 16, 23, 0.36); font-size: 9px; }
+        .debug-section-label { margin: 14px 0 7px; color: var(--subtle); font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+        .debug-rule { display: grid; gap: 5px; }
+        .debug-condition { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; color: #bdcdd3; background: rgba(7, 16, 23, 0.45); font: 9px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+        .debug-timeline { display: grid; gap: 5px; }
+        .debug-event { display: grid; grid-template-columns: 32px 88px minmax(0, 1fr); gap: 8px; padding: 7px 9px; border-left: 2px solid var(--line); border-radius: 6px; background: rgba(7, 16, 23, 0.3); }
+        .debug-event.signal { border-left-color: var(--amber); background: var(--amber-soft); }
+        .debug-event-sequence { color: var(--subtle); font: 9px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .debug-event-stage { color: var(--blue); font-size: 9px; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .debug-event-copy { min-width: 0; color: var(--muted); font-size: 9.5px; line-height: 1.45; overflow-wrap: anywhere; }
+
         .content-grid { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: stretch; }
         .events-card { min-width: 0; min-height: 510px; display: flex; flex-direction: column; overflow: hidden; }
         .events-header { padding: 16px 17px 13px; border-bottom: 1px solid var(--line); }
@@ -778,6 +851,12 @@ HTML_TEMPLATE = """
             .config-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
             .run-mode-control, .scenario-controls, .profile-section, .control.iterations, details.advanced, .form-error, .action-row, .safety-note { grid-column: 1 / -1; }
             .toggle-stack { grid-column: 1 / -1; }
+            .debugger-grid { grid-template-columns: 1fr; }
+            .debug-trace-list { max-height: 230px; border-right: 0; border-bottom: 1px solid var(--line); }
+            .campaign-controls { grid-template-columns: 1fr 1fr; }
+            .campaign-run { grid-column: 1 / -1; }
+            .campaign-body { grid-template-columns: 1fr; }
+            .campaign-history { border-left: 0; border-top: 1px solid var(--line); }
         }
         @media (max-width: 620px) {
             .topbar { height: 64px; padding: 0 14px; }
@@ -791,6 +870,16 @@ HTML_TEMPLATE = """
             .phase { padding: 9px 7px; }
             .phase-name { font-size: 9px; }
             .metrics { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .debugger-header, .debug-detail-head { display: block; }
+            .debugger-score { margin-top: 12px; text-align: left; }
+            .debugger-toolbar { grid-template-columns: 1fr; }
+            .debug-outcome { margin-top: 10px; grid-template-columns: repeat(3, 1fr); }
+            .debug-event { grid-template-columns: 28px 70px minmax(0, 1fr); gap: 5px; }
+            .campaign-header { display: block; }
+            .campaign-version { display: block; margin-top: 10px; }
+            .campaign-controls { grid-template-columns: 1fr; }
+            .campaign-run { grid-column: auto; }
+            .campaign-summary { grid-template-columns: repeat(2, 1fr); }
             .metric { min-height: 75px; }
             .event-row { grid-template-columns: 48px 70px minmax(0, 1fr); gap: 6px; padding: 8px 10px; }
             .events-header { padding: 14px 12px 12px; }
@@ -809,7 +898,7 @@ HTML_TEMPLATE = """
             <div class="brand-mark">A›</div>
             <div class="brand-copy">
                 <div class="brand-name">AgentSim</div>
-                <div class="brand-subtitle">Agent Detection Lab</div>
+                <div class="brand-subtitle">Detection-First Adversary Emulation</div>
             </div>
         </div>
         <div class="topbar-meta">
@@ -825,8 +914,8 @@ HTML_TEMPLATE = """
         <aside class="card config-panel">
             <div class="panel-header">
                 <div class="eyebrow">Run configuration</div>
-                <h2>Shape the agent behavior</h2>
-                <p>Generate endpoint telemetry or replay safe agentic attack scenarios with labeled controls.</p>
+                <h2>Emulate, observe, detect</h2>
+                <p>Preview bounded endpoint behavior, replay synthetic agentic attacks, or run an authorized campaign.</p>
             </div>
 
             <form class="config-form" id="simulation-form" action="/start" method="post">
@@ -883,7 +972,7 @@ HTML_TEMPLATE = """
                         <button class="preset" type="button" data-preset="lineage">Lineage stress</button>
                         <button class="preset" type="button" data-preset="preview">Safe preview</button>
                     </div>
-                    <p class="preset-description" id="preset-description">A representative run with moderate retries and occasional agent mistakes.</p>
+                    <p class="preset-description" id="preset-description">A safe preview with moderate retries and occasional agent mistakes.</p>
                 </section>
 
                 <div class="control iterations behavior-control">
@@ -953,7 +1042,7 @@ HTML_TEMPLATE = """
                             <span>Select and log commands without executing them.</span>
                         </div>
                         <label class="switch">
-                            <input type="checkbox" id="dry-run" name="dry_run" aria-label="Dry run">
+                            <input type="checkbox" id="dry-run" name="dry_run" aria-label="Dry run" checked>
                             <span class="switch-track"></span>
                         </label>
                     </div>
@@ -977,7 +1066,7 @@ HTML_TEMPLATE = """
                     </button>
                     <button class="danger-button" id="stop-button" type="button" {% if not is_running %}disabled{% endif %}>Stop</button>
                 </div>
-                <p class="safety-note" id="safety-note">Local read-only discovery executes by default. Use Safe preview to inspect the run without creating child processes.</p>
+                <p class="safety-note" id="safety-note">Safe preview is the default. Local execution requires an explicit opt-in; directed campaigns additionally require scoped authorization.</p>
             </form>
         </aside>
 
@@ -1033,6 +1122,70 @@ HTML_TEMPLATE = """
                     <span class="metric-label" id="skipped-label">Guarded</span>
                     <strong class="metric-value" id="skipped-metric">0</strong>
                     <span class="metric-foot" id="skipped-foot">network actions blocked</span>
+                </div>
+            </section>
+
+            <section class="card campaign-card" id="campaign-foundation" aria-label="Adversary campaign foundation">
+                <div class="campaign-header">
+                    <div>
+                        <div class="eyebrow">Emulate → Observe → Detect → Defend → Retest</div>
+                        <h2>Authorized campaign foundation</h2>
+                        <p>Run a directed campaign through authorization, provider preparation, lifecycle-v3 ground truth, cleanup verification, defense recommendations, and persistent history. The dashboard exposes simulation only.</p>
+                    </div>
+                    <span class="campaign-version">v0.4.0</span>
+                </div>
+                <div class="campaign-controls">
+                    <select id="campaign-select" aria-label="Campaign">
+                        {% for campaign in campaigns %}
+                        <option value="{{ campaign.campaign_id }}"{% if campaign.campaign_id == "endpoint-discovery-baseline" %} selected{% endif %}>{{ campaign.name }} · {{ campaign.steps|length }} abilities</option>
+                        {% endfor %}
+                    </select>
+                    <div class="campaign-target">synthetic://dashboard</div>
+                    <button class="primary-button campaign-run" id="campaign-run" type="button">Run safe campaign</button>
+                </div>
+                <div class="campaign-body">
+                    <div class="campaign-result" id="campaign-result">
+                        <div class="debug-placeholder">Choose a campaign to generate an authorized, non-executing lifecycle trace.</div>
+                    </div>
+                    <div class="campaign-history">
+                        <div class="campaign-section-label">Persistent run history</div>
+                        <div class="history-list" id="campaign-history">
+                            <div class="debug-placeholder">No campaign runs recorded yet.</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card debugger-card hidden" id="detection-debugger" aria-label="Detection debugger">
+                <div class="debugger-header">
+                    <div>
+                        <div class="eyebrow">Human analysis</div>
+                        <h2>Detection debugger</h2>
+                        <p>Inspect reference-rule conditions, signal checkpoints, control outcomes, and detection latency for each trace.</p>
+                    </div>
+                    <div class="debugger-score">
+                        <strong id="debugger-score">—</strong>
+                        <span id="debugger-score-label">Run a scenario suite</span>
+                    </div>
+                </div>
+                <div class="debugger-toolbar">
+                    <select id="debug-result-filter" aria-label="Detection result filter">
+                        <option value="all">All trace results</option>
+                        <option value="failed">Detection mismatches</option>
+                        <option value="malicious">Malicious traces</option>
+                        <option value="benign">Benign controls</option>
+                        <option value="mutated">Mutations only</option>
+                    </select>
+                    <input type="search" id="debug-search" aria-label="Search detection traces" placeholder="Search scenario or trace ID">
+                    <button class="tool-button" id="debug-refresh" type="button">Refresh results</button>
+                </div>
+                <div class="debugger-grid">
+                    <div class="debug-trace-list" id="debug-trace-list">
+                        <div class="debug-placeholder">Run a scenario suite to inspect detection decisions.</div>
+                    </div>
+                    <div class="debug-detail" id="debug-detail">
+                        <div class="debug-placeholder">Select a trace to explain why its reference detector did or did not fire.</div>
+                    </div>
                 </div>
             </section>
 
@@ -1116,8 +1269,8 @@ HTML_TEMPLATE = """
         const profiles = {
             balanced: {
                 label: "Balanced",
-                description: "A representative run with moderate retries and occasional agent mistakes.",
-                iterations: 30, speed: 100, hallucination: 0.15, context: 0.05, retry: 0.30, evasion: 0.10, dryRun: false
+                description: "A safe preview with moderate retries and occasional agent mistakes.",
+                iterations: 30, speed: 100, hallucination: 0.15, context: 0.05, retry: 0.30, evasion: 0.10, dryRun: true
             },
             chaos: {
                 label: "Chaos burst",
@@ -1174,6 +1327,18 @@ HTML_TEMPLATE = """
             validationDownload: document.getElementById("download-validation"),
             bundleDownload: document.getElementById("download-bundle"),
             scenarioArtifactStatus: document.getElementById("scenario-artifact-status"),
+            debugger: document.getElementById("detection-debugger"),
+            debuggerScore: document.getElementById("debugger-score"),
+            debuggerScoreLabel: document.getElementById("debugger-score-label"),
+            debugResultFilter: document.getElementById("debug-result-filter"),
+            debugSearch: document.getElementById("debug-search"),
+            debugRefresh: document.getElementById("debug-refresh"),
+            debugTraceList: document.getElementById("debug-trace-list"),
+            debugDetail: document.getElementById("debug-detail"),
+            campaignSelect: document.getElementById("campaign-select"),
+            campaignRun: document.getElementById("campaign-run"),
+            campaignResult: document.getElementById("campaign-result"),
+            campaignHistory: document.getElementById("campaign-history"),
             eventStreamHeading: document.getElementById("event-stream-heading"),
             commandFilter: document.getElementById("command-filter"),
             emptyHeading: document.getElementById("empty-heading"),
@@ -1196,7 +1361,12 @@ HTML_TEMPLATE = """
             skippedCount: 0,
             currentPhase: -1,
             startedAt: null,
-            elapsedTimer: null
+            elapsedTimer: null,
+            debugData: null,
+            debugRunId: null,
+            selectedDebugTrace: null,
+            debugLoading: false,
+            campaignLoading: false
         };
 
         const rateControls = [
@@ -1224,6 +1394,256 @@ HTML_TEMPLATE = """
             return baseline * (mutationCount + 1) + scenarioCount * variantsPerScenario * mutationCount;
         }
 
+        function textNode(tag, className, value) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            node.textContent = value == null ? "—" : String(value);
+            return node;
+        }
+
+        function setCampaignPlaceholder(container, message) {
+            container.replaceChildren(textNode("div", "debug-placeholder", message));
+        }
+
+        function renderCampaignHistory(runs) {
+            if (!Array.isArray(runs) || !runs.length) {
+                setCampaignPlaceholder(elements.campaignHistory, "No campaign runs recorded yet.");
+                return;
+            }
+            const fragment = document.createDocumentFragment();
+            runs.slice(0, 8).forEach(function (run) {
+                const row = document.createElement("div");
+                row.className = "history-run";
+                const identity = document.createElement("div");
+                identity.appendChild(textNode("strong", "", run.campaign_id));
+                identity.appendChild(textNode("span", "", run.mode + " · " + run.run_id.slice(0, 10)));
+                row.appendChild(identity);
+                row.appendChild(textNode("span", "", run.status));
+                fragment.appendChild(row);
+            });
+            elements.campaignHistory.replaceChildren(fragment);
+        }
+
+        function renderCampaignResult(payload) {
+            const summary = payload.summary || {};
+            const container = document.createDocumentFragment();
+            container.appendChild(textNode("div", "campaign-section-label", payload.campaign_name || payload.campaign_id));
+            const stats = document.createElement("div");
+            stats.className = "campaign-summary";
+            [
+                [summary.verified_actions || 0, "verified"],
+                [summary.executed_actions || 0, "executed"],
+                [summary.pending_detection_results || 0, "awaiting SIEM"],
+                [summary.cleanup_failures || 0, "cleanup gaps"]
+            ].forEach(function (item) {
+                const stat = document.createElement("div");
+                stat.className = "campaign-stat";
+                stat.appendChild(textNode("strong", "", item[0]));
+                stat.appendChild(textNode("span", "", item[1]));
+                stats.appendChild(stat);
+            });
+            container.appendChild(stats);
+            const timeline = document.createElement("div");
+            timeline.className = "campaign-timeline";
+            const keyStates = new Set(["authorized", "simulated", "executed", "prevented", "detection_pending", "detected", "missed", "cleaned", "cleanup_failed", "verified", "failed"]);
+            const events = (Array.isArray(payload.events) ? payload.events : []).filter(function (event) {
+                return keyStates.has(event.lifecycle_state);
+            }).slice(-12);
+            events.forEach(function (event) {
+                const row = document.createElement("div");
+                row.className = "campaign-event";
+                row.appendChild(textNode("strong", "", event.lifecycle_state));
+                row.appendChild(textNode("span", "", event.ability_id + " · " + event.outcome));
+                timeline.appendChild(row);
+            });
+            container.appendChild(timeline);
+            elements.campaignResult.replaceChildren(container);
+            renderCampaignHistory(payload.history);
+        }
+
+        async function loadCampaignFoundation() {
+            try {
+                const response = await fetch("/api/v0.4/catalog", {headers: {"Accept": "application/json"}});
+                if (!response.ok) throw new Error();
+                const payload = await response.json();
+                renderCampaignHistory(payload.history);
+            } catch (_error) {
+                setCampaignPlaceholder(elements.campaignHistory, "Unable to read persistent campaign history.");
+            }
+        }
+
+        async function runSafeCampaign() {
+            if (state.campaignLoading) return;
+            state.campaignLoading = true;
+            elements.campaignRun.disabled = true;
+            elements.campaignRun.textContent = "Running lifecycle…";
+            setCampaignPlaceholder(elements.campaignResult, "Authorizing and simulating the campaign…");
+            try {
+                const response = await fetch("/api/v0.4/campaign/simulate", {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                        "X-AgentSim-Form-Token": FORM_TOKEN
+                    },
+                    body: JSON.stringify({campaign_id: elements.campaignSelect.value})
+                });
+                if (!response.ok) throw new Error();
+                renderCampaignResult(await response.json());
+                showToast("Safe campaign lifecycle recorded");
+            } catch (_error) {
+                setCampaignPlaceholder(elements.campaignResult, "Campaign simulation failed inside the safety boundary.");
+            } finally {
+                state.campaignLoading = false;
+                elements.campaignRun.disabled = false;
+                elements.campaignRun.textContent = "Run safe campaign";
+            }
+        }
+
+        function setDebugPlaceholder(container, message) {
+            container.replaceChildren(textNode("div", "debug-placeholder", message));
+        }
+
+        function resetDebugger() {
+            state.debugData = null;
+            state.debugRunId = null;
+            state.selectedDebugTrace = null;
+            elements.debuggerScore.textContent = "—";
+            elements.debuggerScoreLabel.textContent = "Run a scenario suite";
+            setDebugPlaceholder(elements.debugTraceList, "Run a scenario suite to inspect detection decisions.");
+            setDebugPlaceholder(elements.debugDetail, "Select a trace to explain why its reference detector did or did not fire.");
+        }
+
+        function debugTraceMatches(trace) {
+            const filter = elements.debugResultFilter.value;
+            const filterMatch = filter === "all"
+                || (filter === "failed" && !trace.passed)
+                || (filter === "malicious" && trace.variant === "malicious")
+                || (filter === "benign" && trace.variant === "benign")
+                || (filter === "mutated" && Boolean(trace.mutation_id));
+            const query = elements.debugSearch.value.trim().toLowerCase();
+            const haystack = [trace.scenario_name, trace.scenario_id, trace.trace_id, trace.variant, trace.mutation_id]
+                .filter(Boolean).join(" ").toLowerCase();
+            return filterMatch && (!query || haystack.includes(query));
+        }
+
+        function renderDebugTraceList() {
+            if (!state.debugData) {
+                setDebugPlaceholder(elements.debugTraceList, "Run a scenario suite to inspect detection decisions.");
+                return;
+            }
+            const traces = state.debugData.traces.filter(debugTraceMatches);
+            if (!traces.length) {
+                state.selectedDebugTrace = null;
+                setDebugPlaceholder(elements.debugTraceList, "No traces match the current debugger filters.");
+                setDebugPlaceholder(elements.debugDetail, "No trace explanation is available for the current filters.");
+                return;
+            }
+            if (!traces.some(function (trace) { return trace.trace_id === state.selectedDebugTrace; })) {
+                state.selectedDebugTrace = traces[0].trace_id;
+            }
+            const fragment = document.createDocumentFragment();
+            traces.forEach(function (trace) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "debug-trace" + (trace.trace_id === state.selectedDebugTrace ? " active" : "");
+                button.appendChild(textNode("span", "debug-trace-name", trace.scenario_name || trace.scenario_id));
+                button.appendChild(textNode("span", "debug-badge" + (trace.passed ? "" : " fail"), trace.passed ? "pass" : "mismatch"));
+                const mutation = trace.mutation_id ? " · " + trace.mutation_id : " · baseline";
+                button.appendChild(textNode("span", "debug-trace-meta", trace.variant + mutation + " · " + trace.signal_count + " signals"));
+                button.addEventListener("click", function () {
+                    state.selectedDebugTrace = trace.trace_id;
+                    renderDebugTraceList();
+                    loadDebugTrace(trace.trace_id);
+                });
+                fragment.appendChild(button);
+            });
+            elements.debugTraceList.replaceChildren(fragment);
+        }
+
+        function renderDebugDetail(payload) {
+            const result = payload.result || {};
+            const detector = payload.detector || {};
+            const events = Array.isArray(payload.events) ? payload.events : [];
+            const signals = new Set(Array.isArray(result.signal_event_ids) ? result.signal_event_ids : []);
+            const container = document.createDocumentFragment();
+            const head = document.createElement("div");
+            head.className = "debug-detail-head";
+            const identity = document.createElement("div");
+            identity.appendChild(textNode("h3", "", result.scenario_name || result.scenario_id));
+            identity.appendChild(textNode("p", "", result.trace_id));
+            head.appendChild(identity);
+            const outcome = document.createElement("div");
+            outcome.className = "debug-outcome";
+            outcome.appendChild(textNode("span", "", "Expected " + (result.expected_detected ? "alert" : "quiet")));
+            outcome.appendChild(textNode("span", "", "Observed " + (result.detected ? "alert" : "quiet")));
+            outcome.appendChild(textNode("span", "", result.detected_at_sequence ? "Detected at #" + result.detected_at_sequence : "No alert"));
+            head.appendChild(outcome);
+            container.appendChild(head);
+
+            container.appendChild(textNode("div", "debug-section-label", "Ordered detector conditions"));
+            const rule = document.createElement("div");
+            rule.className = "debug-rule";
+            const conditions = Array.isArray(detector.conditions) ? detector.conditions : [];
+            if (!conditions.length) {
+                rule.appendChild(textNode("div", "debug-condition", "No reference detector definition is available."));
+            } else {
+                conditions.forEach(function (condition, index) {
+                    rule.appendChild(textNode("div", "debug-condition", String(index + 1).padStart(2, "0") + "  " + JSON.stringify(condition)));
+                });
+            }
+            container.appendChild(rule);
+
+            container.appendChild(textNode("div", "debug-section-label", "Trace timeline · highlighted rows contributed to the alert"));
+            const timeline = document.createElement("div");
+            timeline.className = "debug-timeline";
+            events.forEach(function (event) {
+                const row = document.createElement("div");
+                row.className = "debug-event" + (signals.has(event.event_id) ? " signal" : "");
+                row.appendChild(textNode("span", "debug-event-sequence", "#" + event.sequence));
+                row.appendChild(textNode("span", "debug-event-stage", event.stage));
+                row.appendChild(textNode("span", "debug-event-copy", event.event_type + " · " + event.message));
+                timeline.appendChild(row);
+            });
+            container.appendChild(timeline);
+            elements.debugDetail.replaceChildren(container);
+        }
+
+        async function loadDebugTrace(traceId) {
+            if (!traceId) return;
+            setDebugPlaceholder(elements.debugDetail, "Loading trace explanation…");
+            try {
+                const response = await fetch("/api/detection-debug/trace?trace_id=" + encodeURIComponent(traceId), {headers: {"Accept": "application/json"}});
+                if (!response.ok) throw new Error();
+                renderDebugDetail(await response.json());
+            } catch (_error) {
+                setDebugPlaceholder(elements.debugDetail, "Unable to load this trace from the current evidence artifacts.");
+            }
+        }
+
+        async function loadDebugSummary(force) {
+            if (state.debugLoading || (state.debugData && !force)) return;
+            state.debugLoading = true;
+            elements.debugRefresh.disabled = true;
+            try {
+                const response = await fetch("/api/detection-debug", {headers: {"Accept": "application/json"}});
+                if (!response.ok) throw new Error();
+                const payload = await response.json();
+                state.debugData = payload;
+                state.debugRunId = payload.run_id;
+                const summary = payload.summary || {};
+                elements.debuggerScore.textContent = String(summary.passed || 0) + " / " + String(summary.checks || 0);
+                elements.debuggerScoreLabel.textContent = summary.all_passed ? "Checks passed" : "Review mismatches";
+                renderDebugTraceList();
+                if (state.selectedDebugTrace) await loadDebugTrace(state.selectedDebugTrace);
+            } catch (_error) {
+                resetDebugger();
+            } finally {
+                state.debugLoading = false;
+                elements.debugRefresh.disabled = false;
+            }
+        }
+
         function setRunMode(mode) {
             state.mode = mode === "scenario" ? "scenario" : "behavior";
             elements.runMode.value = state.mode;
@@ -1234,6 +1654,7 @@ HTML_TEMPLATE = """
             });
             elements.layerArtifact.classList.toggle("hidden", scenarioMode);
             elements.scenarioArtifacts.classList.toggle("hidden", !scenarioMode);
+            elements.debugger.classList.toggle("hidden", !scenarioMode);
             document.getElementById("phase-name-0").textContent = scenarioMode ? "Agent input" : "Host discovery";
             document.getElementById("phase-name-1").textContent = scenarioMode ? "Tool boundary" : "Privilege & network";
             document.getElementById("phase-name-2").textContent = scenarioMode ? "Policy outcome" : "Cloud services";
@@ -1265,7 +1686,7 @@ HTML_TEMPLATE = """
                 : "Reuse a seed when validating detection changes against the same run.";
             document.getElementById("safety-note").textContent = scenarioMode
                 ? "Scenario mode only writes synthetic, redacted evidence. It never invokes a tool or opens a network connection."
-                : "Local read-only discovery executes by default. Use Safe preview to inspect the run without creating child processes.";
+                : "Safe preview is the default. Select a non-preview profile to explicitly run reviewed local commands.";
             elements.start.textContent = state.running
                 ? (scenarioMode ? "Scenario suite running" : "Simulation running")
                 : (scenarioMode ? "Run scenario suite" : "Start simulation");
@@ -1541,6 +1962,9 @@ HTML_TEMPLATE = """
                 elements.scenarioArtifactStatus.textContent = status.ground_truth_available && status.validation_available
                     ? "Evidence ready · precision " + Math.round(Number(benchmark.precision || 0) * 100) + "% · recall " + Math.round(Number(benchmark.recall || 0) * 100) + "%"
                     : "Available after the scenario suite completes or is stopped.";
+                if (state.mode === "scenario" && status.validation_available && !state.debugData) {
+                    loadDebugSummary(false);
+                }
                 if (!status.running && status.outcome === "complete") {
                     elements.runHeading.textContent = state.mode === "scenario" ? "Scenario suite complete" : "Simulation complete";
                     elements.runSubtitle.textContent = state.mode === "scenario"
@@ -1566,6 +1990,7 @@ HTML_TEMPLATE = """
             elements.error.textContent = "";
             state.totalIterations = state.mode === "scenario" ? selectedScenarioCount() : Number(document.getElementById("iterations").value);
             resetRunMetrics(true);
+            if (state.mode === "scenario") resetDebugger();
             state.startedAt = Date.now();
             state.finishedAt = null;
             updateElapsed();
@@ -1701,6 +2126,19 @@ HTML_TEMPLATE = """
             state.search = elements.search.value.trim().toLowerCase();
             renderEvents();
         });
+        elements.debugResultFilter.addEventListener("change", function () {
+            renderDebugTraceList();
+            if (state.selectedDebugTrace) loadDebugTrace(state.selectedDebugTrace);
+        });
+        elements.debugSearch.addEventListener("input", function () {
+            renderDebugTraceList();
+            if (state.selectedDebugTrace) loadDebugTrace(state.selectedDebugTrace);
+        });
+        elements.debugRefresh.addEventListener("click", function () {
+            state.debugData = null;
+            loadDebugSummary(true);
+        });
+        elements.campaignRun.addEventListener("click", runSafeCampaign);
         elements.form.addEventListener("submit", submitRun);
         elements.stop.addEventListener("click", stopRun);
         elements.clear.addEventListener("click", clearEvents);
@@ -1725,6 +2163,7 @@ HTML_TEMPLATE = """
         setRunMode("behavior");
         syncControlOutputs();
         setRunning(INITIAL_RUNNING, false);
+        loadCampaignFoundation();
         syncStatus();
     </script>
 </body>
@@ -1756,6 +2195,12 @@ def _parse_rate(name: str, default: float) -> float:
 
 def _validate_form_token() -> None:
     submitted_token = request.form.get("form_token", "")
+    if not hmac.compare_digest(submitted_token, form_token):
+        abort(400, description="invalid form token")
+
+
+def _validate_api_token() -> None:
+    submitted_token = request.headers.get("X-AgentSim-Form-Token", "")
     if not hmac.compare_digest(submitted_token, form_token):
         abort(400, description="invalid form token")
 
@@ -1796,6 +2241,7 @@ def index() -> str:
         is_running=running,
         form_token=form_token,
         scenarios=[SCENARIOS[scenario_id] for scenario_id in sorted(SCENARIOS)],
+        campaigns=[CAMPAIGNS[campaign_id] for campaign_id in sorted(CAMPAIGNS)],
         scenario_counts=scenario_counts,
         scenario_total=len(SCENARIOS),
     )
@@ -1804,6 +2250,194 @@ def index() -> str:
 @app.route("/api/status")
 def api_status() -> Response:
     return jsonify(_status_snapshot())
+
+
+@app.route("/api/v0.4/catalog")
+def api_foundation_catalog() -> Response:
+    history = RunStore(CAMPAIGN_DATABASE_PATH).history(25) if CAMPAIGN_DATABASE_PATH.exists() else []
+    return jsonify(
+        {
+            "version": "0.4.0",
+            "workflow": ["emulate", "observe", "detect", "defend", "retest"],
+            "abilities": [
+                {
+                    "ability_id": ability.ability_id,
+                    "name": ability.name,
+                    "risk": ability.risk,
+                    "providers": list(ability.execution.supported_providers),
+                    "production_allowed": ability.production_allowed,
+                    "detection_objectives": list(ability.detection_objectives),
+                    "defenses": list(ability.defenses),
+                }
+                for ability in ABILITIES.values()
+            ],
+            "campaigns": [
+                {
+                    "campaign_id": campaign.campaign_id,
+                    "name": campaign.name,
+                    "objective": campaign.objective,
+                    "ability_count": len(campaign.steps),
+                    "authorization_required": campaign.authorization_required,
+                }
+                for campaign in CAMPAIGNS.values()
+            ],
+            "history": history,
+        }
+    )
+
+
+@app.route("/api/v0.4/campaign/simulate", methods=["POST"])
+def api_simulate_campaign() -> Response:
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400, description="JSON request body is required")
+    campaign_id = payload.get("campaign_id")
+    if not isinstance(campaign_id, str) or campaign_id not in CAMPAIGNS:
+        abort(400, description="unknown campaign")
+    campaign = CAMPAIGNS[campaign_id]
+    now = datetime.now(timezone.utc)
+    manifest = AuthorizationManifest.from_mapping(
+        {
+            "manifest_id": f"dashboard-{secrets.token_hex(8)}",
+            "authorized_by": "local-dashboard-operator",
+            "scope": "One non-executing dashboard campaign against synthetic://dashboard",
+            "issued_at": now.isoformat().replace("+00:00", "Z"),
+            "expires_at": (now + timedelta(minutes=15)).isoformat().replace("+00:00", "Z"),
+            "allowed_modes": ["simulate"],
+            "allowed_targets": ["synthetic://dashboard"],
+            "allowed_ability_ids": list(campaign.ability_ids),
+            "allow_network": False,
+            "resource_limits": {
+                "max_actions": max(1, len(campaign.steps)),
+                "max_duration_seconds": 60,
+                "max_processes": 1,
+                "max_cloud_spend_usd": 0,
+            },
+        }
+    )
+    try:
+        result = CampaignRunner(
+            ABILITIES,
+            database_path=CAMPAIGN_DATABASE_PATH,
+        ).run(
+            campaign,
+            mode="simulate",
+            target=TargetProfile.from_uri("synthetic://dashboard"),
+            manifest=manifest,
+            output_directory=CAMPAIGN_OUTPUT_DIRECTORY,
+        )
+    except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
+        abort(400, description=str(exc))
+    store = RunStore(CAMPAIGN_DATABASE_PATH)
+    return jsonify(
+        {
+            "run_id": result.run_id,
+            "campaign_id": result.campaign_id,
+            "campaign_name": campaign.name,
+            "mode": result.mode,
+            "provider": result.provider,
+            "target_uri": result.target_uri,
+            "status": result.status,
+            "summary": result.summary,
+            "events": store.events_for_run(result.run_id),
+            "history": store.history(25),
+        }
+    )
+
+
+def _debug_artifact_paths() -> tuple[Path, Path]:
+    with state_lock:
+        events_path = last_ground_truth_path
+        report_path = last_validation_path
+    if (
+        events_path is None
+        or report_path is None
+        or not events_path.exists()
+        or not report_path.exists()
+    ):
+        abort(404, description="no scenario detection artifacts are available")
+    return events_path, report_path
+
+
+def _load_debug_report(path: Path) -> dict[str, Any]:
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        abort(500, description="scenario validation report is unreadable")
+    if not isinstance(report, dict) or not isinstance(report.get("results"), list):
+        abort(500, description="scenario validation report is invalid")
+    return report
+
+
+@app.route("/api/detection-debug")
+def api_detection_debug() -> Response:
+    _events_path, report_path = _debug_artifact_paths()
+    report = _load_debug_report(report_path)
+    traces = []
+    for result in report["results"]:
+        if not isinstance(result, dict):
+            continue
+        traces.append(
+            {
+                "trace_id": result.get("trace_id"),
+                "scenario_id": result.get("scenario_id"),
+                "scenario_name": result.get("scenario_name"),
+                "variant": result.get("variant"),
+                "mutation_id": result.get("mutation_id"),
+                "expected_detected": result.get("expected_detected"),
+                "detected": result.get("detected"),
+                "passed": result.get("passed"),
+                "detected_at_sequence": result.get("detected_at_sequence"),
+                "trace_event_count": result.get("trace_event_count"),
+                "signal_count": len(result.get("signal_event_ids", [])),
+            }
+        )
+    return jsonify(
+        {
+            "run_id": report.get("run_id"),
+            "summary": report.get("summary", {}),
+            "metrics": report.get("metrics", {}),
+            "mutation_summary": report.get("mutation_summary", {}),
+            "traces": traces,
+        }
+    )
+
+
+@app.route("/api/detection-debug/trace")
+def api_detection_debug_trace() -> Response:
+    trace_id = request.args.get("trace_id", "")
+    if not trace_id:
+        abort(400, description="trace_id is required")
+    events_path, report_path = _debug_artifact_paths()
+    report = _load_debug_report(report_path)
+    result = next(
+        (
+            item
+            for item in report["results"]
+            if isinstance(item, dict) and item.get("trace_id") == trace_id
+        ),
+        None,
+    )
+    if result is None:
+        abort(404, description="trace was not found in the current benchmark")
+    try:
+        trace_events = [
+            event
+            for event in load_ground_truth(events_path)
+            if event.get("trace_id") == trace_id
+        ]
+    except (OSError, ValueError):
+        abort(500, description="scenario ground truth is unreadable")
+    definition = SCENARIOS.get(str(result.get("scenario_id", "")))
+    detector = dict(definition.detector) if definition is not None else {}
+    return jsonify(
+        {
+            "result": result,
+            "detector": detector,
+            "events": trace_events,
+        }
+    )
 
 
 @app.route("/start", methods=["POST"])

@@ -8,6 +8,13 @@ sources.
 MITRE ATT&CK® mappings describe the discovery behavior being simulated. A
 mapping does not guarantee complete coverage of an ATT&CK technique.
 
+AgentSim v0.4 campaign runs add lifecycle-v3 ground truth with ability,
+campaign, authorization, provider, target, cleanup, and detection-outcome
+fields. The v0.4 foundation accepts offline ability-level detection results;
+temporal/graph correlation and candidate rule generation are planned for the
+v0.5 validation engine. Existing scenario and vendor analytics below remain
+fully supported.
+
 ## Data requirements
 
 Collect process-creation events with, where available:
@@ -78,6 +85,33 @@ Use a dedicated test index/repository/stream. Replace the visible table,
 index, repository, stream, and log-type placeholders before running any query.
 Do not map `expected_detection` or `scenario_variant` into the searchable view
 used by the analytic.
+
+### Control-plane invariant detections
+
+A second rule family covers direct, high-confidence runtime invariant failures:
+
+| Platform | File |
+| --- | --- |
+| Microsoft KQL | [`detections/kql/agentic_control_plane_abuse.kql`](detections/kql/agentic_control_plane_abuse.kql) |
+| Splunk | [`detections/splunk/agentic_control_plane_abuse.spl`](detections/splunk/agentic_control_plane_abuse.spl) |
+| CrowdStrike Falcon LogScale / Next-Gen SIEM | [`detections/crowdstrike/agentic_control_plane_abuse.cql`](detections/crowdstrike/agentic_control_plane_abuse.cql) |
+| Graylog | [`detections/graylog/agentic_control_plane_abuse.query`](detections/graylog/agentic_control_plane_abuse.query) |
+| Panther | [`detections/panther/agentic_control_plane_abuse.py`](detections/panther/agentic_control_plane_abuse.py) and [metadata](detections/panther/agentic_control_plane_abuse.yml) |
+| Elastic Security | [`detections/elastic/agentic_control_plane_abuse.eql`](detections/elastic/agentic_control_plane_abuse.eql) |
+| Sigma-compatible pipelines | [`detections/sigma/agentic_control_plane_abuse.yml`](detections/sigma/agentic_control_plane_abuse.yml) |
+
+These rules select invalid model-to-policy binding, planner/executor policy
+version disagreement, action-fingerprint approval replay, tenant-principal
+confusion, high-risk composed tool capability, and unsigned agent-registry
+expansion. They use explicit boolean or enumerated security fields rather than
+scenario IDs or message text. In production, generate these fields at the
+authorization and orchestration boundaries; inferring them later from prompts
+is less reliable.
+
+Use the dashboard Detection Debugger during tuning. It shows the exact ordered
+reference conditions and highlights `signal_event_ids` in the trace timeline.
+That viewer is allowed to read the ground-truth label because it is a debugging
+surface; the vendor queries above are tested to exclude answer-key fields.
 
 These examples intentionally use each platform's native field names. Normalize
 or remap your source fields before evaluating a rule; changing only the query

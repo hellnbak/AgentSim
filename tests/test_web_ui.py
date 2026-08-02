@@ -25,6 +25,13 @@ class WebUiTests(unittest.TestCase):
         self.original_otel_path = web_ui.OTEL_OUTPUT_PATH
         self.original_coverage_path = web_ui.COVERAGE_OUTPUT_PATH
         self.original_bundle_path = web_ui.BUNDLE_OUTPUT_PATH
+        self.original_campaign_database_path = web_ui.CAMPAIGN_DATABASE_PATH
+        self.original_campaign_output_directory = web_ui.CAMPAIGN_OUTPUT_DIRECTORY
+        self.campaign_temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.campaign_temp_dir.cleanup)
+        campaign_root = Path(self.campaign_temp_dir.name)
+        web_ui.CAMPAIGN_DATABASE_PATH = campaign_root / "runs.db"
+        web_ui.CAMPAIGN_OUTPUT_DIRECTORY = campaign_root / "campaign-runs"
         with web_ui.state_lock:
             web_ui.is_running = False
             web_ui.log_queue.clear()
@@ -49,6 +56,8 @@ class WebUiTests(unittest.TestCase):
         web_ui.OTEL_OUTPUT_PATH = self.original_otel_path
         web_ui.COVERAGE_OUTPUT_PATH = self.original_coverage_path
         web_ui.BUNDLE_OUTPUT_PATH = self.original_bundle_path
+        web_ui.CAMPAIGN_DATABASE_PATH = self.original_campaign_database_path
+        web_ui.CAMPAIGN_OUTPUT_DIRECTORY = self.original_campaign_output_directory
 
     def valid_form(self):
         return {
@@ -74,11 +83,45 @@ class WebUiTests(unittest.TestCase):
             response.headers["Permissions-Policy"],
             "camera=(), microphone=(), geolocation=()",
         )
-        self.assertIn("Agent Detection Lab", page)
+        self.assertIn("Detection-First Adversary Emulation", page)
+        self.assertIn("Authorized campaign foundation", page)
+        self.assertIn("endpoint-discovery-baseline", page)
+        self.assertIn("Detection debugger", page)
         self.assertIn("Agentic attack scenarios", page)
         self.assertIn("Indirect prompt injection", page)
         self.assertIn("message.textContent", page)
         self.assertNotIn(".innerHTML", page)
+
+    def test_foundation_catalog_and_safe_campaign_api(self):
+        catalog_response = self.client.get("/api/v0.4/catalog")
+        self.assertEqual(catalog_response.status_code, 200)
+        catalog = catalog_response.get_json()
+        self.assertEqual(catalog["version"], "0.4.0")
+        self.assertEqual(len(catalog["abilities"]), 8)
+        self.assertEqual(len(catalog["campaigns"]), 2)
+        self.assertEqual(catalog["history"], [])
+
+        denied = self.client.post(
+            "/api/v0.4/campaign/simulate",
+            json={"campaign_id": "endpoint-discovery-baseline"},
+        )
+        self.assertEqual(denied.status_code, 400)
+
+        response = self.client.post(
+            "/api/v0.4/campaign/simulate",
+            json={"campaign_id": "endpoint-discovery-baseline"},
+            headers={"X-AgentSim-Form-Token": web_ui.form_token},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["status"], "completed")
+        self.assertEqual(payload["summary"]["verified_actions"], 7)
+        self.assertEqual(payload["summary"]["executed_actions"], 0)
+        self.assertTrue(payload["events"])
+        self.assertTrue(all(event["schema_version"] == "3.0" for event in payload["events"]))
+        self.assertEqual(payload["history"][0]["run_id"], payload["run_id"])
+        self.assertTrue(web_ui.CAMPAIGN_DATABASE_PATH.exists())
+        self.assertEqual(len(list(web_ui.CAMPAIGN_OUTPUT_DIRECTORY.glob("*/evidence.zip"))), 1)
 
     def test_classifies_command_cycle_and_anomaly_events(self):
         command = web_ui._classify_message("[*] EXECUTING: whoami (bash)")
@@ -335,6 +378,59 @@ class WebUiTests(unittest.TestCase):
             ground_truth.close()
             validation.close()
             bundle.close()
+
+    def test_detection_debugger_explains_rule_signals_and_timeline(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            web_ui.GROUND_TRUTH_OUTPUT_PATH = Path(temp_dir) / "events.jsonl"
+            web_ui.VALIDATION_OUTPUT_PATH = Path(temp_dir) / "validation.json"
+            web_ui.JUNIT_OUTPUT_PATH = Path(temp_dir) / "junit.xml"
+            web_ui.SARIF_OUTPUT_PATH = Path(temp_dir) / "results.sarif"
+            web_ui.OTEL_OUTPUT_PATH = Path(temp_dir) / "otel.jsonl"
+            web_ui.COVERAGE_OUTPUT_PATH = Path(temp_dir) / "coverage.json"
+            web_ui.BUNDLE_OUTPUT_PATH = Path(temp_dir) / "evidence.zip"
+            with web_ui.state_lock:
+                web_ui.is_running = True
+                web_ui.last_outcome = "running"
+
+            web_ui.run_scenario_background(
+                run_mode="scenario",
+                scenario="approval-replay",
+                variant="both",
+                speed=0,
+                checkpoints=6,
+                mutations=0,
+                mutation_seed=42,
+            )
+
+            summary_response = self.client.get("/api/detection-debug")
+            self.assertEqual(summary_response.status_code, 200)
+            summary = summary_response.get_json()
+            self.assertEqual(summary["summary"]["checks"], 2)
+            self.assertEqual(len(summary["traces"]), 2)
+            malicious = next(
+                trace for trace in summary["traces"] if trace["variant"] == "malicious"
+            )
+            self.assertTrue(malicious["passed"])
+            self.assertEqual(malicious["signal_count"], 2)
+
+            detail_response = self.client.get(
+                "/api/detection-debug/trace",
+                query_string={"trace_id": malicious["trace_id"]},
+            )
+            self.assertEqual(detail_response.status_code, 200)
+            detail = detail_response.get_json()
+            self.assertEqual(len(detail["detector"]["conditions"]), 2)
+            self.assertEqual(len(detail["events"]), 3)
+            self.assertEqual(len(detail["result"]["signal_event_ids"]), 2)
+
+    def test_detection_debugger_requires_current_artifacts(self):
+        self.assertEqual(self.client.get("/api/detection-debug").status_code, 404)
+        self.assertEqual(
+            self.client.get(
+                "/api/detection-debug/trace", query_string={"trace_id": "missing"}
+            ).status_code,
+            404,
+        )
 
 
 if __name__ == "__main__":

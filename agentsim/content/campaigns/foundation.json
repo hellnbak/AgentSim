@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "kind": "campaign-pack",
+  "pack_id": "agentsim.foundation.campaigns",
+  "integrity": {"algorithm": "sha256", "digest": "096569db17731b9b9526414fbd6c6731cce3fdeadf1024b40ded75b1b9ce1b13"},
+  "campaigns": [
+    {
+      "id": "endpoint-discovery-baseline",
+      "name": "Endpoint discovery baseline",
+      "description": "A directed, bounded sequence of reviewed endpoint discovery abilities.",
+      "objective": "Validate endpoint process telemetry, discovery velocity detections, and process ancestry coverage.",
+      "target_profile": "localhost-or-container",
+      "authorization_required": true,
+      "steps": [
+        {"id": "host", "ability_id": "endpoint.discovery.system-information", "depends_on": [], "on_failure": "stop"},
+        {"id": "user", "ability_id": "endpoint.discovery.current-user", "depends_on": ["host"], "on_failure": "stop"},
+        {"id": "accounts", "ability_id": "endpoint.discovery.local-accounts", "depends_on": ["user"], "on_failure": "continue"},
+        {"id": "processes", "ability_id": "endpoint.discovery.processes", "depends_on": ["host"], "on_failure": "stop"},
+        {"id": "groups", "ability_id": "endpoint.discovery.local-groups", "depends_on": ["user"], "on_failure": "continue"},
+        {"id": "connections", "ability_id": "endpoint.discovery.network-connections", "depends_on": ["host"], "on_failure": "continue"},
+        {"id": "interfaces", "ability_id": "endpoint.discovery.network-configuration", "depends_on": ["connections"], "on_failure": "continue"}
+      ],
+      "required_telemetry": ["process_creation", "process_ancestry", "user_context"],
+      "stop_conditions": ["authorization_denied", "resource_limit_reached", "cleanup_failed", "kill_switch"]
+    },
+    {
+      "id": "cloud-discovery-baseline",
+      "name": "Cloud discovery baseline",
+      "description": "A simulation-first cloud service inventory campaign for a named sandbox account.",
+      "objective": "Validate cloud audit visibility for authenticated read-only service discovery.",
+      "target_profile": "named-cloud-sandbox",
+      "authorization_required": true,
+      "steps": [
+        {"id": "services", "ability_id": "cloud.discovery.services", "depends_on": [], "on_failure": "stop"}
+      ],
+      "required_telemetry": ["cloud_audit", "principal_context", "source_ip"],
+      "stop_conditions": ["authorization_denied", "resource_limit_reached", "kill_switch"]
+    }
+  ]
+}

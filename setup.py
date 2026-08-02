@@ -6,7 +6,7 @@ platform Python installations do not silently build an empty UNKNOWN wheel.
 
 from pathlib import Path
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 
 README = Path(__file__).with_name("README.md").read_text(encoding="utf-8")
@@ -14,20 +14,53 @@ README = Path(__file__).with_name("README.md").read_text(encoding="utf-8")
 
 setup(
     name="agentsim",
-    version="0.3.0",
-    description="Defensive telemetry and ground-truth simulation for autonomous agents",
+    version="0.4.0",
+    description="Detection-first adversary emulation for endpoints, cloud, and agentic AI",
+    url="https://github.com/hellnbak/AgentSim",
+    project_urls={
+        "Repository": "https://github.com/hellnbak/AgentSim.git",
+        "Issues": "https://github.com/hellnbak/AgentSim/issues",
+        "Changelog": "https://github.com/hellnbak/AgentSim/blob/main/CHANGELOG.md",
+    },
     long_description=README,
     long_description_content_type="text/markdown",
     python_requires=">=3.9",
     license="MIT",
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3 :: Only",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+        "Topic :: Security",
+    ],
     py_modules=["core", "mcp_lab", "scenarios", "tactics", "web_ui"],
-    packages=["agentsim_scenarios", "agentsim_scenarios.packs"],
-    package_data={"agentsim_scenarios.packs": ["*.json"]},
+    packages=find_packages(include=["agentsim*", "agentsim_scenarios*"]),
+    package_data={
+        "agentsim_scenarios.packs": ["*.json"],
+        "agentsim.content.packs": ["*.json"],
+        "agentsim.content.campaigns": ["*.json"],
+        "agentsim.content.catalogs": ["*.json"],
+    },
+    data_files=[
+        (
+            "share/agentsim/schemas",
+            [
+                "schemas/action-event-v3.schema.json",
+                "schemas/ability-pack.schema.json",
+                "schemas/authorization-manifest.schema.json",
+                "schemas/campaign-pack.schema.json",
+                "schemas/command-catalog.schema.json",
+                "schemas/agent-event.schema.json",
+                "schemas/scenario-pack.schema.json",
+            ],
+        )
+    ],
     install_requires=["Flask>=3.1,<4.0"],
     entry_points={
         "console_scripts": [
-            "agentsim=core:main",
-            "agentsim-web=web_ui:main",
+            "agentsim=agentsim.cli:main",
+            "agentsim-web=agentsim.web.app:main",
         ]
     },
 )

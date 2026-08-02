@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/action-event-v3.schema.json",
+  "title": "AgentSim Action Lifecycle Event v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "timestamp", "event_id", "run_id", "campaign_id", "ability_id", "action_id", "sequence", "lifecycle_state", "provider", "target_uri", "authorization_id", "outcome", "message", "attack_mappings", "atlas_mappings", "expected_telemetry", "attributes"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "event_id": {"type": "string", "minLength": 1},
+    "parent_event_id": {"type": ["string", "null"]},
+    "run_id": {"type": "string", "minLength": 1},
+    "campaign_id": {"type": "string", "minLength": 1},
+    "ability_id": {"type": "string", "minLength": 1},
+    "action_id": {"type": "string", "minLength": 1},
+    "sequence": {"type": "integer", "minimum": 1},
+    "lifecycle_state": {"enum": ["planned", "authorized", "denied", "prepared", "attempted", "simulated", "executed", "prevented", "observed", "detected", "missed", "detection_pending", "cleanup_started", "cleaned", "cleanup_failed", "verified", "cancelled", "failed"]},
+    "provider": {"enum": ["simulate", "local", "docker"]},
+    "target_uri": {"type": "string", "minLength": 1},
+    "authorization_id": {"type": "string", "minLength": 1},
+    "outcome": {"type": "string", "minLength": 1},
+    "message": {"type": "string", "minLength": 1},
+    "attack_mappings": {"type": "array", "items": {"type": "string"}},
+    "atlas_mappings": {"type": "array", "items": {"type": "string"}},
+    "expected_telemetry": {"type": "array", "items": {"type": "string"}},
+    "attributes": {"type": "object"}
+  }
+}

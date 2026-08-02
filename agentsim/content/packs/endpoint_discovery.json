@@ -1,0 +1,112 @@
+{
+  "schema_version": "1.0",
+  "kind": "ability-pack",
+  "pack_id": "agentsim.endpoint.discovery",
+  "integrity": {"algorithm": "sha256", "digest": "97b98c9a14e1bd3b29679a0241c0340fd1a8b1033493e08dbd295f6e953c22da"},
+  "abilities": [
+    {
+      "id": "endpoint.discovery.system-information",
+      "name": "System information discovery",
+      "description": "Generate process telemetry for a bounded burst of host and operating-system discovery.",
+      "risk": "low",
+      "platforms": ["Windows", "Linux", "macOS"],
+      "mappings": {"mitre_attack": ["T1082"]},
+      "execution": {"supported_providers": ["simulate", "local", "docker"], "default_provider": "simulate", "requires_elevation": false, "network_access": "denied", "timeout_seconds": 30, "command_ref": "catalog://endpoint/discovery/system-information", "cleanup_ref": null, "state_changes": false},
+      "target_constraints": {"allowed_target_types": ["localhost", "container", "lab-agent"], "production_allowed": false},
+      "expected_telemetry": [{"source": "process_creation", "required_fields": ["timestamp", "host_id", "process_name", "command_line", "parent_process_name", "parent_process_id"]}],
+      "validation": {"detection_objectives": ["rapid_system_discovery", "python_orchestrated_process_burst"], "benign_controls": ["normal_inventory_collection"]},
+      "defenses": ["collect_process_ancestry", "alert_on_unusual_discovery_velocity", "tune_known_inventory_automation"]
+    },
+    {
+      "id": "endpoint.discovery.current-user",
+      "name": "Current user discovery",
+      "description": "Generate bounded current-user and principal discovery telemetry.",
+      "risk": "low",
+      "platforms": ["Windows", "Linux", "macOS"],
+      "mappings": {"mitre_attack": ["T1033"]},
+      "execution": {"supported_providers": ["simulate", "local", "docker"], "default_provider": "simulate", "requires_elevation": false, "network_access": "denied", "timeout_seconds": 20, "command_ref": "catalog://endpoint/discovery/current-user", "cleanup_ref": null, "state_changes": false},
+      "target_constraints": {"allowed_target_types": ["localhost", "container", "lab-agent"], "production_allowed": false},
+      "expected_telemetry": [{"source": "process_creation", "required_fields": ["timestamp", "host_id", "process_name", "command_line", "user_id"]}],
+      "validation": {"detection_objectives": ["identity_discovery_sequence"], "benign_controls": ["interactive_login_validation"]},
+      "defenses": ["collect_user_context", "correlate_identity_discovery_with_parent_process", "tune_login_scripts"]
+    },
+    {
+      "id": "endpoint.discovery.local-accounts",
+      "name": "Local account discovery",
+      "description": "Generate process telemetry for reviewed local account inventory commands.",
+      "risk": "low",
+      "platforms": ["Windows", "Linux", "macOS"],
+      "mappings": {"mitre_attack": ["T1087.001"]},
+      "execution": {"supported_providers": ["simulate", "local", "docker"], "default_provider": "simulate", "requires_elevation": false, "network_access": "denied", "timeout_seconds": 30, "command_ref": "catalog://endpoint/discovery/local-accounts", "cleanup_ref": null, "state_changes": false},
+      "target_constraints": {"allowed_target_types": ["localhost", "container", "lab-agent"], "production_allowed": false},
+      "expected_telemetry": [{"source": "process_creation", "required_fields": ["timestamp", "host_id", "process_name", "command_line", "parent_process_name"]}],
+      "validation": {"detection_objectives": ["local_account_discovery"], "benign_controls": ["authorized_identity_inventory"]},
+      "defenses": ["collect_command_line", "alert_on_account_database_enumeration", "allowlist_inventory_agents"]
+    },
+    {
+      "id": "endpoint.discovery.processes",
+      "name": "Process discovery burst",
+      "description": "Generate reviewed process inventory telemetry across supported endpoint platforms.",
+      "risk": "low",
+      "platforms": ["Windows", "Linux", "macOS"],
+      "mappings": {"mitre_attack": ["T1057"]},
+      "execution": {"supported_providers": ["simulate", "local", "docker"], "default_provider": "simulate", "requires_elevation": false, "network_access": "denied", "timeout_seconds": 30, "command_ref": "catalog://endpoint/discovery/processes", "cleanup_ref": null, "state_changes": false},
+      "target_constraints": {"allowed_target_types": ["localhost", "container", "lab-agent"], "production_allowed": false},
+      "expected_telemetry": [{"source": "process_creation", "required_fields": ["timestamp", "host_id", "process_name", "command_line", "parent_process_name", "parent_process_id"]}],
+      "validation": {"detection_objectives": ["rapid_discovery_sequence", "python_orchestrated_process_burst"], "benign_controls": ["normal_inventory_collection"]},
+      "defenses": ["collect_process_ancestry", "alert_on_unusual_discovery_velocity", "tune_known_inventory_automation"]
+    },
+    {
+      "id": "endpoint.discovery.local-groups",
+      "name": "Local group discovery",
+      "description": "Generate bounded local group and membership discovery telemetry.",
+      "risk": "low",
+      "platforms": ["Windows", "Linux", "macOS"],
+      "mappings": {"mitre_attack": ["T1069.001"]},
+      "execution": {"supported_providers": ["simulate", "local", "docker"], "default_provider": "simulate", "requires_elevation": false, "network_access": "denied", "timeout_seconds": 30, "command_ref": "catalog://endpoint/discovery/local-groups", "cleanup_ref": null, "state_changes": false},
+      "target_constraints": {"allowed_target_types": ["localhost", "container", "lab-agent"], "production_allowed": false},
+      "expected_telemetry": [{"source": "process_creation", "required_fields": ["timestamp", "host_id", "process_name", "command_line", "user_id"]}],
+      "validation": {"detection_objectives": ["privileged_group_discovery"], "benign_controls": ["authorized_access_review"]},
+      "defenses": ["monitor_privileged_group_enumeration", "collect_user_and_parent_context", "tune_access_review_tools"]
+    },
+    {
+      "id": "endpoint.discovery.network-connections",
+      "name": "Network connection discovery",
+      "description": "Generate local socket and connection inventory telemetry without opening a connection.",
+      "risk": "low",
+      "platforms": ["Windows", "Linux", "macOS"],
+      "mappings": {"mitre_attack": ["T1049"]},
+      "execution": {"supported_providers": ["simulate", "local", "docker"], "default_provider": "simulate", "requires_elevation": false, "network_access": "denied", "timeout_seconds": 30, "command_ref": "catalog://endpoint/discovery/network-connections", "cleanup_ref": null, "state_changes": false},
+      "target_constraints": {"allowed_target_types": ["localhost", "container", "lab-agent"], "production_allowed": false},
+      "expected_telemetry": [{"source": "process_creation", "required_fields": ["timestamp", "host_id", "process_name", "command_line", "parent_process_name"]}],
+      "validation": {"detection_objectives": ["network_connection_inventory_burst"], "benign_controls": ["network_diagnostics"]},
+      "defenses": ["collect_socket_inventory_processes", "correlate_discovery_bursts", "tune_network_diagnostics"]
+    },
+    {
+      "id": "endpoint.discovery.network-configuration",
+      "name": "Network configuration discovery",
+      "description": "Generate interface, address, and neighbor discovery telemetry without network egress.",
+      "risk": "low",
+      "platforms": ["Windows", "Linux", "macOS"],
+      "mappings": {"mitre_attack": ["T1016"]},
+      "execution": {"supported_providers": ["simulate", "local", "docker"], "default_provider": "simulate", "requires_elevation": false, "network_access": "denied", "timeout_seconds": 30, "command_ref": "catalog://endpoint/discovery/network-configuration", "cleanup_ref": null, "state_changes": false},
+      "target_constraints": {"allowed_target_types": ["localhost", "container", "lab-agent"], "production_allowed": false},
+      "expected_telemetry": [{"source": "process_creation", "required_fields": ["timestamp", "host_id", "process_name", "command_line", "parent_process_name"]}],
+      "validation": {"detection_objectives": ["network_configuration_discovery"], "benign_controls": ["support_network_diagnostics"]},
+      "defenses": ["collect_command_line", "correlate_interface_and_neighbor_discovery", "tune_support_tooling"]
+    },
+    {
+      "id": "cloud.discovery.services",
+      "name": "Cloud service discovery",
+      "description": "Generate authenticated read-only cloud control-plane discovery telemetry in a named sandbox account.",
+      "risk": "medium",
+      "platforms": ["Windows", "Linux", "macOS"],
+      "mappings": {"mitre_attack": ["T1526"]},
+      "execution": {"supported_providers": ["simulate"], "default_provider": "simulate", "requires_elevation": false, "network_access": "required", "timeout_seconds": 60, "command_ref": "catalog://cloud/discovery/services", "cleanup_ref": null, "state_changes": false},
+      "target_constraints": {"allowed_target_types": ["localhost", "cloud-account"], "production_allowed": false},
+      "expected_telemetry": [{"source": "cloud_audit", "required_fields": ["timestamp", "account_id", "principal_id", "service", "operation", "source_ip"]}],
+      "validation": {"detection_objectives": ["cloud_service_discovery", "multi_cloud_inventory_burst"], "benign_controls": ["approved_cloud_inventory"]},
+      "defenses": ["enable_cloud_audit_logs", "alert_on_unusual_inventory_velocity", "scope_read_only_inventory_roles"]
+    }
+  ]
+}

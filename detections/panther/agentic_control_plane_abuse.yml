@@ -1,0 +1,37 @@
+AnalysisType: rule
+DisplayName: AgentSim Agent Control-Plane Abuse
+Enabled: false
+Filename: agentic_control_plane_abuse.py
+RuleID: AgentSim.AgentControlPlaneAbuse
+Severity: High
+LogTypes:
+  - Custom.AgentSimAgentEvent
+Description: >
+  Detects explicit failures in model safety binding, policy-version alignment,
+  approval binding, tenant binding, composed tool risk, or signed agent registry
+  integrity in normalized AgentSim-compatible runtime events.
+Runbook: >
+  Inspect the trace in sequence order, compare the active policy/model/tenant
+  binding to the approved baseline, invalidate replayed approvals, and suspend
+  affected agent sessions until control-plane integrity is restored.
+Tags:
+  - AgentSim
+  - Agentic AI
+  - Control Plane
+Tests:
+  - Name: Invalid model fallback policy binding
+    ExpectedResult: true
+    Log:
+      event_type: agent.model.fallback
+      trace_id: synthetic-trace
+      attributes:
+        safety_profile_changed: true
+        policy_binding_valid: false
+  - Name: Approved model fallback
+    ExpectedResult: false
+    Log:
+      event_type: agent.model.fallback
+      trace_id: synthetic-trace
+      attributes:
+        safety_profile_changed: false
+        policy_binding_valid: true

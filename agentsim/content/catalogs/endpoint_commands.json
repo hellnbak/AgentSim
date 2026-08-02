@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0",
+  "kind": "command-catalog",
+  "catalog_id": "agentsim.endpoint.readonly",
+  "integrity": {"algorithm": "sha256", "digest": "c30bb9fddbd9e7911d3a60a5c0468739ea356c1a4fe52096274c5289e69a02b0"},
+  "commands": {
+    "catalog://endpoint/discovery/system-information": {
+      "description": "Reviewed read-only host and operating-system discovery.",
+      "platforms": {
+        "Windows": [["systeminfo"], ["hostname"], ["cmd.exe", "/d", "/s", "/c", "ver"], ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-ComputerInfo"], ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-CimInstance Win32_OperatingSystem"]],
+        "Linux": [["uname", "-a"], ["hostname"], ["cat", "/etc/os-release"]],
+        "macOS": [["sw_vers"], ["system_profiler", "SPHardwareDataType"], ["uname", "-a"]]
+      }
+    },
+    "catalog://endpoint/discovery/current-user": {
+      "description": "Reviewed current-user identity discovery.",
+      "platforms": {
+        "Windows": [["whoami"], ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "[System.Security.Principal.WindowsIdentity]::GetCurrent().Name"]],
+        "Linux": [["whoami"], ["id"]],
+        "macOS": [["whoami"], ["id"]]
+      }
+    },
+    "catalog://endpoint/discovery/local-accounts": {
+      "description": "Reviewed read-only local account discovery.",
+      "platforms": {
+        "Windows": [["net", "user"], ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-LocalUser"]],
+        "Linux": [["getent", "passwd"], ["cat", "/etc/passwd"]],
+        "macOS": [["dscl", ".", "list", "/Users"]]
+      }
+    },
+    "catalog://endpoint/discovery/processes": {
+      "description": "Reviewed process inventory discovery.",
+      "platforms": {
+        "Windows": [["tasklist"], ["wmic", "process", "get", "name,processid"], ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-Process"], ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-CimInstance Win32_Process"]],
+        "Linux": [["ps", "aux"], ["top", "-bn", "1"]],
+        "macOS": [["ps", "aux"], ["top", "-l", "1"]]
+      }
+    },
+    "catalog://endpoint/discovery/local-groups": {
+      "description": "Reviewed local group and membership discovery.",
+      "platforms": {
+        "Windows": [["whoami", "/groups"], ["net", "localgroup", "administrators"], ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-LocalGroup"], ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-LocalGroupMember -Group Administrators"]],
+        "Linux": [["id"], ["groups"], ["getent", "group"]],
+        "macOS": [["id"], ["groups"], ["dscl", ".", "list", "/Groups"]]
+      }
+    },
+    "catalog://endpoint/discovery/network-connections": {
+      "description": "Reviewed local network connection inventory.",
+      "platforms": {
+        "Windows": [["netstat", "-ano"], ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-NetTCPConnection"]],
+        "Linux": [["ss", "-tulpn"], ["netstat", "-tulpn"]],
+        "macOS": [["netstat", "-anv"], ["lsof", "-nP", "-iTCP", "-sTCP:LISTEN"]]
+      }
+    },
+    "catalog://endpoint/discovery/network-configuration": {
+      "description": "Reviewed local network configuration discovery.",
+      "platforms": {
+        "Windows": [["ipconfig", "/all"], ["arp", "-a"], ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-NetAdapter"], ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-NetIPConfiguration"]],
+        "Linux": [["ip", "address", "show"], ["ifconfig", "-a"], ["arp", "-a"]],
+        "macOS": [["ifconfig", "-a"], ["arp", "-a"], ["networksetup", "-listallhardwareports"]]
+      }
+    },
+    "catalog://cloud/discovery/services": {
+      "description": "Reviewed authenticated cloud service inventory commands.",
+      "platforms": {
+        "Windows": [["aws", "sts", "get-caller-identity"], ["aws", "ec2", "describe-regions"], ["az", "resource", "list", "--query", "[].type", "-o", "tsv"], ["gcloud", "services", "list", "--enabled", "--format=value(config.name)"]],
+        "Linux": [["aws", "ec2", "describe-regions"], ["az", "resource", "list", "--query", "[].type", "-o", "tsv"], ["gcloud", "services", "list", "--enabled", "--format=value(config.name)"]],
+        "macOS": [["aws", "ec2", "describe-regions"], ["az", "resource", "list", "--query", "[].type", "-o", "tsv"], ["gcloud", "services", "list", "--enabled", "--format=value(config.name)"]]
+      }
+    }
+  }
+}

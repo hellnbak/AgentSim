@@ -37,7 +37,7 @@ class ScenarioEngineTests(unittest.TestCase):
         scenario_ids = [definition.scenario_id for definition in scenarios.list_scenarios()]
 
         self.assertEqual(scenario_ids, sorted(scenarios.SCENARIOS))
-        self.assertEqual(len(scenario_ids), 13)
+        self.assertEqual(len(scenario_ids), 19)
         for definition in scenarios.list_scenarios():
             with self.subTest(scenario_id=definition.scenario_id):
                 self.assertTrue(definition.malicious_steps)
@@ -50,12 +50,12 @@ class ScenarioEngineTests(unittest.TestCase):
 
         self.assertTrue(result.passed)
         self.assertFalse(result.stopped)
-        self.assertEqual(result.event_count, 84)
-        self.assertEqual(result.trace_count, 26)
-        self.assertEqual(result.check_count, 26)
+        self.assertEqual(result.event_count, 120)
+        self.assertEqual(result.trace_count, 38)
+        self.assertEqual(result.check_count, 38)
 
         events = scenarios.load_ground_truth(self.events_path)
-        self.assertEqual(len(events), 84)
+        self.assertEqual(len(events), 120)
         self.assertEqual(
             {event["scenario_variant"] for event in events},
             {"malicious", "benign"},
@@ -71,11 +71,11 @@ class ScenarioEngineTests(unittest.TestCase):
         )
 
         report = json.loads(self.report_path.read_text(encoding="utf-8"))
-        self.assertEqual(report["summary"]["passed"], 26)
+        self.assertEqual(report["summary"]["passed"], 38)
         self.assertEqual(report["summary"]["failed"], 0)
         self.assertTrue(report["summary"]["all_passed"])
-        self.assertEqual(report["metrics"]["true_positive"], 13)
-        self.assertEqual(report["metrics"]["true_negative"], 13)
+        self.assertEqual(report["metrics"]["true_positive"], 19)
+        self.assertEqual(report["metrics"]["true_negative"], 19)
         self.assertEqual(report["metrics"]["precision"], 1.0)
         self.assertEqual(report["metrics"]["recall"], 1.0)
 

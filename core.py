@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Callable, Sequence
 
+from agentsim import __version__
 from scenarios import (
     DEFAULT_BUNDLE_PATH,
     DEFAULT_COVERAGE_PATH,
@@ -31,7 +32,6 @@ from mcp_lab import DEFAULT_MCP_LAB_PATH, run_mcp_lab
 from tactics import SIMULATION_PHASES, LINUX_HALLUCINATIONS, WINDOWS_HALLUCINATIONS
 
 
-__version__ = "0.3.0"
 ATTACK_VERSION = "19.1"
 NAVIGATOR_VERSION = "5.3.2"
 LAYER_VERSION = "4.5"
@@ -71,7 +71,7 @@ class AgentSim:
         log_callback: LogCallback | None = None,
         *,
         allow_network: bool = False,
-        dry_run: bool = False,
+        dry_run: bool = True,
         output_path: str | os.PathLike[str] = "agent_sim_layer.json",
         seed: int | None = None,
         os_type: str | None = None,
@@ -447,8 +447,8 @@ def _positive_integer(value: str) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "AgentSim: simulate autonomous-agent command patterns for detection "
-            "engineering. Local read-only commands execute by default."
+            "AgentSim: detection-first adversary emulation for endpoints, cloud, "
+            "and agentic AI. Legacy endpoint behavior is a safe preview by default."
         )
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -589,7 +589,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show selected commands without executing them.",
+        help="Compatibility flag for the default safe preview mode.",
+    )
+    parser.add_argument(
+        "--execute-local",
+        action="store_true",
+        help=(
+            "Explicitly execute reviewed read-only endpoint commands on localhost. "
+            "Directed v0.4 campaigns additionally require an authorization manifest."
+        ),
     )
     parser.add_argument(
         "--output",
@@ -658,7 +666,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         error_retry_rate=args.retry_rate,
         evasion_rate=args.evasion_rate,
         allow_network=args.allow_network,
-        dry_run=args.dry_run,
+        dry_run=args.dry_run or not args.execute_local,
         output_path=args.output,
         seed=args.seed,
     )

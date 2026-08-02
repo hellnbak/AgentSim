@@ -1,0 +1,17 @@
+{
+  "manifest_id": "example-simulation-only",
+  "authorized_by": "AgentSim repository example",
+  "scope": "Non-executing built-in campaign validation against synthetic://ci only",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2099-01-01T00:00:00Z",
+  "allowed_modes": ["simulate"],
+  "allowed_targets": ["synthetic://ci"],
+  "allowed_ability_ids": ["*"],
+  "allow_network": false,
+  "resource_limits": {
+    "max_actions": 25,
+    "max_duration_seconds": 120,
+    "max_processes": 1,
+    "max_cloud_spend_usd": 0
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/authorization-manifest.schema.json",
+  "title": "AgentSim Authorization Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest_id", "authorized_by", "scope", "issued_at", "expires_at", "allowed_modes", "allowed_targets", "allowed_ability_ids", "allow_network", "resource_limits"],
+  "properties": {
+    "manifest_id": {"type": "string", "minLength": 1},
+    "authorized_by": {"type": "string", "minLength": 1},
+    "scope": {"type": "string", "minLength": 1},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "allowed_modes": {"type": "array", "minItems": 1, "items": {"enum": ["simulate", "emulate", "lab"]}},
+    "allowed_targets": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "allowed_ability_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "allow_network": {"type": "boolean"},
+    "resource_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_actions", "max_duration_seconds", "max_processes", "max_cloud_spend_usd"],
+      "properties": {
+        "max_actions": {"type": "integer", "minimum": 1},
+        "max_duration_seconds": {"type": "integer", "minimum": 1},
+        "max_processes": {"type": "integer", "minimum": 1},
+        "max_cloud_spend_usd": {"type": "number", "minimum": 0}
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/command-catalog.schema.json",
+  "title": "AgentSim Reviewed Command Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "catalog_id", "integrity", "commands"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "command-catalog"},
+    "catalog_id": {"type": "string", "minLength": 3, "maxLength": 128},
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "commands": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^catalog://"},
+      "additionalProperties": {"$ref": "#/$defs/command"}
+    }
+  },
+  "$defs": {
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "platforms"],
+      "properties": {
+        "description": {"type": "string", "minLength": 1},
+        "platforms": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"enum": ["Windows", "Linux", "macOS"]},
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  }
+}

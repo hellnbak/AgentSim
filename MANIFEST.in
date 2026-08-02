@@ -1,0 +1,8 @@
+include LICENSE NOTICE *.md requirements.txt
+recursive-include agentsim *.json
+recursive-include agentsim_scenarios *.json
+recursive-include detections *
+recursive-include examples *.json
+recursive-include schemas *.json
+recursive-include tests *.py
+global-exclude *.py[cod] __pycache__ .DS_Store

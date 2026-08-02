@@ -10,6 +10,9 @@ PANTHER_RULE_PATH = (
 PANTHER_AGENT_RULE_PATH = (
     PROJECT_ROOT / "detections" / "panther" / "agentic_attack_lineage.py"
 )
+PANTHER_CONTROL_RULE_PATH = (
+    PROJECT_ROOT / "detections" / "panther" / "agentic_control_plane_abuse.py"
+)
 
 
 def _load_panther_rule():
@@ -28,11 +31,21 @@ def _load_panther_agent_rule():
     return module
 
 
+def _load_panther_control_rule():
+    spec = importlib.util.spec_from_file_location(
+        "agentic_control_plane_abuse", PANTHER_CONTROL_RULE_PATH
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class DetectionContentTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.panther_rule = _load_panther_rule()
         cls.panther_agent_rule = _load_panther_agent_rule()
+        cls.panther_control_rule = _load_panther_control_rule()
 
     def test_panther_rule_matches_python_discovery_process(self):
         event = {
@@ -137,6 +150,98 @@ class DetectionContentTests(unittest.TestCase):
                 )
                 self.assertNotIn("expected_detection", executable_lines)
                 self.assertNotIn("scenario_variant", executable_lines)
+                self.assertIn("trace_id", content)
+
+    def test_control_plane_panther_rule_covers_emerging_scenarios(self):
+        cases = (
+            (
+                "model_safety_downgrade",
+                {
+                    "event_type": "agent.model.fallback",
+                    "attributes": {
+                        "safety_profile_changed": True,
+                        "policy_binding_valid": False,
+                    },
+                },
+            ),
+            (
+                "planner_executor_policy_gap",
+                {
+                    "event_type": "agent.policy.decision",
+                    "policy_decision": "allow",
+                    "attributes": {
+                        "policy_scope": "executor",
+                        "intent_equivalent": True,
+                        "policy_version_match": False,
+                    },
+                },
+            ),
+            (
+                "approval_replay",
+                {
+                    "event_type": "agent.approval.reused",
+                    "attributes": {"action_fingerprint_match": False},
+                },
+            ),
+            (
+                "cross_tenant_context_confusion",
+                {
+                    "event_type": "agent.authorization.context_changed",
+                    "attributes": {
+                        "tenant_changed": True,
+                        "tenant_binding_valid": False,
+                    },
+                },
+            ),
+            (
+                "tool_chain_capability_escalation",
+                {
+                    "event_type": "agent.tool.requested",
+                    "attributes": {"egress_capable": True, "composite_risk": "high"},
+                },
+            ),
+            (
+                "agent_registry_poisoning",
+                {
+                    "event_type": "agent.registry.entry.changed",
+                    "attributes": {
+                        "capability_expansion": True,
+                        "signature_valid": False,
+                    },
+                },
+            ),
+        )
+
+        for expected, event in cases:
+            with self.subTest(expected=expected):
+                self.assertTrue(self.panther_control_rule.rule(event))
+                self.assertEqual(self.panther_control_rule.signal_type(event), expected)
+
+        self.assertFalse(
+            self.panther_control_rule.rule(
+                {
+                    "event_type": "agent.model.fallback",
+                    "attributes": {
+                        "safety_profile_changed": False,
+                        "policy_binding_valid": True,
+                    },
+                }
+            )
+        )
+
+    def test_control_plane_queries_avoid_answer_key_fields(self):
+        paths = [
+            PROJECT_ROOT / "detections" / "kql" / "agentic_control_plane_abuse.kql",
+            PROJECT_ROOT / "detections" / "splunk" / "agentic_control_plane_abuse.spl",
+            PROJECT_ROOT / "detections" / "crowdstrike" / "agentic_control_plane_abuse.cql",
+            PROJECT_ROOT / "detections" / "graylog" / "agentic_control_plane_abuse.query",
+            PROJECT_ROOT / "detections" / "elastic" / "agentic_control_plane_abuse.eql",
+        ]
+        for path in paths:
+            with self.subTest(path=path):
+                content = path.read_text(encoding="utf-8")
+                self.assertNotIn("expected_detection", content)
+                self.assertNotIn("scenario_variant", content)
                 self.assertIn("trace_id", content)
 
 

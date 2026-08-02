@@ -1,7 +1,8 @@
 # Contributing to AgentSim
 
-Thank you for helping improve AgentSim. Contributions should preserve its focus
-on transparent, defensive telemetry generation.
+Thank you for helping improve AgentSim. Contributions must preserve its focus
+on detection-first, bounded adversary emulation rather than general
+exploitation or command-and-control capability.
 
 By submitting a contribution, you agree that it may be distributed under the
 project's [MIT License](LICENSE).
@@ -21,18 +22,23 @@ Run the automated checks:
 
 ```bash
 python -m py_compile core.py mcp_lab.py scenarios.py tactics.py web_ui.py
+python -m compileall -q agentsim
 python -m unittest discover -s tests -v
-python core.py --dry-run --iterations 6 --speed 0 --seed 42
+python core.py --iterations 6 --speed 0 --seed 42
 python core.py --scenario all --variant both --mutations 1 --mutation-seed 42 --speed 0
 python core.py --mcp-lab
+python -m agentsim.cli campaign run endpoint-discovery-baseline --mode simulate --target synthetic://ci --authorization examples/authorization.simulate.json
 ```
 
 Tests must not execute commands from the catalog. Mock process execution or use
 dry-run mode.
 
-## Command safety policy
+## Ability and command safety policy
 
-Changes to `tactics.py` receive extra scrutiny. Every command must:
+Executable content belongs in the reviewed static argv catalogs under
+`agentsim/content/catalogs/`. Ability and campaign files may reference those
+commands but may not embed shell text, scripts, payloads, downloads, or
+user-controlled interpolation. Every catalog command must:
 
 - be static and strictly read-only;
 - avoid exploitation, credential access, persistence, lateral movement, data
@@ -45,9 +51,28 @@ Changes to `tactics.py` receive extra scrutiny. Every command must:
 - be mapped to the most specific applicable MITRE ATT&CK® technique using an
   official ATT&CK source.
 
-Commands that contact a service must live in the cloud phase so the engine's
-explicit network opt-in applies. Explain what data the command reads and which
-credentials it may use in the pull request.
+Commands that contact a service must use an ability with
+`network_access: required`. The run and authorization manifest must also permit
+network access. Explain what data the command reads and which credentials it
+may use in the pull request.
+
+Every new ability must define supported providers, target types,
+`production_allowed`, timeout, state-change and cleanup behavior, expected
+telemetry, detection objectives, benign controls, and defenses. Built-in
+content should remain `production_allowed: false`.
+
+Ability packs, campaign packs, and command catalogs require canonical SHA-256
+integrity metadata. Unknown fields are rejected. Update the affected digest
+after review; never disable integrity verification to make a content change
+load.
+
+State-changing abilities require an idempotent cleanup catalog reference and
+tests for success, failure, cancellation, and cleanup. Higher-risk behaviors
+belong in disposable labs or external adapters rather than the public core.
+
+Campaign packs may only reference abilities. Dependencies must point to an
+earlier declared step, and stop behavior must be explicit. See
+[`ABILITIES.md`](ABILITIES.md) and [`CAMPAIGNS.md`](CAMPAIGNS.md).
 
 ## Agentic scenario safety policy
 
@@ -106,7 +131,8 @@ Keep changes focused and include:
 2. Safety and compatibility implications.
 3. Tests for code changes.
 4. Documentation updates for interface, command, or mapping changes.
-5. Confirmation that the checks above pass on a supported Python version.
+5. Authorization, target-scope, resource-limit, and cleanup implications.
+6. Confirmation that the checks above pass on a supported Python version.
 
 Please do not include secrets, proprietary telemetry, or sensitive command
 output in issues, fixtures, or pull requests. Report security concerns using

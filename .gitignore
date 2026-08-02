@@ -17,4 +17,8 @@ agent_sim_otel.jsonl
 agent_sim_coverage.json
 agent_sim_evidence.zip
 agent_sim_mcp_lab.json
+agent_sim_runs.db
+agent_sim_runs.db-shm
+agent_sim_runs.db-wal
+agent_sim_campaign_runs/
 .DS_Store

@@ -1,0 +1,22 @@
+index=<agent_runtime_index> sourcetype=agentsim:agent_event
+| spath path=attributes.safety_profile_changed output=safety_profile_changed
+| spath path=attributes.policy_binding_valid output=policy_binding_valid
+| spath path=attributes.policy_scope output=policy_scope
+| spath path=attributes.intent_equivalent output=intent_equivalent
+| spath path=attributes.policy_version_match output=policy_version_match
+| spath path=attributes.action_fingerprint_match output=action_fingerprint_match
+| spath path=attributes.tenant_changed output=tenant_changed
+| spath path=attributes.tenant_binding_valid output=tenant_binding_valid
+| spath path=attributes.egress_capable output=egress_capable
+| spath path=attributes.composite_risk output=composite_risk
+| spath path=attributes.capability_expansion output=capability_expansion
+| spath path=attributes.signature_valid output=signature_valid
+| eval signal_type=case(
+    event_type="agent.model.fallback" AND safety_profile_changed="true" AND policy_binding_valid="false", "model_safety_downgrade",
+    event_type="agent.policy.decision" AND policy_decision="allow" AND policy_scope="executor" AND intent_equivalent="true" AND policy_version_match="false", "planner_executor_policy_gap",
+    event_type="agent.approval.reused" AND action_fingerprint_match="false", "approval_replay",
+    event_type="agent.authorization.context_changed" AND tenant_changed="true" AND tenant_binding_valid="false", "cross_tenant_context_confusion",
+    event_type="agent.tool.requested" AND egress_capable="true" AND composite_risk="high", "tool_chain_capability_escalation",
+    event_type="agent.registry.entry.changed" AND capability_expansion="true" AND signature_valid="false", "agent_registry_poisoning")
+| where isnotnull(signal_type)
+| table _time signal_type trace_id sequence session_id agent_id principal_id policy_id policy_version approval_id delegation_id tool_name tool_risk policy_decision data_lineage_id

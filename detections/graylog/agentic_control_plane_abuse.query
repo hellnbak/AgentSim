@@ -1,0 +1,10 @@
+streams:<agent-runtime-stream-id>
+AND _exists_:trace_id
+AND (
+  (event_type:"agent.model.fallback" AND attributes_safety_profile_changed:true AND attributes_policy_binding_valid:false)
+  OR (event_type:"agent.policy.decision" AND policy_decision:allow AND attributes_policy_scope:executor AND attributes_intent_equivalent:true AND attributes_policy_version_match:false)
+  OR (event_type:"agent.approval.reused" AND attributes_action_fingerprint_match:false)
+  OR (event_type:"agent.authorization.context_changed" AND attributes_tenant_changed:true AND attributes_tenant_binding_valid:false)
+  OR (event_type:"agent.tool.requested" AND attributes_egress_capable:true AND attributes_composite_risk:high)
+  OR (event_type:"agent.registry.entry.changed" AND attributes_capability_expansion:true AND attributes_signature_valid:false)
+)

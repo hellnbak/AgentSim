@@ -1,0 +1,42 @@
+title: Agent Runtime Control-Plane Security Invariant Failure
+id: a768fd41-84b8-47b2-a744-b060d6f29f84
+status: experimental
+description: >
+  Selects high-confidence model, policy, approval, tenant, composed-tool, and
+  agent-registry control failures in AgentSim-compatible runtime telemetry.
+author: AgentSim contributors
+date: 2026-08-01
+logsource:
+  category: application
+  product: agentsim
+detection:
+  selection_model_downgrade:
+    event_type: agent.model.fallback
+    attributes.safety_profile_changed: true
+    attributes.policy_binding_valid: false
+  selection_policy_gap:
+    event_type: agent.policy.decision
+    policy_decision: allow
+    attributes.policy_scope: executor
+    attributes.intent_equivalent: true
+    attributes.policy_version_match: false
+  selection_approval_replay:
+    event_type: agent.approval.reused
+    attributes.action_fingerprint_match: false
+  selection_tenant_confusion:
+    event_type: agent.authorization.context_changed
+    attributes.tenant_changed: true
+    attributes.tenant_binding_valid: false
+  selection_composed_tool_risk:
+    event_type: agent.tool.requested
+    attributes.egress_capable: true
+    attributes.composite_risk: high
+  selection_registry_poisoning:
+    event_type: agent.registry.entry.changed
+    attributes.capability_expansion: true
+    attributes.signature_valid: false
+  condition: 1 of selection_*
+falsepositives:
+  - Authorized synthetic control testing
+  - Runtime migrations where old and new policy bindings overlap briefly
+level: high

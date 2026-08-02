@@ -4,6 +4,12 @@ AgentSim produces safe, labeled traces for validating detections at AI-agent
 trust boundaries. It records what an agent observed, proposed, delegated, and
 was allowed or blocked from doing. It never invokes an AI model or tool.
 
+As of v0.4, scenario packs remain a separate non-executing content contract.
+Gated endpoint or lab behavior belongs in ability packs and directed campaign
+packs documented in [`ABILITIES.md`](ABILITIES.md) and
+[`CAMPAIGNS.md`](CAMPAIGNS.md). A scenario pack cannot opt into lifecycle-v3
+execution.
+
 ## Quick start
 
 ```bash
@@ -37,6 +43,12 @@ detectors inspect observable event fields and never query `scenario_variant`,
 | `unexpected-code-execution` | Untrusted content followed by interpreter/tool execution intent. |
 | `resource-cost-abuse` | Tool budget exceeded followed by deep, high-fan-out delegation. |
 | `decoy-secret-exfiltration` | Decoy-secret lineage followed by transformed, blocked loopback egress intent. |
+| `model-fallback-downgrade` | Fallback model changes the safety profile without a valid policy binding. |
+| `planner-executor-policy-gap` | A stale executor policy allows equivalent intent blocked by the planner. |
+| `approval-replay` | An expired approval is reused for a different high-risk action fingerprint. |
+| `cross-tenant-context-confusion` | Principal and resource tenants diverge after an invalid context switch. |
+| `tool-chain-capability-escalation` | Modest tools compose into a high-risk restricted-data egress capability. |
+| `agent-registry-poisoning` | Unsigned registry capability expansion precedes a risky agent delegation. |
 
 The catalog is declarative JSON under `agentsim_scenarios/packs/`; adding a
 scenario does not require editing the engine.
@@ -123,6 +135,22 @@ Scenario CLI runs create these files by default:
 The OpenTelemetry export contains fixed synthetic descriptions, never raw
 prompts, tool arguments, or results. Review privacy and retention before
 adapting the pattern to production telemetry.
+
+## Human detection debugger
+
+After a dashboard scenario run, the **Detection debugger** reads only the local
+ground-truth and validation artifacts for that run. It provides:
+
+- pass/mismatch and malicious/benign/mutation filters;
+- expected versus observed alert behavior;
+- the ordered detector conditions as evaluated;
+- the trace sequence where detection completed; and
+- a timeline with contributing `signal_event_ids` highlighted.
+
+The viewer is an evaluation surface and intentionally has access to ground
+truth. Production analytics must still run without `expected_detection` or
+`scenario_variant`. The local API endpoints `/api/detection-debug` and
+`/api/detection-debug/trace` return 404 until a scenario artifact set exists.
 
 ## Custom scenario packs
 

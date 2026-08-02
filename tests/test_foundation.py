@@ -61,7 +61,7 @@ class FoundationTests(unittest.TestCase):
         self.campaigns = load_campaign_registry()
 
     def test_version_and_reviewed_content_catalogs(self):
-        self.assertEqual(__version__, "1.0.0")
+        self.assertEqual(__version__, "1.2.0")
         self.assertEqual(len(self.abilities), 8)
         self.assertEqual(len(self.campaigns), 2)
         for ability in self.abilities.values():
@@ -367,7 +367,7 @@ class FoundationTests(unittest.TestCase):
         stdout.seek(0)
         stdout.truncate(0)
         self.assertEqual(cli_main(["--version"]), 0)
-        self.assertIn("1.0.0", stdout.getvalue())
+        self.assertIn("1.2.0", stdout.getvalue())
 
 
 if __name__ == "__main__":

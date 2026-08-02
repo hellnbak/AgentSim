@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/agent-trace-event.schema.json",
+  "title": "AgentSim canonical agent trace event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "timestamp", "event_id", "event_type", "trace_id",
+    "session_id", "agent_id", "source", "caused_by_event_ids", "auth_scopes",
+    "taint_labels", "synthetic", "content_recorded", "attributes"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "event_id": {"$ref": "#/$defs/id"},
+    "event_type": {"type": "string", "pattern": "^(agent|gen_ai|mcp)\\."},
+    "trace_id": {"$ref": "#/$defs/id"},
+    "session_id": {"$ref": "#/$defs/id"},
+    "agent_id": {"$ref": "#/$defs/id"},
+    "source": {"$ref": "#/$defs/id"},
+    "conversation_id": {"$ref": "#/$defs/optionalId"},
+    "agent_instance_id": {"$ref": "#/$defs/optionalId"},
+    "principal_id": {"$ref": "#/$defs/optionalId"},
+    "turn_id": {"$ref": "#/$defs/optionalId"},
+    "tool_call_id": {"$ref": "#/$defs/optionalId"},
+    "tool_name": {"$ref": "#/$defs/optionalId"},
+    "tool_risk": {"type": ["string", "null"]},
+    "parent_event_id": {"$ref": "#/$defs/optionalId"},
+    "caused_by_event_ids": {"$ref": "#/$defs/idList"},
+    "delegation_id": {"$ref": "#/$defs/optionalId"},
+    "data_lineage_id": {"$ref": "#/$defs/optionalId"},
+    "memory_id": {"$ref": "#/$defs/optionalId"},
+    "model_id": {"$ref": "#/$defs/optionalId"},
+    "mcp_client_id": {"$ref": "#/$defs/optionalId"},
+    "mcp_server_id": {"$ref": "#/$defs/optionalId"},
+    "auth_audience": {"$ref": "#/$defs/optionalId"},
+    "auth_resource": {"$ref": "#/$defs/optionalId"},
+    "auth_scopes": {"$ref": "#/$defs/idList"},
+    "auth_audience_valid": {"type": ["boolean", "null"]},
+    "consent_valid": {"type": ["boolean", "null"]},
+    "policy_id": {"$ref": "#/$defs/optionalId"},
+    "policy_version": {"$ref": "#/$defs/optionalId"},
+    "policy_decision": {"type": ["string", "null"]},
+    "approval_id": {"$ref": "#/$defs/optionalId"},
+    "approval_fingerprint": {"$ref": "#/$defs/optionalId"},
+    "input_trust": {"type": ["string", "null"]},
+    "taint_labels": {"$ref": "#/$defs/idList"},
+    "outcome": {"type": ["string", "null"]},
+    "synthetic": {"type": "boolean"},
+    "content_recorded": {"const": false},
+    "attributes": {
+      "type": "object",
+      "maxProperties": 100,
+      "propertyNames": {
+        "not": {
+          "pattern": "(argument|Argument|body|Body|completion|Completion|content|Content|credential|Credential|document|Document|instruction|Instruction|message|Message|password|Password|payload|Payload|prompt|Prompt|query|Query|reasoning|Reasoning|response|Response|result|Result|secret|Secret|text|Text)"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 512},
+    "optionalId": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+    "idList": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/id"}}
+  }
+}

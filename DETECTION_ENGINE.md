@@ -1,12 +1,13 @@
 # Detection validation engine
 
-AgentSim v1 validates defensive assumptions against exported telemetry without
-requiring vendor credentials or live query access.
+AgentSim v1.2 validates defensive assumptions against exported telemetry or an
+explicitly authorized, read-only live query. Offline operation remains the
+default and requires no vendor credential.
 
 ## Data flow
 
 ```text
-vendor export → bounded collector → normalized/redacted events
+vendor export OR bounded live query → normalized/redacted events
              → lifecycle correlation → field/source coverage
              → detection AST → evidence → gaps/runbook/regression
              → candidate vendor renderers (human review required)
@@ -14,10 +15,11 @@ vendor export → bounded collector → normalized/redacted events
 
 ## Offline collectors
 
-`jsonl`, `otel`, `sysmon`, `auditd`, `cloudtrail`, `crowdstrike`, `splunk`, and
-`agent_runtime` collectors accept a JSON array, a JSON object, newline-delimited
-JSON, or common wrapper arrays such as `records`, `events`, `results`, and
-`Records`.
+`jsonl`, `otel`, `sysmon`, `auditd`, `cloudtrail`, `crowdstrike`, `splunk`,
+`elastic`, `sentinel`, `logscale`, `panther`, `graylog`, `agent_runtime`,
+`otel_genai`, and `mcp_audit` collectors accept a JSON array, a JSON object,
+newline-delimited JSON, or common wrapper arrays such as `records`, `events`,
+`results`, and `Records`.
 
 Collectors never contact a vendor. A file is rejected above 256 MiB or 250,000
 records. Prompt, token, authorization, credential, password, payload, and secret
@@ -29,6 +31,29 @@ agentsim telemetry inspect export.jsonl --collector sysmon
 
 The normalized record contract is
 [`schemas/normalized-event.schema.json`](schemas/normalized-event.schema.json).
+Agent-specific input is projected through the stricter
+[`schemas/agent-trace-event.schema.json`](schemas/agent-trace-event.schema.json)
+contract described in [AGENT_TELEMETRY.md](AGENT_TELEMETRY.md).
+
+## Live query connectors
+
+Splunk, Elastic, CrowdStrike LogScale, Microsoft Sentinel, Panther, and Graylog
+connectors first create a non-executing query plan. Live access is double
+opt-in, read-only, exact-target, time/record/response bounded, and credentialed
+only from an explicitly named environment variable. Redirects are denied and
+remote origins require HTTPS.
+
+When abilities are selected, candidate AST rules and their telemetry
+requirements are evaluated together. Outcomes are:
+
+- `detected`: the candidate rule matched;
+- `missed`: the rule did not match even though required telemetry was fully
+  present; or
+- `visibility_gap`: the rule did not match and required sources or fields were
+  absent.
+
+See [LIVE_CONNECTORS.md](LIVE_CONNECTORS.md) for vendor dataset formats,
+credential names, audit behavior, and CLI examples.
 
 ## Detection AST
 

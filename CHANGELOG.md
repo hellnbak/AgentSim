@@ -3,6 +3,34 @@
 Notable changes to AgentSim are documented here. The project follows semantic
 versioning while its public interfaces mature.
 
+## 1.2.0 - 2026-08-02
+
+- Added a canonical, content-safe agent trace contract with trace, session,
+  conversation, agent, principal, turn, tool, delegation, memory, lineage,
+  policy, approval, MCP authorization, taint, outcome, and usage metadata.
+- Added adapters for generic agent-runtime, OpenTelemetry GenAI, and MCP audit
+  records. Prompt, message, argument, result, response, payload, credential,
+  secret, password, and unsafe token fields are discarded before persistence.
+- Added dry-run-first, exact-target, read-only telemetry connectors for Splunk,
+  Elastic, CrowdStrike LogScale, Microsoft Sentinel, Panther, and Graylog.
+  Live execution requires two explicit flags, HTTPS (except loopback), an
+  environment-sourced credential, and a bounded 24-hour/10,000-record query.
+- Added live detection outcomes that distinguish a true `missed` analytic from
+  a `visibility_gap`, plus redacted SQLite query history and optional campaign
+  detection/artifact linkage.
+- Added an instrumented reference-agent runtime with fixed synthetic tools,
+  malicious/benign twins, causal policy traces, reset verification, a guarded
+  loopback HTTP surface, and a hardened Docker Compose profile.
+- Doubled deterministic control fixtures from ten to twenty and expanded the
+  declarative benchmark from nineteen to twenty-nine scenarios. New coverage
+  includes cross-turn goal hijacking, tool-definition/result provenance
+  poisoning, configuration/supply-chain tampering, replay, delayed
+  exfiltration, deceptive summaries, MCP scope challenge abuse, and retrieval
+  source substitution.
+- Added public schemas for agent trace events, redacted query plans, and
+  reference-lab results, plus Python/CLI/Web APIs and plugin API 1.0 telemetry
+  connector entry points.
+
 ## 1.0.0 - 2026-08-02
 
 - Stabilized the detection-first workflow across endpoint, cloud, and agentic

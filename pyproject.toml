@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentsim"
-version = "1.0.0"
+version = "1.2.0"
 description = "Detection-first adversary emulation for endpoints, cloud, and agentic AI"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -56,4 +56,7 @@ include = ["agentsim*", "agentsim_scenarios*"]
     "schemas/normalized-event.schema.json",
     "schemas/detection-rule.schema.json",
     "schemas/external-plan.schema.json",
+    "schemas/agent-trace-event.schema.json",
+    "schemas/live-query-plan.schema.json",
+    "schemas/reference-lab-result.schema.json",
 ]

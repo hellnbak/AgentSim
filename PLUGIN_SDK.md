@@ -9,6 +9,7 @@ not be built into or implicitly trusted by the public core.
 | --- | --- | --- |
 | Collector | `agentsim.collectors` | `collect(source)` |
 | Detection renderer | `agentsim.detection_renderers` | `render(candidate)` |
+| Telemetry connector | `agentsim.telemetry_connectors` | `build_plan(specification)`, `execute(plan)` |
 | External executor | `agentsim.external_executors` | `execute(plan)` |
 
 Every plugin object must expose `api_version = "1.0"`.
@@ -65,7 +66,10 @@ one named entry point exists and that the loaded object declares API version
 ## Security requirements
 
 Collectors must be read-only, bounded, and redact sensitive content before
-returning events. Renderers must treat candidates as data and must not deploy
-them. External executors must independently enforce authorization, target
-scope, version pins, cleanup, resource policy, audit evidence, and secret
-redaction. No plugin may claim built-in AgentSim trust or signing identity.
+returning events. Telemetry connectors must build a non-executing review plan,
+perform read-only exact-target queries only after explicit network consent,
+source credentials outside serialized plans, and return normalized events.
+Renderers must treat candidates as data and must not deploy them. External
+executors must independently enforce authorization, target scope, version
+pins, cleanup, resource policy, audit evidence, and secret redaction. No plugin
+may claim built-in AgentSim trust or signing identity.

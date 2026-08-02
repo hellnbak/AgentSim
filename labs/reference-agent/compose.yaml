@@ -1,0 +1,23 @@
+services:
+  reference-agent:
+    build:
+      context: ../..
+      dockerfile: labs/reference-agent/Dockerfile
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.50
+    ports:
+      - "127.0.0.1:8765:8765"
+    networks:
+      - agentsim-internal
+
+networks:
+  agentsim-internal:
+    internal: true

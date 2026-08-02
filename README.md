@@ -9,9 +9,10 @@ behavior to ground truth, telemetry coverage, detection validation, defensive
 guidance, cleanup verification, and repeatable evidence. It is deliberately not
 a general exploitation toolkit or command-and-control platform.
 
-Version 1.0.0 consolidates the adversary-emulation foundation, offline
-detection engine, disposable agentic lab, external-provider planning, signed
-content, portable evidence, Web workspace, CI interfaces, and stable plugin SDK.
+Version 1.2.0 adds a content-safe agent/MCP telemetry contract, bounded
+read-only validation against six SIEM platforms, an instrumented disposable
+reference agent, and broader agentic attack coverage while preserving the v1
+simulation-first and non-exploitation boundaries.
 
 ## Core workflow
 
@@ -27,7 +28,7 @@ AgentSim then correlates exported telemetry, evaluates vendor-neutral rules,
 checks field availability, creates human-review candidate detections, explains
 defensive gaps, and emits regression-ready evidence.
 
-## v1 capabilities
+## v1.2 capabilities
 
 - Eight reviewed endpoint/cloud abilities and two directed campaigns.
 - Strict scenario, ability, and campaign content boundaries.
@@ -35,7 +36,12 @@ defensive gaps, and emits regression-ready evidence.
 - Expiring authorization, exact target/CIDR scope, production lockout, resource
   limits, kill switch, redaction, and mandatory cleanup paths.
 - Offline JSON/JSONL collectors for OTel, Sysmon, auditd, CloudTrail,
-  CrowdStrike, Splunk, and agent-runtime exports.
+  CrowdStrike, Splunk, Elastic, Sentinel, LogScale, Panther, Graylog, and
+  agent-runtime exports, including OpenTelemetry GenAI and MCP audit profiles.
+- Dry-run-first, exact-target live query connectors for Splunk, Elastic,
+  CrowdStrike LogScale, Microsoft Sentinel, Panther, and Graylog. Execution
+  requires both `--execute` and `--allow-network`; credentials remain in named
+  environment variables.
 - Detection AST supporting field predicates, boolean logic, ordered sequences,
   time windows, thresholds, distinct counts, parent/child relationships,
   causal graphs, negative conditions, and host/user/resource grouping.
@@ -43,17 +49,18 @@ defensive gaps, and emits regression-ready evidence.
   LogScale, Elastic EQL, Panther Python, and Graylog.
 - Telemetry coverage, defensive gap analysis, investigation runbooks,
   malicious/benign regression, and readiness scorecards.
-- Nineteen declarative agentic scenarios plus ten disposable in-memory control
-  fixtures for prompt injection, memory/RAG poisoning, MCP abuse, confused
-  deputy, delegation spoofing, approval deception, decoy-secret access, and
-  recursive budget abuse.
+- Twenty-nine declarative agentic scenarios plus twenty disposable control
+  fixtures and an instrumented reference-agent runtime. Coverage includes
+  cross-turn goal hijacking, provenance/tool-result poisoning, configuration
+  and supply-chain tampering, replay, delayed exfiltration, scope challenge
+  abuse, deceptive summaries, and the original prompt/memory/MCP controls.
 - Version-pinned, non-executing plans for Atomic Red Team, Stratus Red Team,
   and MITRE CALDERA. The public core does not execute these plans.
 - Attack Flow STIX 2.1 import/export.
 - RSA-signed built-in ability, campaign, and reviewed-command content.
 - SQLite run, action, lifecycle, detection, and artifact records.
-- Stable plugin API 1.0 for collectors, detection renderers, and separately
-  installed external executors.
+- Stable plugin API 1.0 for collectors, detection renderers, telemetry
+  connectors, and separately installed external executors.
 
 ## Content and execution boundaries
 
@@ -198,6 +205,42 @@ Exit code `0` means the requested detection/regression condition passed; `1`
 means it did not. Generated rules always retain candidate/human-review status.
 See [DETECTION_ENGINE.md](DETECTION_ENGINE.md) and [DETECTIONS.md](DETECTIONS.md).
 
+## Live read-only detection validation
+
+Build a secret-free query plan first. The plan records the exact dataset,
+target, time window, limit, endpoint, and query hash but never the credential:
+
+```bash
+agentsim telemetry query elastic \
+  --base-url https://elastic.example.test \
+  --dataset logs-endpoint.events.process-default \
+  --target host-123 \
+  --since 2026-08-02T00:00:00Z \
+  --until 2026-08-02T00:15:00Z
+```
+
+After reviewing the plan, explicitly execute it and evaluate one or more
+abilities:
+
+```bash
+export AGENTSIM_ELASTIC_API_KEY='replace-with-a-read-only-api-key'
+agentsim telemetry query elastic \
+  --base-url https://elastic.example.test \
+  --dataset logs-endpoint.events.process-default \
+  --target host-123 \
+  --since 2026-08-02T00:00:00Z \
+  --until 2026-08-02T00:15:00Z \
+  --ability endpoint.discovery.processes \
+  --execute --allow-network \
+  --output live-validation.json
+```
+
+The result classifies each ability as `detected`, `missed`, or
+`visibility_gap` and persists a redacted audit record in SQLite. Query windows
+are limited to 24 hours, results to 10,000 records, responses to 32 MiB, and
+wildcard datasets/targets are rejected. See
+[LIVE_CONNECTORS.md](LIVE_CONNECTORS.md).
+
 ## Agentic security lab
 
 The existing declarative benchmark remains available:
@@ -208,7 +251,7 @@ agentsim --scenario all --variant both --mutations 1 --mutation-seed 42 --speed 
 agentsim --mcp-lab
 ```
 
-The v1 control fixtures are smaller disposable policy exercises:
+The v1.2 control fixtures are smaller disposable policy exercises:
 
 ```bash
 agentsim lab list
@@ -218,7 +261,18 @@ agentsim lab run approval-deception
 
 These fixtures run in memory. They do not open a socket, start a process, load
 a tool/plugin, read a file or credential, or record a prompt/token/payload.
-See [SCENARIOS.md](SCENARIOS.md).
+
+Run the instrumented reference agent directly, or in its hardened container:
+
+```bash
+agentsim lab reference all --output reference-lab-results.json
+docker compose -f labs/reference-agent/compose.yaml up --build
+```
+
+The reference runtime emits requested → policy decision → completed/blocked
+causal traces and only applies fixed changes to an in-memory dictionary for the
+benign twin. See [SCENARIOS.md](SCENARIOS.md) and
+[`labs/reference-agent/README.md`](labs/reference-agent/README.md).
 
 ## External provider plans and Attack Flow
 
@@ -261,7 +315,8 @@ agentsim-web
 Open `http://127.0.0.1:5000`. The server binds only to loopback. The dashboard
 includes safe endpoint preview, the scenario benchmark, human Detection
 Debugger, authorized simulation-only campaigns, SQLite history, a synthetic
-detection/coverage workspace, and all ten in-memory agentic control fixtures.
+detection/coverage workspace, and all twenty agentic control fixtures plus the
+instrumented reference-agent run.
 Local, Docker, and external execution are intentionally unavailable in the UI.
 
 ## Plugin SDK
@@ -272,8 +327,8 @@ agentsim plugin list
 
 Plugin metadata is listed without importing third-party code. Explicit loading
 enforces API version `1.0`. Entry-point groups are `agentsim.collectors`,
-`agentsim.detection_renderers`, and `agentsim.external_executors`. See
-[PLUGIN_SDK.md](PLUGIN_SDK.md).
+`agentsim.detection_renderers`, `agentsim.telemetry_connectors`, and
+`agentsim.external_executors`. See [PLUGIN_SDK.md](PLUGIN_SDK.md).
 
 ## Safety guarantees
 
@@ -287,6 +342,8 @@ enforces API version `1.0`. Entry-point groups are `agentsim.collectors`,
 - Raw command output, prompts, tokens, secrets, credentials, and payloads are
   excluded from evidence.
 - Offline collectors limit file size and record count and never query vendors.
+- Live connectors are read-only, dry-run by default, exact-target, bounded,
+  TLS-validating, redirect-denying, and require a second network opt-in.
 - Third-party entry points are not imported during plugin discovery.
 - Built-in executable content has both a canonical digest and trusted RSA
   signature.
@@ -310,6 +367,8 @@ python -m build
 - [Campaigns](CAMPAIGNS.md)
 - [Detection engine](DETECTION_ENGINE.md)
 - [Detection content](DETECTIONS.md)
+- [Agent telemetry contract](AGENT_TELEMETRY.md)
+- [Live telemetry connectors](LIVE_CONNECTORS.md)
 - [Agentic scenarios](SCENARIOS.md)
 - [External providers](EXTERNAL_PROVIDERS.md)
 - [Plugin SDK](PLUGIN_SDK.md)

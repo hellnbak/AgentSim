@@ -1,4 +1,4 @@
-# AgentSim v1 architecture
+# AgentSim v1.2 architecture
 
 AgentSim separates content, execution, authorization, telemetry, detection,
 and defensive evaluation so synthetic traces cannot silently become executable
@@ -18,6 +18,9 @@ flowchart TD
     Plugin --> Timeline
     Timeline --> Store["SQLite run, action, event, detection, artifact history"]
     Export["Offline vendor exports"] --> Collect["Bounded collectors and redaction"]
+    Live["Explicit read-only SIEM query"] --> Collect
+    Runtime["Agent / OTel GenAI / MCP audit"] --> Contract["Content-safe agent trace contract"]
+    Contract --> Collect
     Collect --> Normalize["Normalized event model"]
     Normalize --> Correlate["Ground-truth correlation"]
     Timeline --> Correlate
@@ -35,16 +38,16 @@ agentsim/
 ├── cli.py                 stable v1 CLI and legacy dispatch
 ├── api.py                 stable Python API
 ├── plugins.py             entry-point metadata and API 1.0 contracts
-├── models/                ability, campaign, target, result, event, telemetry
+├── models/                ability, campaign, target, result, event, agent telemetry
 ├── content/               strict loaders, integrity, RSA trust, signed content
 ├── orchestration/         directed planning and lifecycle runner
 ├── execution/             simulate, local, and Docker provider interfaces
 ├── external/              non-executing Atomic, Stratus, CALDERA plans
 ├── safety/                authorization, target scope, policy, limits, cleanup
-├── telemetry/             ground truth, normalization, collectors, correlation
+├── telemetry/             contracts, collectors, live connectors, correlation
 ├── detection/             AST, evaluator, coverage, generator, renderers
 ├── defense/               recommendations, gaps, runbooks, regression, scorecard
-├── lab/                   disposable in-memory agentic control fixtures
+├── lab/                   in-memory controls and instrumented reference agent
 ├── reporting/             bundles and Attack Flow STIX interchange
 └── web/                   packaged loopback Web entry point
 ```
@@ -84,6 +87,19 @@ an explicit act and enforces plugin API `1.0`. An external executor is outside
 the public core and must independently enforce authorization, version, target,
 resource, cleanup, and evidence contracts.
 
+### Live telemetry connectors
+
+Live connectors are a narrow read-only exception to the public core's general
+non-networking default. Building a plan never contacts a vendor. Execution
+requires `--execute` plus `--allow-network`; exact datasets and targets are
+mandatory; time, record, response, timeout, redirect, and TLS constraints are
+enforced. Only a credential environment-variable name is serialized. The
+credential value and request authorization header are never placed in the
+plan, audit record, normalized events, or output artifact.
+
+The connector boundary retrieves telemetry only. It cannot create, update,
+deploy, or delete vendor detections, dashboards, indexes, users, or policies.
+
 ## Authorization and execution
 
 Before preparation, the safety policy checks manifest expiration, mode, exact
@@ -102,10 +118,15 @@ actions while keeping a separately bounded cleanup reserve.
 
 ## Telemetry and detection
 
-Collectors read only local JSON/JSONL exports, enforce a 256 MiB and 250,000
+Offline collectors read local JSON/JSONL exports, enforce a 256 MiB and 250,000
 record limit, normalize known vendor fields, inventory available fields, and
 discard fields whose names indicate prompts, credentials, secrets, tokens,
 payloads, or authorization data.
+
+The agent trace contract adds stable correlation and authorization fields for
+agent runtimes, OpenTelemetry GenAI spans, and MCP audit records. Raw prompts,
+messages, tool arguments/results, and model responses are excluded by design.
+Live connector responses pass through the same normalized/redacted event model.
 
 The detection AST is data, not executable code. Evaluation is deterministic and
 bounded. Regex values are length-limited; evidence is capped and contains only
@@ -119,8 +140,9 @@ marked experimental/candidate and includes known limitations.
 ## Persistence and evidence
 
 SQLite stores immutable manifest JSON/hash, action results, append-only
-lifecycle events, detection evaluations, and artifact metadata. Only final run
-status/summary fields are updated.
+lifecycle events, detection evaluations, artifact metadata, and redacted live
+query audits. Only final run status/summary fields and explicit post-run
+detection counters are updated.
 
 The v1 evidence ZIP contains the manifest, lifecycle JSONL, campaign report,
 scorecard, runbooks, candidate detections, and Attack Flow export. Process
@@ -128,4 +150,5 @@ output is reduced to return codes, byte count, and SHA-256 digest before any
 evidence is persisted.
 
 The public schemas are in [schemas](schemas/), including normalized events,
-detection rules, external plans, signed packs, authorization, and lifecycle v3.
+detection rules, external plans, agent trace events, live query plans,
+reference-lab results, signed packs, authorization, and lifecycle v3.

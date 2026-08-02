@@ -97,10 +97,10 @@ class WebUiTests(unittest.TestCase):
         catalog_response = self.client.get("/api/v1/catalog")
         self.assertEqual(catalog_response.status_code, 200)
         catalog = catalog_response.get_json()
-        self.assertEqual(catalog["version"], "1.0.0")
+        self.assertEqual(catalog["version"], "1.2.0")
         self.assertEqual(len(catalog["abilities"]), 8)
         self.assertEqual(len(catalog["campaigns"]), 2)
-        self.assertEqual(catalog["capabilities"]["agentic_fixtures"], 10)
+        self.assertEqual(catalog["capabilities"]["agentic_fixtures"], 20)
         self.assertTrue(catalog["capabilities"]["signed_builtin_content"])
         self.assertEqual(catalog["history"], [])
 
@@ -146,7 +146,7 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(lab.status_code, 200)
         lab_value = lab.get_json()
         self.assertTrue(lab_value["passed"])
-        self.assertEqual(len(lab_value["results"]), 10)
+        self.assertEqual(len(lab_value["results"]), 20)
         self.assertTrue(
             all(not result["safety"]["tool_executed"] for result in lab_value["results"])
         )

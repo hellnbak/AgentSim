@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/live-query-plan.schema.json",
+  "title": "AgentSim redacted live telemetry query plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "connector", "method", "url", "content_type",
+    "credential_env", "auth_style", "profile", "since", "until", "target",
+    "dataset", "limit", "metadata", "query_sha256", "credential_value_recorded",
+    "authorization_header_recorded", "network_execution"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "connector": {"enum": ["splunk", "elastic", "crowdstrike", "sentinel", "panther", "graylog"]},
+    "method": {"enum": ["GET", "POST"]},
+    "url": {"type": "string", "format": "uri"},
+    "content_type": {"type": "string"},
+    "credential_env": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"},
+    "auth_style": {"enum": ["bearer", "api-key", "x-api-key", "graylog-token"]},
+    "profile": {"type": "string"},
+    "since": {"type": "string", "format": "date-time"},
+    "until": {"type": "string", "format": "date-time"},
+    "target": {"type": "string", "minLength": 1},
+    "dataset": {"type": "string", "minLength": 1},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "metadata": {"type": "object"},
+    "query_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "credential_value_recorded": {"const": false},
+    "authorization_header_recorded": {"const": false},
+    "network_execution": {"const": "disabled_until_explicit_execute_and_allow_network"}
+  }
+}

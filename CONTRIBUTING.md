@@ -29,6 +29,8 @@ python core.py --iterations 6 --speed 0 --seed 42
 python core.py --scenario all --variant both --mutations 1 --mutation-seed 42 --speed 0
 python core.py --mcp-lab
 python -m agentsim.cli campaign run endpoint-discovery-baseline --mode simulate --target synthetic://ci --authorization examples/authorization.simulate.json
+python -m agentsim.cli lab reference all
+python -m agentsim.cli telemetry query elastic --base-url https://elastic.example.test --dataset logs-test --target host-test --since 2026-08-02T00:00:00Z --until 2026-08-02T00:05:00Z
 ```
 
 Tests must not execute commands from the catalog. Mock process execution or use
@@ -130,16 +132,23 @@ fixtures, group/time-boundary tests, required-field coverage, and renderer
 limitations. Generated rules must remain candidates until a human reviewer
 promotes them outside AgentSim.
 
-## Collectors, external adapters, and plugins
+## Collectors, live connectors, external adapters, and plugins
 
-Collectors must read exported data only, enforce bounded input, normalize to
-the public event schema, and remove sensitive values. Do not add a live SIEM
-credential/query connector to the public core.
+Offline collectors must read exported data only, enforce bounded input,
+normalize to the public event schema, and remove sensitive values.
+
+Live SIEM connectors must remain read-only and dry-run first. They must use an
+exact dataset and target, bounded time/record/response limits, TLS validation,
+redirect denial, an environment-sourced credential, a mockable transport, and
+double network opt-in. Tests must use fake transports and verify credentials do
+not enter plans, normalized events, output artifacts, or SQLite audits. Vendor
+mutation/deployment APIs and broad searches are out of scope.
 
 External adapters may emit version-pinned plans but may not execute a tool or
 send a network request. Execution belongs in an explicitly installed
-`agentsim.external_executors` plugin. New plugin contracts must preserve API
-1.0 or introduce a clearly versioned new contract. See
+`agentsim.external_executors` plugin. Custom query backends may use
+`agentsim.telemetry_connectors`. New plugin contracts must preserve API 1.0 or
+introduce a clearly versioned new contract. See
 [`PLUGIN_SDK.md`](PLUGIN_SDK.md) and
 [`EXTERNAL_PROVIDERS.md`](EXTERNAL_PROVIDERS.md).
 

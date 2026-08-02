@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
+import uuid
 from dataclasses import asdict
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -12,10 +14,23 @@ from typing import Mapping, Sequence
 from agentsim import __version__
 from agentsim.content import load_ability_registry, load_campaign_registry
 from agentsim.defense import analyze_gaps, generate_runbook, run_regression
-from agentsim.detection import analyze_coverage, evaluate_rule, generate_candidate, load_rule
+from agentsim.detection import (
+    analyze_coverage,
+    evaluate_live_registry,
+    evaluate_rule,
+    generate_candidate,
+    load_rule,
+)
 from agentsim.detection.renderers import FORMATS, render_candidate, write_candidate_bundle
 from agentsim.external import adapter_names, build_external_plan
-from agentsim.lab import list_fixtures, run_fixture, run_lab_suite
+from agentsim.lab import (
+    list_fixtures,
+    run_fixture,
+    run_lab_suite,
+    run_reference_fixture,
+    run_reference_suite,
+)
+from agentsim.lab.server import serve_reference_lab
 from agentsim.models.campaign import CampaignDefinition, CampaignStep
 from agentsim.models.target import TargetProfile
 from agentsim.orchestration.planner import plan_campaign
@@ -25,6 +40,7 @@ from agentsim.reporting.attack_flow import export_campaign, import_campaign
 from agentsim.safety.authorization import load_authorization_manifest
 from agentsim.storage import RunStore
 from agentsim.telemetry.collectors import COLLECTOR_NAMES, collector_for
+from agentsim.telemetry.connectors import CONNECTOR_NAMES, QuerySpec, build_query_plan, execute_query_plan
 
 
 FOUNDATION_COMMANDS = {
@@ -91,11 +107,36 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     history.add_argument("--database", default="agent_sim_runs.db", metavar="PATH")
     history.add_argument("--limit", type=int, default=25)
 
-    telemetry = commands.add_parser("telemetry", help="Normalize exported telemetry offline.")
+    telemetry = commands.add_parser("telemetry", help="Normalize exports or query a SIEM read-only.")
     telemetry_commands = telemetry.add_subparsers(dest="telemetry_command", required=True)
     telemetry_inspect = telemetry_commands.add_parser("inspect", help="Summarize a telemetry export.")
     telemetry_inspect.add_argument("path")
     telemetry_inspect.add_argument("--collector", choices=COLLECTOR_NAMES, default="jsonl")
+    telemetry_query = telemetry_commands.add_parser(
+        "query", help="Plan or explicitly execute an exact-target, read-only SIEM query."
+    )
+    telemetry_query.add_argument("connector", choices=CONNECTOR_NAMES)
+    telemetry_query.add_argument("--base-url", required=True)
+    telemetry_query.add_argument("--dataset", required=True)
+    telemetry_query.add_argument("--target", required=True)
+    telemetry_query.add_argument("--since", required=True)
+    telemetry_query.add_argument("--until", required=True)
+    telemetry_query.add_argument("--limit", type=int, default=1000)
+    telemetry_query.add_argument("--target-field")
+    telemetry_query.add_argument("--credential-env")
+    telemetry_query.add_argument("--execute", action="store_true")
+    telemetry_query.add_argument("--allow-network", action="store_true")
+    telemetry_query.add_argument("--ability", action="append", default=[])
+    telemetry_query.add_argument("--run-id", help="Link outcomes to an existing campaign run.")
+    telemetry_query.add_argument("--ability-pack", action="append", default=[], metavar="PATH")
+    telemetry_query.add_argument("--include-events", action="store_true")
+    telemetry_query.add_argument("--output")
+    telemetry_query.add_argument("--database", default="agent_sim_runs.db", metavar="PATH")
+    telemetry_history = telemetry_commands.add_parser(
+        "query-history", help="Show redacted live-query audit history."
+    )
+    telemetry_history.add_argument("--database", default="agent_sim_runs.db", metavar="PATH")
+    telemetry_history.add_argument("--limit", type=int, default=25)
 
     detection = commands.add_parser("detection", help="Evaluate and generate detection rules.")
     detection_commands = detection.add_subparsers(dest="detection_command", required=True)
@@ -122,12 +163,23 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     defense_regress.add_argument("--benign", required=True)
     defense_regress.add_argument("--collector", choices=COLLECTOR_NAMES, default="jsonl")
 
-    lab = commands.add_parser("lab", help="Run disposable in-memory agentic attack fixtures.")
+    lab = commands.add_parser("lab", help="Run in-memory or instrumented reference-agent fixtures.")
     lab_commands = lab.add_subparsers(dest="lab_command", required=True)
     lab_commands.add_parser("list", help="List agentic lab fixtures.")
     lab_run = lab_commands.add_parser("run", help="Run one fixture or the complete suite.")
     lab_run.add_argument("fixture_id", nargs="?", default="all")
     lab_run.add_argument("--output")
+    lab_reference = lab_commands.add_parser(
+        "reference", help="Run the instrumented reference agent with fixed synthetic tools."
+    )
+    lab_reference.add_argument("fixture_id", nargs="?", default="all")
+    lab_reference.add_argument("--output")
+    lab_serve = lab_commands.add_parser(
+        "serve", help="Serve the synthetic reference lab on an explicitly allowed loopback socket."
+    )
+    lab_serve.add_argument("--host", default="127.0.0.1")
+    lab_serve.add_argument("--port", type=int, default=8765)
+    lab_serve.add_argument("--allow-loopback", action="store_true")
 
     external = commands.add_parser("external", help="Build version-pinned external provider plans.")
     external_commands = external.add_subparsers(dest="external_command", required=True)
@@ -213,7 +265,7 @@ def _campaign_value(campaign: CampaignDefinition) -> dict[str, object]:
 
 
 def _run_v1(args: argparse.Namespace) -> int | None:
-    if args.command == "telemetry":
+    if args.command == "telemetry" and args.telemetry_command == "inspect":
         events = collector_for(args.collector).collect(args.path)
         _emit_json(
             {
@@ -229,6 +281,74 @@ def _run_v1(args: argparse.Namespace) -> int | None:
             }
         )
         return 0
+    if args.command == "telemetry" and args.telemetry_command == "query-history":
+        _emit_json(RunStore(args.database).telemetry_query_history(args.limit))
+        return 0
+    if args.command == "telemetry" and args.telemetry_command == "query":
+        spec = QuerySpec(
+            connector=args.connector,
+            base_url=args.base_url,
+            dataset=args.dataset,
+            target=args.target,
+            since=args.since,
+            until=args.until,
+            limit=args.limit,
+            target_field=args.target_field,
+            credential_env=args.credential_env,
+        )
+        plan = build_query_plan(spec)
+        if not args.execute:
+            _emit_json(plan.to_dict(), args.output)
+            return 0
+        result = execute_query_plan(plan, allow_network=args.allow_network)
+        store = RunStore(args.database)
+        selected_ability_ids = list(args.ability)
+        if args.run_id:
+            selected_ability_ids.extend(store.ability_ids_for_run(args.run_id))
+        selected_ability_ids = sorted(set(selected_ability_ids))
+        outcomes = ()
+        if selected_ability_ids:
+            abilities = load_ability_registry(args.ability_pack)
+            unknown = sorted(set(selected_ability_ids) - set(abilities))
+            if unknown:
+                raise ValueError(f"unknown abilities: {', '.join(unknown)}")
+            outcomes = evaluate_live_registry(
+                {ability_id: abilities[ability_id] for ability_id in selected_ability_ids},
+                result.events,
+            )
+        query_id = uuid.uuid4().hex
+        value = {
+            "query_id": query_id,
+            "campaign_run_id": args.run_id,
+            **result.to_dict(include_events=args.include_events),
+            "detection_outcomes": [outcome.to_dict() for outcome in outcomes],
+        }
+        audit = {
+            key: item for key, item in value.items() if key not in {"events"}
+        }
+        store.record_telemetry_query(query_id, audit, run_id=args.run_id)
+        if args.run_id:
+            outcome_values = [outcome.to_dict() for outcome in outcomes]
+            for outcome in outcomes:
+                store.append_detection(
+                    args.run_id,
+                    rule_id=outcome.rule_id,
+                    ability_id=outcome.ability_id,
+                    matched=outcome.matched,
+                    evaluation=outcome.to_dict(),
+                )
+            store.apply_detection_outcomes(args.run_id, outcome_values)
+        _emit_json(value, args.output)
+        if args.run_id and args.output:
+            output_path = Path(args.output)
+            store.record_artifact(
+                args.run_id,
+                artifact_type=f"live_detection_{query_id}",
+                path=str(output_path.resolve()),
+                sha256=hashlib.sha256(output_path.read_bytes()).hexdigest(),
+                metadata={"connector": args.connector, "query_id": query_id},
+            )
+        return 0 if all(outcome.status == "detected" for outcome in outcomes) else 1
     if args.command == "detection" and args.detection_command == "evaluate":
         result = evaluate_rule(
             load_rule(args.rule), collector_for(args.collector).collect(args.telemetry)
@@ -278,6 +398,8 @@ def _run_v1(args: argparse.Namespace) -> int | None:
                     "name": fixture.name,
                     "attack_class": fixture.attack_class,
                     "control": fixture.control,
+                    "atlas_techniques": list(fixture.atlas_techniques),
+                    "owasp_risks": list(fixture.owasp_risks),
                 }
                 for fixture in list_fixtures()
             ]
@@ -292,6 +414,28 @@ def _run_v1(args: argparse.Namespace) -> int | None:
         }
         _emit_json(value, args.output)
         return 0 if value["passed"] else 1
+    if args.command == "lab" and args.lab_command == "reference":
+        results = (
+            run_reference_suite()
+            if args.fixture_id == "all"
+            else (run_reference_fixture(args.fixture_id),)
+        )
+        value = {
+            "schema_version": "1.0",
+            "kind": "agentsim-reference-agent-lab-suite",
+            "passed": all(result.passed for result in results),
+            "fixture_count": len(results),
+            "results": [result.to_dict() for result in results],
+        }
+        _emit_json(value, args.output)
+        return 0 if value["passed"] else 1
+    if args.command == "lab" and args.lab_command == "serve":
+        serve_reference_lab(
+            args.host,
+            args.port,
+            allow_loopback=args.allow_loopback,
+        )
+        return 0
     if args.command == "external" and args.external_command == "list":
         _emit_json(
             {

@@ -7,10 +7,23 @@ from typing import Mapping, Sequence
 
 from agentsim.content import load_ability_registry, load_campaign_registry
 from agentsim.defense import analyze_gaps, generate_runbook
-from agentsim.detection import analyze_coverage, evaluate_rule, generate_candidate
+from agentsim.detection import (
+    analyze_coverage,
+    evaluate_live_registry,
+    evaluate_rule,
+    generate_candidate,
+)
 from agentsim.detection.ast import DetectionRule
 from agentsim.external import ExternalPlan, build_external_plan
-from agentsim.lab import LabResult, run_fixture, run_lab_suite
+from agentsim.lab import (
+    LabResult,
+    ReferenceLabRun,
+    run_fixture,
+    run_lab_suite,
+    run_reference_fixture,
+    run_reference_suite,
+)
+from agentsim.models.agent_trace import AgentTraceEvent
 from agentsim.models.telemetry import NormalizedEvent
 from agentsim.models.result import CampaignRunResult
 from agentsim.models.target import TargetProfile
@@ -18,6 +31,15 @@ from agentsim.orchestration.planner import CampaignPlan, plan_campaign
 from agentsim.orchestration.runner import CampaignRunner
 from agentsim.safety.authorization import AuthorizationManifest
 from agentsim.telemetry.collectors import collector_for
+from agentsim.telemetry.agent_contract import agent_trace_from_record
+from agentsim.telemetry.connectors import (
+    LiveQueryResult,
+    QueryPlan,
+    QuerySpec,
+    QueryTransport,
+    build_query_plan,
+    execute_query_plan,
+)
 
 
 def plan(
@@ -80,6 +102,47 @@ def collect_telemetry(path: str | Path, *, collector: str = "jsonl") -> tuple[No
     return collector_for(collector).collect(path)
 
 
+def normalize_agent_telemetry(
+    record: Mapping[str, object], *, collector: str = "agent_runtime"
+) -> AgentTraceEvent:
+    return agent_trace_from_record(record, collector=collector)
+
+
+def build_live_query(specification: QuerySpec) -> QueryPlan:
+    return build_query_plan(specification)
+
+
+def execute_live_query(
+    plan: QueryPlan,
+    *,
+    allow_network: bool = False,
+    transport: QueryTransport | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> LiveQueryResult:
+    return execute_query_plan(
+        plan,
+        allow_network=allow_network,
+        transport=transport,
+        environ=environ,
+    )
+
+
+def evaluate_live_telemetry(
+    ability_ids: Sequence[str],
+    events: Sequence[NormalizedEvent],
+    *,
+    ability_packs: Sequence[str | Path] = (),
+) -> tuple[dict[str, object], ...]:
+    abilities = load_ability_registry(ability_packs)
+    unknown = sorted(set(ability_ids) - set(abilities))
+    if unknown:
+        raise ValueError(f"unknown abilities: {', '.join(unknown)}")
+    outcomes = evaluate_live_registry(
+        {ability_id: abilities[ability_id] for ability_id in ability_ids}, events
+    )
+    return tuple(outcome.to_dict() for outcome in outcomes)
+
+
 def validate_detection(
     rule: DetectionRule, events: Sequence[NormalizedEvent]
 ) -> dict[str, object]:
@@ -119,6 +182,14 @@ def defense_analysis(
 
 def run_agentic_lab(fixture_id: str = "all") -> tuple[LabResult, ...]:
     return run_lab_suite() if fixture_id == "all" else (run_fixture(fixture_id),)
+
+
+def run_reference_agent_lab(fixture_id: str = "all") -> tuple[ReferenceLabRun, ...]:
+    return (
+        run_reference_suite()
+        if fixture_id == "all"
+        else (run_reference_fixture(fixture_id),)
+    )
 
 
 def external_plan(adapter: str, **parameters: str) -> ExternalPlan:

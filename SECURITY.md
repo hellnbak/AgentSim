@@ -60,6 +60,21 @@ and bounded evidence must remain fail closed. Report any path that evaluates
 telemetry as code, records sensitive field values, or silently contacts a
 vendor as a security issue.
 
+Live telemetry connectors are read-only query clients and are disabled until
+both execution and network access are explicitly enabled. Wildcard datasets or
+targets, windows over 24 hours, limits over 10,000 records, responses over 32
+MiB, remote plaintext HTTP, redirects, URL credentials, and credentials not
+provided through the named environment variable must fail closed. Connector
+plans and SQLite audits must never contain a credential value or authorization
+header. Creating or modifying vendor content is outside the connector scope.
+
+The reference-agent HTTP lab is synthetic-only. Host loopback requires an
+explicit opt-in, and non-loopback binding requires the disposable-container
+guard. Its request accepts only a fixture ID; it must never accept prompts,
+tool definitions, arguments, tokens, credentials, or arbitrary code. A host
+process, filesystem change, outbound network request, external tool call, or
+failure to reset state is a security issue.
+
 Built-in ability, campaign, and command content is RSA-signed. Signature
 bypass, trust-store substitution, acceptance of an untrusted key ID, or a
 content change that preserves verification is a security issue. The release

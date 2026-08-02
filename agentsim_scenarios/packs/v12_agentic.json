@@ -1,0 +1,226 @@
+{
+  "pack_schema_version": "1.0",
+  "pack_id": "agentsim.v12-agentic",
+  "scenarios": [
+    {
+      "scenario_id": "cross-turn-goal-hijack",
+      "name": "Cross-turn goal hijack",
+      "description": "Models a goal fingerprint changing after untrusted context is introduced.",
+      "risk": "critical",
+      "mappings": {
+        "mitre_atlas": ["AI Agent Context Poisoning", "AI Agent Tool Invocation"],
+        "owasp_agentic": ["ASI01 Agent Goal Hijack"]
+      },
+      "detector": {"type": "ordered_sequence", "conditions": [
+        {"event_type": "agent.goal.integrity", "equals": {"attributes.goal_integrity_valid": false}},
+        {"event_type": "agent.tool.requested", "equals": {"tool_risk": "high"}}
+      ]},
+      "malicious_steps": [
+        {"event_type": "agent.goal.integrity", "stage": "planning", "message": "Untrusted context changed the bound synthetic goal.", "input_trust": "untrusted", "outcome": "mismatch", "attributes": {"goal_integrity_valid": false, "content_recorded": false}},
+        {"event_type": "agent.tool.requested", "stage": "pre_tool", "message": "Changed goal proposed a high-risk synthetic action.", "input_trust": "untrusted", "tool_name": "synthetic.goal.preview", "tool_risk": "high", "policy_decision": "block", "outcome": "blocked", "attributes": {"executed": false, "arguments_redacted": true}}
+      ],
+      "benign_steps": [
+        {"event_type": "agent.goal.integrity", "stage": "planning", "message": "Trusted context preserved the bound synthetic goal.", "input_trust": "trusted", "outcome": "verified", "attributes": {"goal_integrity_valid": true, "content_recorded": false}},
+        {"event_type": "agent.tool.requested", "stage": "pre_tool", "message": "Stable goal proposed a low-risk synthetic read.", "input_trust": "trusted", "tool_name": "synthetic.catalog.read", "tool_risk": "low", "policy_decision": "allow", "outcome": "simulated", "attributes": {"executed": false, "arguments_redacted": true}}
+      ]
+    },
+    {
+      "scenario_id": "tool-result-provenance-poisoning",
+      "name": "Tool result provenance poisoning",
+      "description": "Models an unsigned tool result influencing a subsequent action.",
+      "risk": "high",
+      "mappings": {
+        "mitre_atlas": ["AI Agent Tool Data Poisoning"],
+        "owasp_agentic": ["ASI06 Memory and Context Poisoning"]
+      },
+      "detector": {"type": "ordered_sequence", "conditions": [
+        {"event_type": "agent.tool.result.observed", "equals": {"attributes.provenance_valid": false}},
+        {"event_type": "agent.tool.requested", "equals": {"tool_risk": "high"}}
+      ]},
+      "malicious_steps": [
+        {"event_type": "agent.tool.result.observed", "stage": "post_tool", "message": "Synthetic tool result lacked valid provenance.", "input_trust": "untrusted", "outcome": "untrusted", "attributes": {"provenance_valid": false, "result_recorded": false}},
+        {"event_type": "agent.tool.requested", "stage": "pre_tool", "message": "Untrusted result influenced a high-risk synthetic action.", "input_trust": "untrusted", "tool_name": "synthetic.tool.result", "tool_risk": "high", "policy_decision": "block", "outcome": "blocked", "attributes": {"executed": false, "arguments_redacted": true}}
+      ],
+      "benign_steps": [
+        {"event_type": "agent.tool.result.observed", "stage": "post_tool", "message": "Synthetic tool result matched its provenance record.", "input_trust": "trusted", "outcome": "verified", "attributes": {"provenance_valid": true, "result_recorded": false}},
+        {"event_type": "agent.tool.requested", "stage": "pre_tool", "message": "Trusted result influenced a low-risk synthetic read.", "input_trust": "trusted", "tool_name": "synthetic.catalog.read", "tool_risk": "low", "policy_decision": "allow", "outcome": "simulated", "attributes": {"executed": false, "arguments_redacted": true}}
+      ]
+    },
+    {
+      "scenario_id": "agent-configuration-tampering",
+      "name": "Agent configuration tampering",
+      "description": "Models an unsigned policy configuration appearing before a risky action.",
+      "risk": "critical",
+      "mappings": {
+        "mitre_atlas": ["Modify AI Agent Configuration"],
+        "owasp_agentic": ["ASI04 Agentic Supply Chain Vulnerabilities"]
+      },
+      "detector": {"type": "ordered_sequence", "conditions": [
+        {"event_type": "agent.configuration.integrity", "equals": {"attributes.signature_valid": false}},
+        {"event_type": "agent.policy.decision", "equals": {"attributes.policy_version_match": false}}
+      ]},
+      "malicious_steps": [
+        {"event_type": "agent.configuration.integrity", "stage": "configuration", "message": "Synthetic agent configuration failed signature verification.", "input_trust": "untrusted", "outcome": "invalid", "attributes": {"signature_valid": false, "configuration_target": "synthetic://agent/config"}},
+        {"event_type": "agent.policy.decision", "stage": "policy", "message": "Tampered configuration selected a stale synthetic policy.", "input_trust": "untrusted", "policy_decision": "block", "outcome": "prevented", "attributes": {"policy_version_match": false, "executed": false}}
+      ],
+      "benign_steps": [
+        {"event_type": "agent.configuration.integrity", "stage": "configuration", "message": "Synthetic agent configuration passed signature verification.", "input_trust": "trusted", "outcome": "verified", "attributes": {"signature_valid": true, "configuration_target": "synthetic://agent/config"}},
+        {"event_type": "agent.policy.decision", "stage": "policy", "message": "Verified configuration selected the current policy.", "input_trust": "trusted", "policy_decision": "allow", "outcome": "verified", "attributes": {"policy_version_match": true, "executed": false}}
+      ]
+    },
+    {
+      "scenario_id": "agent-supply-chain-rug-pull",
+      "name": "Agentic supply-chain rug pull",
+      "description": "Models a previously trusted tool version changing signer or provenance.",
+      "risk": "critical",
+      "mappings": {
+        "mitre_atlas": ["AI Supply Chain Rug Pull", "AI Agent Tool Poisoning"],
+        "owasp_agentic": ["ASI04 Agentic Supply Chain Vulnerabilities"]
+      },
+      "detector": {"type": "ordered_sequence", "conditions": [
+        {"event_type": "agent.tool.integrity", "equals": {"attributes.version_pinned": false, "attributes.signer_valid": false}},
+        {"event_type": "agent.tool.requested", "equals": {"tool_risk": "high"}}
+      ]},
+      "malicious_steps": [
+        {"event_type": "agent.tool.integrity", "stage": "tool_discovery", "message": "Synthetic tool changed version and signer outside policy.", "input_trust": "untrusted", "outcome": "invalid", "attributes": {"version_pinned": false, "signer_valid": false}},
+        {"event_type": "agent.tool.requested", "stage": "pre_tool", "message": "Untrusted tool proposed a high-risk synthetic action.", "input_trust": "untrusted", "tool_name": "synthetic.package.inspect", "tool_risk": "high", "policy_decision": "block", "outcome": "blocked", "attributes": {"executed": false, "arguments_redacted": true}}
+      ],
+      "benign_steps": [
+        {"event_type": "agent.tool.integrity", "stage": "tool_discovery", "message": "Synthetic tool matched its pinned version and signer.", "input_trust": "trusted", "outcome": "verified", "attributes": {"version_pinned": true, "signer_valid": true}},
+        {"event_type": "agent.tool.requested", "stage": "pre_tool", "message": "Verified tool proposed a low-risk synthetic inspection.", "input_trust": "trusted", "tool_name": "synthetic.package.inspect", "tool_risk": "low", "policy_decision": "allow", "outcome": "simulated", "attributes": {"executed": false, "arguments_redacted": true}}
+      ]
+    },
+    {
+      "scenario_id": "cross-session-action-replay",
+      "name": "Cross-session action replay",
+      "description": "Models a tool request replayed outside its bound session and intent.",
+      "risk": "high",
+      "mappings": {
+        "mitre_atlas": ["Use Alternate Authentication Material"],
+        "owasp_agentic": ["ASI03 Identity and Privilege Abuse"]
+      },
+      "detector": {"type": "ordered_sequence", "conditions": [
+        {"event_type": "agent.session.binding", "equals": {"attributes.session_binding_valid": false}},
+        {"event_type": "agent.tool.requested", "equals": {"attributes.replayed": true}}
+      ]},
+      "malicious_steps": [
+        {"event_type": "agent.session.binding", "stage": "authorization", "message": "Synthetic request did not match its bound session.", "input_trust": "untrusted", "outcome": "mismatch", "attributes": {"session_binding_valid": false, "intent_binding_valid": false}},
+        {"event_type": "agent.tool.requested", "stage": "pre_tool", "message": "Cross-session request attempted a synthetic replay.", "input_trust": "untrusted", "tool_name": "synthetic.session.inspect", "tool_risk": "high", "policy_decision": "block", "outcome": "blocked", "attributes": {"replayed": true, "executed": false}}
+      ],
+      "benign_steps": [
+        {"event_type": "agent.session.binding", "stage": "authorization", "message": "Synthetic request matched its bound session and intent.", "input_trust": "trusted", "outcome": "verified", "attributes": {"session_binding_valid": true, "intent_binding_valid": true}},
+        {"event_type": "agent.tool.requested", "stage": "pre_tool", "message": "Session-bound request proposed a synthetic inspection.", "input_trust": "trusted", "tool_name": "synthetic.session.inspect", "tool_risk": "low", "policy_decision": "allow", "outcome": "simulated", "attributes": {"replayed": false, "executed": false}}
+      ]
+    },
+    {
+      "scenario_id": "delayed-tool-exfiltration",
+      "name": "Delayed exfiltration through an allowed tool",
+      "description": "Models sensitive data classification followed later by an unapproved destination.",
+      "risk": "critical",
+      "mappings": {
+        "mitre_atlas": ["Exfiltration via AI Agent Tool Invocation"],
+        "owasp_agentic": ["ASI02 Tool Misuse"]
+      },
+      "detector": {"type": "ordered_sequence", "conditions": [
+        {"event_type": "agent.data.classified", "equals": {"attributes.data_class": "restricted"}},
+        {"event_type": "agent.network.requested", "equals": {"attributes.destination_allowed": false}}
+      ]},
+      "malicious_steps": [
+        {"event_type": "agent.data.classified", "stage": "data", "message": "Synthetic data was classified as restricted.", "input_trust": "mixed", "outcome": "classified", "attributes": {"data_class": "restricted", "content_recorded": false}},
+        {"event_type": "agent.network.requested", "stage": "network", "message": "Later action proposed an unapproved synthetic destination.", "input_trust": "untrusted", "tool_name": "synthetic.egress.preview", "tool_risk": "critical", "policy_decision": "block", "outcome": "blocked", "attributes": {"destination": "synthetic://egress/unapproved", "destination_allowed": false, "payload_recorded": false, "executed": false}}
+      ],
+      "benign_steps": [
+        {"event_type": "agent.data.classified", "stage": "data", "message": "Synthetic data was classified as public.", "input_trust": "trusted", "outcome": "classified", "attributes": {"data_class": "public", "content_recorded": false}},
+        {"event_type": "agent.network.requested", "stage": "network", "message": "Later action proposed an approved synthetic destination.", "input_trust": "trusted", "tool_name": "synthetic.egress.preview", "tool_risk": "low", "policy_decision": "allow", "outcome": "simulated", "attributes": {"destination": "synthetic://egress/approved", "destination_allowed": true, "payload_recorded": false, "executed": false}}
+      ]
+    },
+    {
+      "scenario_id": "misleading-action-summary",
+      "name": "Misleading action summary",
+      "description": "Models a human-facing summary that does not match the requested tool action.",
+      "risk": "high",
+      "mappings": {
+        "mitre_atlas": ["AI Agent Clickbait"],
+        "owasp_agentic": ["ASI09 Human-Agent Trust Exploitation"]
+      },
+      "detector": {"type": "ordered_sequence", "conditions": [
+        {"event_type": "agent.summary.integrity", "equals": {"attributes.evidence_binding_valid": false}},
+        {"event_type": "agent.approval.granted", "equals": {"attributes.summary_match": false}}
+      ]},
+      "malicious_steps": [
+        {"event_type": "agent.summary.integrity", "stage": "approval", "message": "Synthetic summary did not match the underlying action evidence.", "input_trust": "untrusted", "outcome": "mismatch", "attributes": {"evidence_binding_valid": false, "content_recorded": false}},
+        {"event_type": "agent.approval.granted", "stage": "approval", "message": "Synthetic approval was represented with a mismatched summary.", "input_trust": "untrusted", "tool_risk": "high", "policy_decision": "block", "outcome": "invalid", "attributes": {"summary_match": false, "executed": false}}
+      ],
+      "benign_steps": [
+        {"event_type": "agent.summary.integrity", "stage": "approval", "message": "Synthetic summary matched the underlying action evidence.", "input_trust": "trusted", "outcome": "verified", "attributes": {"evidence_binding_valid": true, "content_recorded": false}},
+        {"event_type": "agent.approval.granted", "stage": "approval", "message": "Synthetic approval matched the reviewed action summary.", "input_trust": "trusted", "tool_risk": "low", "policy_decision": "allow", "outcome": "verified", "attributes": {"summary_match": true, "executed": false}}
+      ]
+    },
+    {
+      "scenario_id": "mcp-scope-challenge-abuse",
+      "name": "MCP scope challenge escalation",
+      "description": "Models an excessive incremental scope challenge before a tool call.",
+      "risk": "high",
+      "mappings": {
+        "mitre_atlas": ["AI Agent Tool Invocation", "Valid Accounts"],
+        "owasp_agentic": ["ASI03 Identity and Privilege Abuse"]
+      },
+      "detector": {"type": "ordered_sequence", "conditions": [
+        {"event_type": "agent.auth.scope.challenge", "equals": {"attributes.least_privilege_valid": false}},
+        {"event_type": "agent.tool.requested", "equals": {"tool_risk": "high"}}
+      ]},
+      "malicious_steps": [
+        {"event_type": "agent.auth.scope.challenge", "stage": "authorization", "message": "Synthetic MCP challenge requested scopes unrelated to the current operation.", "input_trust": "untrusted", "outcome": "excessive", "attributes": {"least_privilege_valid": false, "resource_indicator_valid": true, "token_recorded": false}},
+        {"event_type": "agent.tool.requested", "stage": "pre_tool", "message": "Excessive scope context proposed a high-risk MCP action.", "input_trust": "untrusted", "tool_name": "mcp.synthetic.publish", "tool_risk": "high", "policy_decision": "block", "outcome": "blocked", "attributes": {"executed": false, "arguments_redacted": true}}
+      ],
+      "benign_steps": [
+        {"event_type": "agent.auth.scope.challenge", "stage": "authorization", "message": "Synthetic MCP challenge requested only the scope required for the operation.", "input_trust": "trusted", "outcome": "verified", "attributes": {"least_privilege_valid": true, "resource_indicator_valid": true, "token_recorded": false}},
+        {"event_type": "agent.tool.requested", "stage": "pre_tool", "message": "Least-privilege context proposed a read-only MCP action.", "input_trust": "trusted", "tool_name": "mcp.synthetic.search", "tool_risk": "low", "policy_decision": "allow", "outcome": "simulated", "attributes": {"executed": false, "arguments_redacted": true}}
+      ]
+    },
+    {
+      "scenario_id": "agent-task-id-replay",
+      "name": "Predictable agent task ID replay",
+      "description": "Models a task identifier reused outside its creator context.",
+      "risk": "high",
+      "mappings": {
+        "mitre_atlas": ["Use Alternate Authentication Material"],
+        "owasp_agentic": ["ASI07 Insecure Inter-Agent Communication"]
+      },
+      "detector": {"type": "ordered_sequence", "conditions": [
+        {"event_type": "agent.task.identity", "equals": {"attributes.context_binding_valid": false}},
+        {"event_type": "agent.delegation.accepted", "equals": {"attributes.task_replayed": true}}
+      ]},
+      "malicious_steps": [
+        {"event_type": "agent.task.identity", "stage": "delegation", "message": "Synthetic task ID was not bound to its creator context.", "input_trust": "untrusted", "outcome": "mismatch", "attributes": {"context_binding_valid": false, "task_id_predictable": true}},
+        {"event_type": "agent.delegation.accepted", "stage": "delegation", "message": "Peer proposed accepting the replayed synthetic task.", "input_trust": "untrusted", "tool_risk": "high", "policy_decision": "block", "outcome": "blocked", "attributes": {"task_replayed": true, "executed": false}}
+      ],
+      "benign_steps": [
+        {"event_type": "agent.task.identity", "stage": "delegation", "message": "Synthetic task ID was strongly bound to its creator context.", "input_trust": "trusted", "outcome": "verified", "attributes": {"context_binding_valid": true, "task_id_predictable": false}},
+        {"event_type": "agent.delegation.accepted", "stage": "delegation", "message": "Peer accepted the context-bound synthetic task.", "input_trust": "trusted", "tool_risk": "low", "policy_decision": "allow", "outcome": "simulated", "attributes": {"task_replayed": false, "executed": false}}
+      ]
+    },
+    {
+      "scenario_id": "retrieval-source-substitution",
+      "name": "Retrieval source substitution",
+      "description": "Models a retrieved source changing identity after trust evaluation.",
+      "risk": "high",
+      "mappings": {
+        "mitre_atlas": ["RAG Poisoning", "False RAG Entry Injection"],
+        "owasp_agentic": ["ASI06 Memory and Context Poisoning"]
+      },
+      "detector": {"type": "ordered_sequence", "conditions": [
+        {"event_type": "agent.retrieval.provenance", "equals": {"attributes.source_identity_match": false}},
+        {"event_type": "agent.memory.written", "equals": {"attributes.provenance_valid": false}}
+      ]},
+      "malicious_steps": [
+        {"event_type": "agent.retrieval.provenance", "stage": "retrieval", "message": "Synthetic retrieved source changed after trust evaluation.", "input_trust": "untrusted", "outcome": "substituted", "attributes": {"source_identity_match": false, "content_recorded": false}},
+        {"event_type": "agent.memory.written", "stage": "memory", "message": "Substituted source proposed a persistent synthetic memory write.", "input_trust": "untrusted", "policy_decision": "block", "outcome": "blocked", "attributes": {"provenance_valid": false, "resource": "synthetic://memory/reference", "executed": false}}
+      ],
+      "benign_steps": [
+        {"event_type": "agent.retrieval.provenance", "stage": "retrieval", "message": "Synthetic retrieved source identity remained stable.", "input_trust": "trusted", "outcome": "verified", "attributes": {"source_identity_match": true, "content_recorded": false}},
+        {"event_type": "agent.memory.written", "stage": "memory", "message": "Verified source proposed a synthetic memory update.", "input_trust": "trusted", "policy_decision": "allow", "outcome": "simulated", "attributes": {"provenance_valid": true, "resource": "synthetic://memory/reference", "executed": false}}
+      ]
+    }
+  ]
+}

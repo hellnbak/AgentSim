@@ -14,7 +14,7 @@ README = Path(__file__).with_name("README.md").read_text(encoding="utf-8")
 
 setup(
     name="agentsim",
-    version="1.0.0",
+    version="1.2.0",
     description="Detection-first adversary emulation for endpoints, cloud, and agentic AI",
     url="https://github.com/hellnbak/AgentSim",
     project_urls={
@@ -56,6 +56,9 @@ setup(
                 "schemas/normalized-event.schema.json",
                 "schemas/detection-rule.schema.json",
                 "schemas/external-plan.schema.json",
+                "schemas/agent-trace-event.schema.json",
+                "schemas/live-query-plan.schema.json",
+                "schemas/reference-lab-result.schema.json",
             ],
         )
     ],

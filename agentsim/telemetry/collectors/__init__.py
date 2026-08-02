@@ -8,12 +8,19 @@ from .base import ProfiledJsonCollector, TelemetryCollector
 COLLECTOR_NAMES = (
     "jsonl",
     "otel",
+    "otel_genai",
     "sysmon",
     "auditd",
     "cloudtrail",
     "crowdstrike",
+    "elastic",
+    "sentinel",
+    "logscale",
+    "panther",
+    "graylog",
     "splunk",
     "agent_runtime",
+    "mcp_audit",
 )
 
 

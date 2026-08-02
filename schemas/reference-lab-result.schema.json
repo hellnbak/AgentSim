@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/reference-lab-result.schema.json",
+  "title": "AgentSim reference-agent lab result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "run_id", "fixture_id", "passed", "events",
+    "synthetic_effects", "reset_verified", "safety"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "agentsim-reference-agent-lab-run"},
+    "run_id": {"type": "string", "minLength": 1},
+    "fixture_id": {"type": "string", "minLength": 1},
+    "passed": {"type": "boolean"},
+    "events": {"type": "array", "minItems": 6, "items": {"type": "object"}},
+    "synthetic_effects": {"type": "array", "items": {"type": "object"}},
+    "reset_verified": {"const": true},
+    "safety": {
+      "type": "object",
+      "required": [
+        "network_opened", "process_started", "filesystem_changed",
+        "external_tool_executed", "credential_used", "content_recorded"
+      ],
+      "properties": {
+        "network_opened": {"const": false},
+        "process_started": {"const": false},
+        "filesystem_changed": {"const": false},
+        "external_tool_executed": {"const": false},
+        "credential_used": {"const": false},
+        "content_recorded": {"const": false}
+      }
+    }
+  }
+}

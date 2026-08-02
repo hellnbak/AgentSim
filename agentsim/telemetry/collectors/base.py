@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Mapping
 
 from agentsim.models.telemetry import NormalizedEvent
+from agentsim.telemetry.agent_contract import AGENT_COLLECTOR_NAMES, normalize_agent_records
 from agentsim.telemetry.normalization import normalize_records
 
 
@@ -74,4 +75,7 @@ class ProfiledJsonCollector(TelemetryCollector):
         self.name = name
 
     def collect(self, path: str | Path) -> tuple[NormalizedEvent, ...]:
-        return normalize_records(read_json_records(path), collector=self.name)
+        records = read_json_records(path)
+        if self.name in AGENT_COLLECTOR_NAMES:
+            return normalize_agent_records(records, collector=self.name)
+        return normalize_records(records, collector=self.name)

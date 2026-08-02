@@ -64,6 +64,32 @@ CANONICAL_ALIASES: Mapping[str, tuple[str, ...]] = {
     "run_id": ("run_id", "agentsim.run_id", "attributes.run_id"),
     "ability_id": ("ability_id", "agentsim.ability_id", "attributes.ability_id"),
     "parent_event_id": ("parent_event_id", "event.parent_id", "caused_by"),
+    "trace_id": ("trace_id", "trace.id", "TraceId"),
+    "conversation_id": ("conversation_id", "gen_ai.conversation.id"),
+    "turn_id": ("turn_id", "gen_ai.turn.id"),
+    "tool_call_id": ("tool_call_id", "gen_ai.tool.call.id", "mcp.request.id"),
+    "tool_name": ("tool_name", "gen_ai.tool.name", "mcp.tool.name"),
+    "tool_risk": ("tool_risk", "agent.tool.risk"),
+    "delegation_id": ("delegation_id", "agent.delegation.id"),
+    "data_lineage_id": ("data_lineage_id", "gen_ai.data_source.id"),
+    "memory_id": ("memory_id", "agent.memory.id"),
+    "model_id": ("model_id", "gen_ai.response.model", "gen_ai.request.model"),
+    "mcp_client_id": ("mcp_client_id", "mcp.client.id"),
+    "mcp_server_id": ("mcp_server_id", "mcp.server.id"),
+    "auth_audience": ("auth_audience", "auth.audience", "audience"),
+    "auth_resource": ("auth_resource", "auth.resource"),
+    "auth_scopes": ("auth_scopes", "auth.scopes", "scopes"),
+    "auth_audience_valid": ("auth_audience_valid", "auth.audience_valid", "audience_valid"),
+    "consent_valid": ("consent_valid", "auth.consent_valid", "per_client_consent"),
+    "policy_id": ("policy_id", "agent.policy.id"),
+    "policy_version": ("policy_version", "agent.policy.version"),
+    "policy_decision": ("policy_decision", "agent.policy.decision"),
+    "approval_id": ("approval_id", "agent.approval.id"),
+    "approval_fingerprint": ("approval_fingerprint", "agent.approval.fingerprint"),
+    "input_trust": ("input_trust", "agent.input.trust"),
+    "taint_labels": ("taint_labels", "agent.taint.labels"),
+    "input_token_count": ("input_token_count", "gen_ai.usage.input_tokens"),
+    "output_token_count": ("output_token_count", "gen_ai.usage.output_tokens"),
 }
 
 PROFILE_ALIASES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
@@ -79,6 +105,11 @@ PROFILE_ALIASES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "timestamp": ("@timestamp", "timestamp"),
     },
     "splunk": {"timestamp": ("_time",), "source": ("sourcetype", "source")},
+    "elastic": {"timestamp": ("@timestamp",), "source": ("event.dataset",)},
+    "sentinel": {"timestamp": ("TimeGenerated",), "source": ("Type", "SourceSystem")},
+    "logscale": {"timestamp": ("@timestamp", "timestamp"), "source": ("#repo", "event_platform")},
+    "panther": {"timestamp": ("p_event_time", "timestamp"), "source": ("p_log_type",)},
+    "graylog": {"timestamp": ("timestamp",), "source": ("source",)},
     "otel": {
         "timestamp": ("timeUnixNano", "observedTimeUnixNano"),
         "event_type": ("name",),
@@ -88,6 +119,8 @@ PROFILE_ALIASES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
 
 
 def _get_path(value: Mapping[str, object], path: str) -> object:
+    if path in value:
+        return value[path]
     current: object = value
     for part in path.split("."):
         if not isinstance(current, Mapping) or part not in current:

@@ -14,6 +14,7 @@ ENTRY_POINT_GROUPS = {
     "collector": "agentsim.collectors",
     "external_executor": "agentsim.external_executors",
     "renderer": "agentsim.detection_renderers",
+    "telemetry_connector": "agentsim.telemetry_connectors",
 }
 
 
@@ -36,6 +37,15 @@ class DetectionRendererPlugin(Protocol):
     api_version: str
 
     def render(self, candidate: Mapping[str, object]) -> str: ...
+
+
+@runtime_checkable
+class TelemetryConnectorPlugin(Protocol):
+    api_version: str
+
+    def build_plan(self, specification: Mapping[str, object]) -> Mapping[str, object]: ...
+
+    def execute(self, plan: Mapping[str, object]) -> Iterable[NormalizedEvent]: ...
 
 
 @dataclass(frozen=True)

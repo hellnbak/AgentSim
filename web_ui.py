@@ -30,7 +30,14 @@ from agentsim.content import load_ability_registry, load_campaign_registry
 from agentsim.defense import analyze_gaps, generate_runbook
 from agentsim.detection import analyze_coverage, evaluate_rule, generate_candidate
 from agentsim.external import adapter_names
-from agentsim.lab import list_fixtures, run_fixture, run_lab_suite
+from agentsim.lab import (
+    list_fixtures,
+    run_fixture,
+    run_lab_suite,
+    run_reference_fixture,
+    run_reference_suite,
+)
+from agentsim.telemetry.connectors import CONNECTOR_NAMES
 from agentsim.models.target import TargetProfile
 from agentsim.orchestration.runner import CampaignRunner
 from agentsim.safety.authorization import AuthorizationManifest
@@ -1137,7 +1144,7 @@ HTML_TEMPLATE = """
                         <h2>Authorized campaign foundation</h2>
                         <p>Run a directed campaign through authorization, provider preparation, lifecycle-v3 ground truth, cleanup verification, defense recommendations, and persistent history. The dashboard exposes simulation only.</p>
                     </div>
-                    <span class="campaign-version">v1.0.0</span>
+                    <span class="campaign-version">v1.2.0</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="campaign-select" aria-label="Campaign">
@@ -1166,9 +1173,9 @@ HTML_TEMPLATE = """
                     <div>
                         <div class="eyebrow">Detection validation engine</div>
                         <h2>Validate visibility and agent safeguards</h2>
-                        <p>Exercise a generated candidate against redacted synthetic telemetry, inspect field coverage and gaps, or run all ten disposable agentic control fixtures. Nothing here starts a process or opens a network connection.</p>
+                        <p>Exercise a generated candidate against redacted synthetic telemetry, inspect field coverage and gaps, or run twenty instrumented malicious/benign agentic control pairs. Nothing here starts a host process or opens an external network connection.</p>
                     </div>
-                    <span class="campaign-version">v1 stable</span>
+                    <span class="campaign-version">v1.2 stable</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="v1-ability-select" aria-label="Detection validation ability">
@@ -1177,7 +1184,7 @@ HTML_TEMPLATE = """
                         {% endfor %}
                     </select>
                     <button class="primary-button campaign-run" id="v1-detection-run" type="button">Validate detection</button>
-                    <button class="tool-button" id="v1-lab-run" type="button">Run agentic lab</button>
+                    <button class="tool-button" id="v1-lab-run" type="button">Run reference lab</button>
                 </div>
                 <div class="campaign-result" id="v1-validation-result">
                     <div class="debug-placeholder">Choose an ability to inspect a candidate rule, evidence, field coverage, and defensive guidance.</div>
@@ -1579,9 +1586,9 @@ HTML_TEMPLATE = """
 
         async function runV1Lab() {
             elements.v1LabRun.disabled = true;
-            setCampaignPlaceholder(elements.v1Result, "Running ten disposable in-memory agentic fixtures…");
+            setCampaignPlaceholder(elements.v1Result, "Running twenty instrumented reference-agent fixtures…");
             try {
-                const response = await fetch("/api/v1/lab/run", {
+                const response = await fetch("/api/v1/lab/reference", {
                     method: "POST",
                     headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
                     body: JSON.stringify({fixture_id: "all"})
@@ -1590,7 +1597,7 @@ HTML_TEMPLATE = """
                 const payload = await response.json();
                 const results = Array.isArray(payload.results) ? payload.results : [];
                 setCampaignPlaceholder(elements.v1Result, results.filter(function (item) { return item.passed; }).length
-                    + " / " + results.length + " agentic control fixtures passed; all actions remained synthetic and non-executing.");
+                    + " / " + results.length + " reference-agent controls passed; only resettable in-memory synthetic effects were applied.");
             } catch (_error) {
                 setCampaignPlaceholder(elements.v1Result, "Agentic lab validation failed inside the disposable fixture boundary.");
             } finally {
@@ -2359,16 +2366,19 @@ def api_foundation_catalog() -> Response:
     history = RunStore(CAMPAIGN_DATABASE_PATH).history(25) if CAMPAIGN_DATABASE_PATH.exists() else []
     return jsonify(
         {
-            "version": "1.0.0",
+            "version": "1.2.0",
             "workflow": ["emulate", "observe", "detect", "defend", "retest"],
             "capabilities": {
-                "offline_collectors": ["jsonl", "otel", "sysmon", "auditd", "cloudtrail", "crowdstrike", "splunk", "agent_runtime"],
+                "offline_collectors": ["jsonl", "otel", "otel_genai", "sysmon", "auditd", "cloudtrail", "crowdstrike", "splunk", "elastic", "sentinel", "logscale", "panther", "graylog", "agent_runtime", "mcp_audit"],
+                "live_read_only_connectors": list(CONNECTOR_NAMES),
+                "agent_trace_contract": "1.0",
                 "detection_formats": ["sigma", "kql", "splunk", "crowdstrike", "elastic", "panther", "graylog"],
                 "agentic_fixtures": len(list_fixtures()),
                 "external_adapters": list(adapter_names()),
                 "external_execution_supported_by_core": False,
                 "signed_builtin_content": True,
                 "plugin_api_version": "1.0",
+                "reference_agent_lab": True,
             },
             "abilities": [
                 {
@@ -2525,6 +2535,32 @@ def api_v1_lab_run() -> Response:
         abort(400, description=str(exc))
     return jsonify(
         {
+            "passed": all(result.passed for result in results),
+            "results": [result.to_dict() for result in results],
+        }
+    )
+
+
+@app.route("/api/v1/lab/reference", methods=["POST"])
+def api_v12_reference_lab_run() -> Response:
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400, description="JSON request body is required")
+    fixture_id = payload.get("fixture_id", "all")
+    if not isinstance(fixture_id, str):
+        abort(400, description="fixture_id must be a string")
+    try:
+        results = (
+            run_reference_suite()
+            if fixture_id == "all"
+            else (run_reference_fixture(fixture_id),)
+        )
+    except ValueError as exc:
+        abort(400, description=str(exc))
+    return jsonify(
+        {
+            "version": "1.2.0",
             "passed": all(result.passed for result in results),
             "results": [result.to_dict() for result in results],
         }

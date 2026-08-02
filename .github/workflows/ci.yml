@@ -30,10 +30,12 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: v1 campaign and evidence smoke test
         run: agentsim campaign run endpoint-discovery-baseline --mode simulate --target synthetic://ci --authorization examples/authorization.simulate.json --output-dir smoke-campaign-runs --database smoke-runs.db
-      - name: v1 detection and lab interfaces
+      - name: v1.2 detection and lab interfaces
         run: |
           agentsim detection generate endpoint.discovery.processes --format sigma
           agentsim lab run all --output smoke-agentic-lab.json
+          agentsim lab reference all --output smoke-reference-lab.json
+          agentsim telemetry query elastic --base-url https://elastic.example.test --dataset logs-test --target host-test --since 2026-08-02T00:00:00Z --until 2026-08-02T00:05:00Z --output smoke-live-query-plan.json
           agentsim attack-flow export endpoint-discovery-baseline --output smoke-attack-flow.json
           agentsim external plan stratus-red-team --provider-version 2.17.0 --target cloud://aws/security-sandbox --technique-id aws.discovery.ec2-describe-instances --output smoke-external-plan.json
       - name: Smoke test
@@ -50,6 +52,8 @@ jobs:
             agent_sim_evidence.zip
             smoke-mcp-lab.json
             smoke-agentic-lab.json
+            smoke-reference-lab.json
+            smoke-live-query-plan.json
             smoke-attack-flow.json
             smoke-external-plan.json
             smoke-campaign-runs/*/evidence.zip

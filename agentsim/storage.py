@@ -78,8 +78,27 @@ class RunStore:
                     PRIMARY KEY (run_id, artifact_type),
                     FOREIGN KEY (run_id) REFERENCES runs(run_id)
                 );
+                CREATE TABLE IF NOT EXISTS telemetry_queries (
+                    query_id TEXT PRIMARY KEY,
+                    run_id TEXT,
+                    connector TEXT NOT NULL,
+                    dataset TEXT NOT NULL,
+                    target TEXT NOT NULL,
+                    since TEXT NOT NULL,
+                    until TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    query_sha256 TEXT NOT NULL,
+                    event_count INTEGER NOT NULL,
+                    audit_json TEXT NOT NULL
+                );
                 """
             )
+            query_columns = {
+                str(row["name"])
+                for row in connection.execute("PRAGMA table_info(telemetry_queries)").fetchall()
+            }
+            if "run_id" not in query_columns:
+                connection.execute("ALTER TABLE telemetry_queries ADD COLUMN run_id TEXT")
 
     def create_run(self, manifest: Mapping[str, object], manifest_sha256: str) -> None:
         with self._connect() as connection:
@@ -183,6 +202,100 @@ class RunStore:
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 (run_id, artifact_type, path, sha256, json.dumps(metadata or {}, sort_keys=True)),
+            )
+
+    def record_telemetry_query(
+        self, query_id: str, audit: Mapping[str, object], *, run_id: str | None = None
+    ) -> None:
+        """Persist only redacted query metadata; credentials and headers are rejected."""
+
+        serialized = json.dumps(audit, sort_keys=True)
+        lowered = serialized.casefold()
+        if '"authorization"' in lowered or '"credential_value"' in lowered:
+            raise ValueError("telemetry query audit may not contain credentials or authorization headers")
+        query = audit.get("query")
+        if not isinstance(query, Mapping):
+            raise ValueError("telemetry query audit is missing query metadata")
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO telemetry_queries (
+                    query_id, run_id, connector, dataset, target, since, until,
+                    status, query_sha256, event_count, audit_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    query_id,
+                    run_id,
+                    query["connector"],
+                    query["dataset"],
+                    query["target"],
+                    query["since"],
+                    query["until"],
+                    audit.get("status", "unknown"),
+                    query["query_sha256"],
+                    int(audit.get("record_count", 0)),
+                    serialized,
+                ),
+            )
+
+    def telemetry_query_history(self, limit: int = 25) -> list[dict[str, object]]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ValueError("telemetry query history limit must be between 1 and 500")
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT query_id, run_id, audit_json FROM telemetry_queries ORDER BY rowid DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [
+            {
+                "query_id": row["query_id"],
+                "campaign_run_id": row["run_id"],
+                **json.loads(row["audit_json"]),
+            }
+            for row in rows
+        ]
+
+    def ability_ids_for_run(self, run_id: str) -> tuple[str, ...]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT DISTINCT ability_id FROM actions WHERE run_id = ? ORDER BY ability_id",
+                (run_id,),
+            ).fetchall()
+        if not rows:
+            raise ValueError(f"unknown campaign run or run has no actions: {run_id}")
+        return tuple(str(row["ability_id"]) for row in rows)
+
+    def apply_detection_outcomes(
+        self, run_id: str, outcomes: list[Mapping[str, object]]
+    ) -> None:
+        """Update only detection counters after a separately audited telemetry query."""
+
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT summary_json FROM runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"unknown campaign run: {run_id}")
+            summary = json.loads(row["summary_json"])
+            stored = connection.execute(
+                "SELECT evaluation_json FROM detection_evaluations WHERE run_id = ?",
+                (run_id,),
+            ).fetchall()
+            merged = [json.loads(item["evaluation_json"]) for item in stored] or outcomes
+            detected = sum(item.get("status") == "detected" for item in merged)
+            missed = sum(item.get("status") == "missed" for item in merged)
+            evaluated = len(merged)
+            planned = int(summary.get("planned_actions", len(outcomes)))
+            summary["detections"] = detected
+            summary["misses"] = missed
+            summary["visibility_gaps"] = sum(
+                item.get("status") == "visibility_gap" for item in merged
+            )
+            summary["pending_detection_results"] = max(0, planned - evaluated)
+            connection.execute(
+                "UPDATE runs SET summary_json = ? WHERE run_id = ?",
+                (json.dumps(summary, sort_keys=True), run_id),
             )
 
     def history(self, limit: int = 25) -> list[dict[str, object]]:

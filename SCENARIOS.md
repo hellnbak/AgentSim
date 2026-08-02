@@ -4,7 +4,7 @@ AgentSim produces safe, labeled traces for validating detections at AI-agent
 trust boundaries. It records what an agent observed, proposed, delegated, and
 was allowed or blocked from doing. It never invokes an AI model or tool.
 
-In v1, scenario packs remain a separate non-executing content contract.
+In v1.2, scenario packs remain a separate non-executing content contract.
 Gated endpoint or lab behavior belongs in ability packs and directed campaign
 packs documented in [`ABILITIES.md`](ABILITIES.md) and
 [`CAMPAIGNS.md`](CAMPAIGNS.md). A scenario pack cannot opt into lifecycle-v3
@@ -49,6 +49,16 @@ detectors inspect observable event fields and never query `scenario_variant`,
 | `cross-tenant-context-confusion` | Principal and resource tenants diverge after an invalid context switch. |
 | `tool-chain-capability-escalation` | Modest tools compose into a high-risk restricted-data egress capability. |
 | `agent-registry-poisoning` | Unsigned registry capability expansion precedes a risky agent delegation. |
+| `cross-turn-goal-hijack` | Untrusted cross-turn instructions replace the authorized goal before a risky tool request. |
+| `tool-result-provenance-poisoning` | An untrusted tool result is accepted without provenance and drives a risky action. |
+| `agent-configuration-tampering` | Unsigned configuration changes weaken policy before a protected action. |
+| `agent-supply-chain-rug-pull` | A previously trusted dependency changes identity/capability before use. |
+| `cross-session-action-replay` | A stale action authorization is replayed in a different session. |
+| `delayed-tool-exfiltration` | Tainted data is retained and later proposed for egress after a delay. |
+| `misleading-action-summary` | The human-facing summary omits material scope from the proposed action. |
+| `mcp-scope-challenge-abuse` | An MCP authorization challenge expands resource or scope unexpectedly. |
+| `agent-task-id-replay` | A completed task identifier is reused for a different agent action. |
+| `retrieval-source-substitution` | A trusted retrieval source is replaced with an unverified origin before use. |
 
 The catalog is declarative JSON under `agentsim_scenarios/packs/`; adding a
 scenario does not require editing the engine.
@@ -74,15 +84,22 @@ loading a plugin, or executing a tool.
 This boundary differs from endpoint behavior mode, which runs the documented
 read-only command catalog unless `--dry-run` is selected.
 
-## v1 disposable control fixtures
+## v1.2 disposable and reference-agent fixtures
 
-`agentsim lab run all` adds ten smaller in-memory controls alongside the
-declarative benchmark: indirect prompt injection, memory poisoning, RAG
-poisoning, MCP permission expansion, MCP identity/audience failure, confused
-deputy, delegation spoofing, approval deception, decoy-secret access, and
-budget/recursion abuse. Each fixture exercises a malicious request and benign
-twin against a deterministic synthetic policy. No fixture opens a socket,
-starts a process, loads a plugin, executes a tool, or uses a credential.
+`agentsim lab run all` adds twenty smaller in-memory controls alongside the
+declarative benchmark. The original prompt, memory, RAG, MCP, delegation,
+approval, decoy-secret, and budget controls now include goal hijacking,
+tool-definition/result poisoning, configuration and supply-chain tampering,
+cross-session/approval replay, delayed exfiltration, cost harvesting, and
+deceptive summaries. Each fixture exercises a malicious request and benign
+twin against a deterministic synthetic policy.
+
+`agentsim lab reference all` runs those controls through an instrumented
+reference agent. It emits causal requested → policy → outcome events using the
+canonical agent trace contract. Only benign twins invoke a fixed synthetic
+tool, and that invocation changes an in-memory dictionary only. State is reset
+and verified after each fixture. The guarded HTTP form is packaged in a
+read-only, capability-free Docker profile under `labs/reference-agent/`.
 
 ## Event schema v2
 

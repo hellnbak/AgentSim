@@ -4,7 +4,7 @@ AgentSim produces safe, labeled traces for validating detections at AI-agent
 trust boundaries. It records what an agent observed, proposed, delegated, and
 was allowed or blocked from doing. It never invokes an AI model or tool.
 
-In v1.4, scenario packs remain a separate non-executing content contract.
+In v1.5, scenario packs remain a separate non-executing content contract.
 Gated endpoint or lab behavior belongs in ability packs and directed campaign
 packs documented in [`ABILITIES.md`](ABILITIES.md) and
 [`CAMPAIGNS.md`](CAMPAIGNS.md). A scenario pack cannot opt into lifecycle-v3
@@ -63,6 +63,11 @@ detectors inspect observable event fields and never query `scenario_variant`,
 | `shared-memory-retention-escape` | Untrusted memory crosses its session scope and influences another agent. |
 | `cross-agent-goal-fingerprint-drift` | A goal fingerprint changes across a delegation without approval. |
 | `multi-agent-trust-cascade` | One untrusted result fans out into high-risk proposals from multiple agents. |
+| `alert-verdict-poisoning` | An agent-authored false-positive verdict with invalid evidence binding proposes broad suppression. |
+| `alert-trace-reconciliation-confusion` | Alert and evidence identifiers resolve across conflicting traces and tenants. |
+| `operator-annotation-trust-abuse` | An AI-generated annotation misrepresents critical evidence to obtain suppression approval. |
+| `detection-tuning-recall-collapse` | A tuning proposal lowers malicious recall beyond an explicit regression threshold. |
+| `feedback-loop-alert-suppression` | An agent verdict cascades through remediation and planning agents until monitoring coverage falls. |
 
 The catalog is declarative JSON under `agentsim_scenarios/packs/`; adding a
 scenario does not require editing the engine.
@@ -88,15 +93,20 @@ loading a plugin, or executing a tool.
 This boundary differs from endpoint behavior mode, which runs the documented
 read-only command catalog unless `--dry-run` is selected.
 
-## v1.4 disposable and reference-agent fixtures
+## v1.5 disposable and reference-agent fixtures
 
-`agentsim lab run all` adds twenty-one smaller in-memory controls alongside the
+`agentsim lab run all` adds twenty-two smaller in-memory controls alongside the
 declarative benchmark. The original prompt, memory, RAG, MCP, delegation,
 approval, decoy-secret, and budget controls now include goal hijacking,
 tool-definition/result poisoning, configuration and supply-chain tampering,
 cross-session/approval replay, delayed exfiltration, cost harvesting, and
 deceptive summaries. Each fixture exercises a malicious request and benign
 twin against a deterministic synthetic policy.
+
+The `detection-feedback-integrity` fixture adds identity/evidence-bound alert
+feedback, trace/tenant reconciliation, a proposed suppression change, offline
+coverage validation, and a final policy gate. Its malicious twin is denied;
+its benign twin preserves the reviewed configuration.
 
 `agentsim lab reference all` runs those controls through an instrumented
 reference agent. It emits causal requested → policy → outcome events using
@@ -127,7 +137,9 @@ Important correlation fields include:
 | `agent_id`, `agent_instance_id`, `principal_id` | Logical agent, runtime instance, and authenticated principal. |
 | `delegation_id`, `approval_id` | Delegation and human-approval correlation. |
 | `data_lineage_id`, `taint_labels` | Data provenance and trust propagation. |
-| `attributes.goal_*`, `attributes.memory_*`, `attributes.identity_binding_valid` | Goal, retention, provenance, and delegation invariants used by v1.4 scenarios. |
+| `attributes.goal_*`, `attributes.memory_*`, `attributes.identity_binding_valid` | Goal, retention, provenance, and delegation invariants. |
+| `attributes.feedback_*`, `attributes.evidence_digest_match`, `attributes.alert_trace_match` | Structured feedback authorship, disposition, evidence, and alert reconciliation. |
+| `attributes.suppression_expanded`, `attributes.drift_exceeds_threshold`, `attributes.detection_recall` | Offline tuning scope and coverage-regression observations. |
 | `policy_id`, `policy_version`, `policy_decision` | Versioned control result. |
 | `event_type`, `stage`, `outcome` | Runtime checkpoint and disposition. |
 | `input_trust`, `tool_name`, `tool_risk` | Trust and proposed tool context. |
@@ -251,12 +263,15 @@ Treat blocked requests as high-value observations: they show an attack reached
 a control boundary. Keep allowed/simulated outcomes too, so prevention can be
 distinguished from possible exposure.
 
-The v1.4 detection-pack sweep is a separate, answer-key-free view over
+The v1.5 detection-pack sweep is a separate, answer-key-free view over
 normalized evidence. It is useful for exploratory signal coverage, but it does
 not replace malicious/benign benchmark scoring. Run `agentsim telemetry doctor`
 first so a broken trace cannot be interpreted as a quiet rule. Run
 `agentsim telemetry investigate` to reconstruct agent/delegation/memory paths
 and explain invariant failures without consulting the answer key.
+Use `agentsim defense reconcile` to bind external alert identifiers back to
+these content-safe traces, then `agentsim defense drift` before accepting any
+tuning candidate. See [DETECTION_FEEDBACK.md](DETECTION_FEEDBACK.md).
 
 ## Framework references
 

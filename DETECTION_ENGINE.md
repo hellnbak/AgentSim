@@ -1,6 +1,6 @@
 # Detection validation engine
 
-AgentSim v1.4 validates defensive assumptions against exported telemetry or an
+AgentSim v1.5 validates defensive assumptions against exported telemetry or an
 explicitly authorized, read-only live query. Offline operation remains the
 default and requires no vendor credential.
 
@@ -12,6 +12,7 @@ vendor export OR bounded live query → normalized/redacted events
              → multi-agent graph and invariant investigation
              → lifecycle correlation → field/source coverage
              → detection AST → evidence → gaps/runbook/regression
+             → alert/annotation reconciliation → tuning drift gate
              → candidate vendor renderers (human review required)
 ```
 
@@ -148,11 +149,13 @@ Evidence is bounded to 100 record references and excludes raw fields.
 ## Detection packs and sweeps
 
 A detection pack adds explicit `required_fields` and `expected_sources` to
-each AST rule. The built-in `agentsim.agent-security-core` pack contains twelve
+each AST rule. The built-in `agentsim.agent-security-core` pack contains fifteen
 content-safe investigative rules for untrusted/tainted high-risk tool requests,
 policy outcomes, MCP requests, authorization audience and consent failures,
-memory writes, attribution gaps, a goal-to-memory-to-tool path, and invalid
-memory provenance fanning out across agent identities.
+memory writes, attribution gaps, a goal-to-memory-to-tool path, invalid memory
+provenance fanning out across agent identities, feedback identity/evidence
+tampering, trace/tenant reconciliation mismatch, and tuning-driven recall
+collapse.
 
 ```bash
 agentsim detection sweep agent-events.jsonl --collector agent_runtime
@@ -187,6 +190,27 @@ benign controls, detection objectives, and a repeatable regression command.
 agentsim defense analyze endpoint.discovery.processes events.jsonl \
   --collector crowdstrike
 ```
+
+## Feedback reconciliation and drift
+
+Detection feedback uses a separate strict contract so an alert verdict cannot
+silently become a tuning instruction:
+
+```bash
+agentsim defense reconcile feedback.json agent-events.jsonl \
+  --collector agent_runtime \
+  --output feedback-report.json \
+  --fail-on elevated
+
+agentsim defense drift baseline.json candidate.json \
+  --output detection-drift.json
+```
+
+Reconciliation requires stable alert, trace, and evidence identifiers and
+enumerated annotations. Drift checks malicious recall and benign rejection as
+well as alert reconciliation and checkpoint latency. Both reports are offline,
+bounded, content-safe, and advisory; neither modifies vendor content. See
+[DETECTION_FEEDBACK.md](DETECTION_FEEDBACK.md).
 
 ## Candidate generation
 

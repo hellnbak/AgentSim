@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/detection-feedback-report.schema.json",
+  "title": "AgentSim detection feedback reconciliation report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "status", "score", "summary", "alerts",
+    "annotations", "reconciliations", "conflicts", "content_values_recorded"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "detection-feedback-report"},
+    "status": {"enum": ["clean", "review", "elevated", "critical"]},
+    "score": {"type": "integer", "minimum": 0, "maximum": 100},
+    "summary": {"$ref": "#/$defs/summary"},
+    "alerts": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {"$ref": "#/$defs/alert"}
+    },
+    "annotations": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/annotation"}
+    },
+    "reconciliations": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "alert_id", "status", "trace_id", "candidate_trace_ids",
+          "matched_event_ids", "reason_code"
+        ],
+        "properties": {
+          "alert_id": {"type": "string"},
+          "status": {"enum": ["matched", "ambiguous", "unmatched"]},
+          "trace_id": {"type": ["string", "null"]},
+          "candidate_trace_ids": {"type": "array", "items": {"type": "string"}},
+          "matched_event_ids": {"type": "array", "items": {"type": "string"}},
+          "reason_code": {"type": "string"}
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conflict_id", "code", "severity", "target_type", "target_id",
+          "trace_id", "annotation_ids", "evidence_ids", "remediation"
+        ],
+        "properties": {
+          "conflict_id": {"type": "string"},
+          "code": {"type": "string"},
+          "severity": {"enum": ["low", "medium", "high", "critical"]},
+          "target_type": {"enum": ["alert", "trace"]},
+          "target_id": {"type": "string"},
+          "trace_id": {"type": ["string", "null"]},
+          "annotation_ids": {"type": "array", "items": {"type": "string"}},
+          "evidence_ids": {"type": "array", "items": {"type": "string"}},
+          "remediation": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "content_values_recorded": {"const": false}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "minLength": 1, "maxLength": 512},
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alert_id", "rule_id", "detected_at", "severity", "trace_id",
+        "source_record_ids", "agent_id"
+      ],
+      "properties": {
+        "alert_id": {"$ref": "#/$defs/identifier"},
+        "rule_id": {"$ref": "#/$defs/identifier"},
+        "detected_at": {"type": "string", "format": "date-time"},
+        "severity": {"enum": ["low", "medium", "high", "critical"]},
+        "trace_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+        "source_record_ids": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "agent_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 512}
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "annotation_id", "target_type", "target_id", "disposition",
+        "reason_code", "author_id", "author_type", "created_at",
+        "evidence_ids", "evidence_digest_match"
+      ],
+      "properties": {
+        "annotation_id": {"$ref": "#/$defs/identifier"},
+        "target_type": {"enum": ["alert", "trace"]},
+        "target_id": {"$ref": "#/$defs/identifier"},
+        "disposition": {
+          "enum": [
+            "confirmed_true_positive", "false_positive", "benign_expected",
+            "needs_review", "tuning_candidate", "accepted_risk"
+          ]
+        },
+        "reason_code": {
+          "enum": [
+            "control_failure", "expected_behavior", "identity_mismatch",
+            "visibility_gap", "duplicate", "insufficient_evidence",
+            "policy_exception", "other_structured"
+          ]
+        },
+        "author_id": {"$ref": "#/$defs/identifier"},
+        "author_type": {"enum": ["human", "service", "agent"]},
+        "created_at": {"type": "string", "format": "date-time"},
+        "evidence_ids": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "evidence_digest_match": {"type": ["boolean", "null"]}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alerts", "annotations", "annotated_alerts", "matched", "ambiguous",
+        "unmatched", "match_rate_percent", "annotation_coverage_percent",
+        "verdicts", "conflicts", "conflict_severity"
+      ],
+      "properties": {
+        "alerts": {"type": "integer", "minimum": 0},
+        "annotations": {"type": "integer", "minimum": 0},
+        "annotated_alerts": {"type": "integer", "minimum": 0},
+        "matched": {"type": "integer", "minimum": 0},
+        "ambiguous": {"type": "integer", "minimum": 0},
+        "unmatched": {"type": "integer", "minimum": 0},
+        "match_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "annotation_coverage_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "verdicts": {"$ref": "#/$defs/verdict-counts"},
+        "conflicts": {"type": "integer", "minimum": 0},
+        "conflict_severity": {"$ref": "#/$defs/severity-counts"}
+      }
+    },
+    "verdict-counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accepted_risk", "benign_expected", "confirmed_true_positive",
+        "false_positive", "needs_review", "tuning_candidate"
+      ],
+      "properties": {
+        "accepted_risk": {"type": "integer", "minimum": 0},
+        "benign_expected": {"type": "integer", "minimum": 0},
+        "confirmed_true_positive": {"type": "integer", "minimum": 0},
+        "false_positive": {"type": "integer", "minimum": 0},
+        "needs_review": {"type": "integer", "minimum": 0},
+        "tuning_candidate": {"type": "integer", "minimum": 0}
+      }
+    },
+    "severity-counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["critical", "high", "medium", "low"],
+      "properties": {
+        "critical": {"type": "integer", "minimum": 0},
+        "high": {"type": "integer", "minimum": 0},
+        "medium": {"type": "integer", "minimum": 0},
+        "low": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

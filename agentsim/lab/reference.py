@@ -292,6 +292,135 @@ def _multi_agent_trace(
     return (goal, first_request, first_accept, memory, second_request, second_accept, tool, policy)
 
 
+def _feedback_integrity_trace(
+    *,
+    run_id: str,
+    fixture: LabFixture,
+    variant: str,
+    allowed: bool,
+    reason: str,
+) -> tuple[AgentTraceEvent, ...]:
+    """Emit a fixed feedback, reconciliation, tuning, and coverage chain."""
+
+    malicious = variant == "malicious"
+    trace_id = f"{run_id}:{variant}"
+    alert_id = f"{trace_id}:alert"
+
+    def checkpoint(
+        event_id: str,
+        event_type: str,
+        *,
+        parent_event_id: str | None = None,
+        agent_id: str,
+        outcome: str,
+        policy_decision: str | None = None,
+        identity_binding_valid: bool | None = None,
+        attributes: Mapping[str, object] | None = None,
+    ) -> AgentTraceEvent:
+        return AgentTraceEvent(
+            timestamp=_timestamp(),
+            event_id=f"{trace_id}:{event_id}",
+            event_type=event_type,
+            trace_id=trace_id,
+            session_id=f"reference-session-{variant}",
+            conversation_id=f"reference-conversation-{variant}",
+            agent_id=agent_id,
+            agent_instance_id=f"{agent_id}-{run_id[:8]}",
+            principal_id="synthetic-operator",
+            parent_event_id=parent_event_id,
+            caused_by_event_ids=(parent_event_id,) if parent_event_id else (),
+            tool_name=fixture.tool_name,
+            tool_risk="high" if malicious else "low",
+            policy_id=fixture.control,
+            policy_version="1.5",
+            policy_decision=policy_decision,
+            identity_binding_valid=identity_binding_valid,
+            input_trust="untrusted" if malicious else "trusted",
+            taint_labels=(fixture.attack_class,) if malicious else (),
+            outcome=outcome,
+            synthetic=True,
+            content_recorded=False,
+            attributes={
+                "fixture_id": fixture.fixture_id,
+                "variant": variant,
+                "executed": False,
+                **dict(attributes or {}),
+            },
+        )
+
+    alerted = checkpoint(
+        "alert",
+        "agent.detection.alerted",
+        agent_id="detection-agent",
+        outcome="detected",
+        attributes={"alert_id": alert_id, "alert_severity": "critical"},
+    )
+    feedback = checkpoint(
+        "feedback",
+        "agent.feedback.submitted",
+        parent_event_id=alerted.event_id,
+        agent_id="remediation-agent" if malicious else "review-agent",
+        outcome="rejected" if malicious else "verified",
+        identity_binding_valid=not malicious,
+        attributes={
+            "alert_id": alert_id,
+            "feedback_author_type": "agent" if malicious else "human",
+            "feedback_disposition": (
+                "false_positive" if malicious else "confirmed_true_positive"
+            ),
+            "evidence_digest_match": not malicious,
+        },
+    )
+    reconciled = checkpoint(
+        "reconciled",
+        "agent.alert.reconciled",
+        parent_event_id=feedback.event_id,
+        agent_id="correlation-agent",
+        outcome="ambiguous" if malicious else "matched",
+        identity_binding_valid=not malicious,
+        attributes={
+            "alert_id": alert_id,
+            "alert_trace_match": not malicious,
+            "tenant_binding_valid": not malicious,
+            "candidate_trace_count": 2 if malicious else 1,
+        },
+    )
+    tuned = checkpoint(
+        "tuned",
+        "agent.detection.tuned",
+        parent_event_id=reconciled.event_id,
+        agent_id="remediation-agent",
+        outcome="blocked" if malicious else "unchanged",
+        policy_decision="deny" if malicious else "allow",
+        attributes={
+            "tuning_scope": "wildcard" if malicious else "none",
+            "suppression_expanded": malicious,
+        },
+    )
+    coverage = checkpoint(
+        "coverage",
+        "agent.monitoring.coverage",
+        parent_event_id=tuned.event_id,
+        agent_id="validation-agent",
+        outcome="regressed" if malicious else "stable",
+        attributes={
+            "detection_recall": 0.5 if malicious else 1.0,
+            "false_positive_rate": 0.0,
+            "drift_exceeds_threshold": malicious,
+        },
+    )
+    policy = checkpoint(
+        "policy",
+        "agent.policy.decision",
+        parent_event_id=coverage.event_id,
+        agent_id="policy-agent",
+        outcome="prevented" if malicious else "verified",
+        policy_decision="allow" if allowed else "deny",
+        attributes={"decision_reason": reason, "tool_effect_applied": False},
+    )
+    return alerted, feedback, reconciled, tuned, coverage, policy
+
+
 def _trace(
     *,
     run_id: str,
@@ -309,6 +438,14 @@ def _trace(
             allowed=allowed,
             reason=reason,
             tool_effect_applied=tool_effect_applied,
+        )
+    if fixture.fixture_id == "detection-feedback-integrity":
+        return _feedback_integrity_trace(
+            run_id=run_id,
+            fixture=fixture,
+            variant=variant,
+            allowed=allowed,
+            reason=reason,
         )
     trace_id = f"{run_id}:{variant}"
     request = fixture.malicious_request if variant == "malicious" else fixture.benign_request

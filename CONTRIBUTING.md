@@ -31,6 +31,7 @@ python core.py --mcp-lab
 python -m agentsim.cli campaign run endpoint-discovery-baseline --mode simulate --target synthetic://ci --authorization examples/authorization.simulate.json
 python -m agentsim.cli lab reference all
 python -m agentsim.cli telemetry investigate agent_sim_events.jsonl --collector agent_runtime --fail-on never
+python -m unittest tests.test_v15 -v
 python -m agentsim.cli telemetry query elastic --base-url https://elastic.example.test --dataset logs-test --target host-test --since 2026-08-02T00:00:00Z --until 2026-08-02T00:05:00Z
 ```
 
@@ -152,6 +153,13 @@ record IDs, and grouping isolation. Investigation invariants require a failing
 trace, a closely matched clean twin, evidence/remediation assertions, and a
 content-boundary test. Web changes must use text-safe DOM construction and be
 verified in the local browser at desktop and narrow viewport widths.
+
+Feedback contract changes must keep alerts and annotations structured and
+content-safe. Do not add a free-form analyst note, prompt, argument, result,
+response, or payload field. Add tests for alert/evidence trace disagreement,
+unresolved references, invalid evidence digests, agent-authored dispositions,
+contradictory verdicts, and malicious/benign drift. Drift changes must test both
+stable and regressed candidates and must never add a vendor deployment path.
 
 ## Collectors, live connectors, external adapters, and plugins
 

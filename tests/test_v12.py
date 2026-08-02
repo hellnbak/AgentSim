@@ -306,7 +306,7 @@ class LiveConnectorTests(unittest.TestCase):
 
 class ReferenceAgentLabTests(unittest.TestCase):
     def test_v12_doubles_control_fixtures_and_all_pairs_pass(self):
-        self.assertEqual(len(list_fixtures()), 21)
+        self.assertEqual(len(list_fixtures()), 22)
         results = run_lab_suite()
         self.assertTrue(all(result.passed for result in results))
         self.assertTrue(all(not result.safety["network_opened"] for result in results))
@@ -324,8 +324,8 @@ class ReferenceAgentLabTests(unittest.TestCase):
         self.assertFalse(result.safety["external_tool_executed"])
 
     def test_reference_suite_and_v12_scenarios_cover_release_scope(self):
-        self.assertEqual(len(run_reference_suite()), 21)
-        self.assertEqual(len(SCENARIOS), 33)
+        self.assertEqual(len(run_reference_suite()), 22)
+        self.assertEqual(len(SCENARIOS), 38)
         self.assertIn("cross-turn-goal-hijack", SCENARIOS)
         self.assertIn("agent-task-id-replay", SCENARIOS)
 

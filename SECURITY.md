@@ -80,6 +80,20 @@ link fields and depth must remain bounded, their traversal must stay inside the
 rule grouping boundary, and detection-pack field declarations must cover every
 link and distinct-entity field.
 
+Detection feedback bundles are untrusted input. They must accept only bounded
+alerts and enumerated structured annotations, reject unknown/free-form fields,
+require stable identifiers, and never retain prompt, message, argument,
+response, result, credential, token, payload, or analyst narrative content.
+An unresolved or contradictory annotation, evidence-digest mismatch,
+agent-authored final verdict, trace disagreement, or high-risk trace dismissal
+must be reported rather than silently used for tuning.
+
+Detection drift is offline and advisory. Snapshot counts and thresholds must be
+validated and bounded; a comparison must never deploy, promote, suppress,
+update, or delete a vendor rule. Any path from a feedback or drift report to
+automatic production detection mutation is outside AgentSim's security model
+and should be treated as a security issue.
+
 Live telemetry connectors are read-only query clients and are disabled until
 both execution and network access are explicitly enabled. Wildcard datasets or
 targets, windows over 24 hours, limits over 10,000 records, responses over 32

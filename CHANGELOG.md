@@ -3,6 +3,39 @@
 Notable changes to AgentSim are documented here. The project follows semantic
 versioning while its public interfaces mature.
 
+## 1.5.0 - 2026-08-02
+
+- Added strict, content-safe alert and operator-annotation contracts plus
+  alert-to-trace/evidence reconciliation with matched, ambiguous, and unmatched
+  outcomes.
+- Added feedback integrity findings for unresolved targets/evidence, trace
+  disagreement, evidence-digest mismatch, agent-authored final verdicts,
+  contradictory dispositions, and dismissal of high-risk traces.
+- Added malicious/benign detection snapshots and configurable drift gates for
+  recall, false-positive rate, benign rejection, alert reconciliation, and
+  mean checkpoints to detection.
+- Added `agentsim defense reconcile` and `agentsim defense drift`, stable Python
+  APIs, three public JSON schemas, bounded inputs, JSON reports, and
+  configurable CI exit thresholds.
+- Added five malicious/benign scenarios covering alert-verdict poisoning,
+  trace reconciliation confusion, operator annotation trust abuse, tuning
+  recall collapse, and cross-agent feedback-loop alert suppression. The
+  benchmark now contains thirty-eight scenarios and seventy-six baseline
+  checks.
+- Added the `detection-feedback-integrity` disposable/reference fixture with
+  alert, feedback, reconciliation, tuning, coverage, and policy checkpoints.
+  The reference corpus now includes twenty-two fixtures and 152 events.
+- Expanded the answer-key-free Agent Security Core pack from twelve to fifteen
+  rules with feedback identity/evidence tampering, trace/tenant reconciliation,
+  and causal tuning/coverage regression detections. The reference sweep detects
+  twelve rules with zero visibility gaps.
+- Added a dashboard feedback workspace showing reconciliation and annotation
+  coverage, prioritized conflicts, feedback/drift scores, and per-metric tuning
+  deltas over a fixed synthetic corpus.
+- Added focused unit, CLI, API, scenario, pack, schema, Web, and reference-lab
+  tests plus updated architecture, detection, telemetry, security, scenario,
+  contribution, roadmap, and lab documentation.
+
 ## 1.4.0 - 2026-08-02
 
 - Added bounded multi-agent investigation reports with content-safe nodes,

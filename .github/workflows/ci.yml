@@ -30,7 +30,7 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: v1 campaign and evidence smoke test
         run: agentsim campaign run endpoint-discovery-baseline --mode simulate --target synthetic://ci --authorization examples/authorization.simulate.json --output-dir smoke-campaign-runs --database smoke-runs.db
-      - name: v1.4 assurance, graph investigation, detection, and lab interfaces
+      - name: v1.5 assurance, investigation, detection, feedback, and lab interfaces
         run: |
           agentsim detection generate endpoint.discovery.processes --format sigma
           agentsim lab run all --output smoke-agentic-lab.json
@@ -47,6 +47,7 @@ jobs:
           agentsim telemetry doctor smoke-events.jsonl --collector agent_runtime --output smoke-assurance.json --fail-on degraded
           agentsim telemetry investigate smoke-events.jsonl --collector agent_runtime --output smoke-investigation.json --fail-on never
           agentsim detection sweep smoke-events.jsonl --collector agent_runtime --output smoke-detection-sweep.json
+          agentsim defense drift smoke-validation.json smoke-validation.json --output smoke-detection-drift.json
       - name: MCP boundary smoke test
         run: python core.py --mcp-lab --mcp-lab-output smoke-mcp-lab.json
       - name: Upload benchmark evidence
@@ -60,6 +61,7 @@ jobs:
             smoke-reference-lab.json
             smoke-assurance.json
             smoke-detection-sweep.json
+            smoke-detection-drift.json
             smoke-live-query-plan.json
             smoke-attack-flow.json
             smoke-external-plan.json

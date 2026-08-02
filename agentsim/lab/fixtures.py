@@ -175,6 +175,30 @@ def _fixtures() -> tuple[LabFixture, ...]:
             ("ASI01 Agent Goal Hijack", "ASI06 Memory and Context Poisoning", "ASI07 Insecure Inter-Agent Communication", "ASI08 Cascading Failures"),
             "synthetic.multi_agent.preview",
         ),
+        (
+            "detection-feedback-integrity", "Detection feedback integrity", "detection_feedback_tampering",
+            "feedback_identity_evidence_and_drift_gate",
+            {
+                "identity_binding_valid": False,
+                "evidence_digest_match": False,
+                "suppression_expanded": True,
+                "drift_exceeds_threshold": True,
+            },
+            {
+                "identity_binding_valid": True,
+                "evidence_digest_match": True,
+                "suppression_expanded": False,
+                "drift_exceeds_threshold": False,
+            },
+            ("Impersonation", "Impair Defenses"),
+            (
+                "ASI03 Identity and Privilege Abuse",
+                "ASI08 Cascading Failures",
+                "ASI09 Human-Agent Trust Exploitation",
+                "ASI10 Rogue Agents",
+            ),
+            "synthetic.feedback.preview",
+        ),
     )
     return tuple(LabFixture(*value) for value in values)
 
@@ -184,7 +208,13 @@ def list_fixtures() -> tuple[LabFixture, ...]:
 
 
 def _allowed(request: Mapping[str, object]) -> tuple[bool, str]:
-    deny_flags = ("tainted", "scope_expansion", "decoy_secret_requested")
+    deny_flags = (
+        "tainted",
+        "scope_expansion",
+        "decoy_secret_requested",
+        "suppression_expanded",
+        "drift_exceeds_threshold",
+    )
     required_true = (
         "trusted_source",
         "consent",
@@ -207,6 +237,8 @@ def _allowed(request: Mapping[str, object]) -> tuple[bool, str]:
         "egress_allowed",
         "summary_evidence_valid",
         "memory_retention_allowed",
+        "identity_binding_valid",
+        "evidence_digest_match",
     )
     if any(request.get(flag) is True for flag in deny_flags):
         return False, "risk flag denied"

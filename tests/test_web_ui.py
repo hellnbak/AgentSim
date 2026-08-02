@@ -118,10 +118,12 @@ class WebUiTests(unittest.TestCase):
         catalog_response = self.client.get("/api/v1/catalog")
         self.assertEqual(catalog_response.status_code, 200)
         catalog = catalog_response.get_json()
-        self.assertEqual(catalog["version"], "1.4.0")
+        self.assertEqual(catalog["version"], "1.5.0")
         self.assertEqual(len(catalog["abilities"]), 8)
         self.assertEqual(len(catalog["campaigns"]), 2)
-        self.assertEqual(catalog["capabilities"]["agentic_fixtures"], 21)
+        self.assertEqual(catalog["capabilities"]["agentic_fixtures"], 22)
+        self.assertTrue(catalog["capabilities"]["detection_feedback_reconciliation"])
+        self.assertTrue(catalog["capabilities"]["detection_tuning_drift"])
         self.assertTrue(catalog["capabilities"]["multi_agent_investigation"])
         self.assertEqual(catalog["capabilities"]["agent_trace_contract"], "1.1")
         self.assertTrue(catalog["capabilities"]["signed_builtin_content"])
@@ -169,7 +171,7 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(lab.status_code, 200)
         lab_value = lab.get_json()
         self.assertTrue(lab_value["passed"])
-        self.assertEqual(len(lab_value["results"]), 21)
+        self.assertEqual(len(lab_value["results"]), 22)
         self.assertTrue(
             all(not result["safety"]["tool_executed"] for result in lab_value["results"])
         )
@@ -183,7 +185,7 @@ class WebUiTests(unittest.TestCase):
         assurance_value = assurance.get_json()
         self.assertEqual(assurance_value["assurance"]["status"], "healthy")
         self.assertEqual(assurance_value["assurance"]["score"], 100)
-        self.assertEqual(assurance_value["sweep"]["summary"]["detected"], 9)
+        self.assertEqual(assurance_value["sweep"]["summary"]["detected"], 12)
         self.assertEqual(assurance_value["sweep"]["summary"]["visibility_gap"], 0)
         self.assertFalse(assurance_value["sweep"]["ground_truth_used"])
 
@@ -199,6 +201,25 @@ class WebUiTests(unittest.TestCase):
         self.assertGreaterEqual(report["summary"]["max_depth"], 7)
         self.assertTrue(report["paths"])
         self.assertFalse(report["content_values_recorded"])
+
+    def test_feedback_integrity_gui_api_is_synthetic_and_actionable(self):
+        headers = {"X-AgentSim-Form-Token": web_ui.form_token}
+        response = self.client.post(
+            "/api/v1/defense/feedback-demo",
+            json={"corpus": "detection-feedback-integrity"},
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        value = response.get_json()
+        self.assertEqual(value["feedback"]["status"], "critical")
+        self.assertEqual(value["feedback"]["summary"]["match_rate_percent"], 100.0)
+        self.assertEqual(value["drift"]["status"], "regressed")
+        self.assertEqual(len(value["drift"]["findings"]), 4)
+        self.assertFalse(value["process_started"])
+        self.assertFalse(value["network_opened"])
+        page = self.client.get("/").get_data(as_text=True)
+        self.assertIn('id="feedback-run"', page)
+        self.assertIn("Detection feedback and tuning drift", page)
 
     def test_classifies_command_cycle_and_anomaly_events(self):
         command = web_ui._classify_message("[*] EXECUTING: whoami (bash)")

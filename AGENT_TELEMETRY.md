@@ -1,6 +1,6 @@
 # Agent and MCP telemetry contract
 
-AgentSim 1.4 defines agent trace contract 1.1 for correlating agent,
+AgentSim 1.5 uses agent trace contract 1.1 for correlating agent,
 model, tool, policy, and MCP activity without retaining prompts, reasoning,
 messages, tool arguments/results, model responses, payloads, credentials, or
 unsafe token values.
@@ -102,6 +102,24 @@ originating principal, goal identity/fingerprint, and applicable memory
 lineage. The v1.4 reference fixture emits a three-agent malicious/benign twin
 for this sequence.
 
+Detection and remediation agents should preserve feedback as separate
+checkpoints:
+
+```text
+agent.detection.alerted
+  → agent.feedback.submitted
+  → agent.alert.reconciled
+  → agent.detection.tuned
+  → agent.monitoring.coverage
+  → agent.policy.decision
+```
+
+Record only stable alert/evidence identifiers, enumerated author/disposition
+facts, identity and evidence-digest validity, tuning scope, and coverage
+metrics. Do not place analyst narrative, alert payloads, prompts, arguments, or
+results in these attributes. The v1.5 feedback fixture emits malicious/benign
+twins for this sequence.
+
 Memory writes, retrieval, delegation, approval, configuration, and MCP
 authorization should likewise emit the observable decision separately from the
 requested action. Blocked events remain valuable: they prove hostile or unsafe
@@ -110,6 +128,8 @@ intent reached a control boundary without implying compromise.
 Run [`telemetry doctor`](TELEMETRY_ASSURANCE.md) on every new runtime mapping,
 then use [`telemetry investigate`](MULTI_AGENT_INVESTIGATION.md) when agent,
 delegation, goal, or memory fields are present.
+Run [`defense reconcile`](DETECTION_FEEDBACK.md) before using alert feedback for
+tuning, then compare the candidate with a reviewed malicious/benign baseline.
 A deterministic fallback keeps malformed exports parseable, but the assurance
 report marks substituted timestamps and generated identities so they cannot be
 mistaken for native correlation evidence.

@@ -6,7 +6,15 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from agentsim.content import load_ability_registry, load_campaign_registry
-from agentsim.defense import analyze_gaps, generate_runbook
+from agentsim.defense import (
+    DetectionAlert,
+    DetectionSnapshot,
+    OperatorAnnotation,
+    analyze_gaps,
+    compare_detection_snapshots,
+    generate_runbook,
+    reconcile_detection_feedback,
+)
 from agentsim.detection import (
     analyze_coverage,
     evaluate_live_registry,
@@ -122,6 +130,37 @@ def telemetry_investigation(events: Sequence[NormalizedEvent]) -> dict[str, obje
     """Reconstruct a bounded multi-agent graph and evaluate defensive invariants."""
 
     return investigate_telemetry(events).to_dict()
+
+
+def detection_feedback_reconciliation(
+    alerts: Sequence[DetectionAlert],
+    events: Sequence[NormalizedEvent],
+    annotations: Sequence[OperatorAnnotation] = (),
+) -> dict[str, object]:
+    """Join structured alert feedback to traces without accepting analyst free text."""
+
+    return reconcile_detection_feedback(alerts, events, annotations).to_dict()
+
+
+def detection_drift(
+    baseline: DetectionSnapshot,
+    candidate: DetectionSnapshot,
+    *,
+    max_recall_drop: float = 0.05,
+    max_false_positive_rate_increase: float = 0.05,
+    max_latency_increase: float = 1.0,
+    max_reconciliation_drop: float = 0.05,
+) -> dict[str, object]:
+    """Compare malicious/benign detection metrics using explicit drift gates."""
+
+    return compare_detection_snapshots(
+        baseline,
+        candidate,
+        max_recall_drop=max_recall_drop,
+        max_false_positive_rate_increase=max_false_positive_rate_increase,
+        max_latency_increase=max_latency_increase,
+        max_reconciliation_drop=max_reconciliation_drop,
+    ).to_dict()
 
 
 def detection_pack_sweep(

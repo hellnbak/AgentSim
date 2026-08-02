@@ -2,8 +2,8 @@
   "pack_schema_version": "1.0",
   "pack_id": "agentsim.agent-security-core",
   "name": "AgentSim Agent Security Core",
-  "version": "1.1.0",
-  "description": "Content-safe investigative signals for agent, tool, policy, MCP, and multi-agent graph telemetry.",
+  "version": "1.2.0",
+  "description": "Content-safe investigative signals for agent, tool, policy, MCP, multi-agent graph, and detection-feedback telemetry.",
   "metadata": {
     "maintainer": "AgentSim contributors",
     "content_values_required": false,
@@ -236,6 +236,62 @@
         "max_depth": 4
       },
       "metadata": {"disposition": "identify the first untrusted ancestor and contain every affected agent session"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.feedback-identity-evidence-tampering",
+      "name": "Detection feedback failed identity and evidence binding",
+      "description": "Finds structured alert feedback whose author identity and evidence digest did not validate.",
+      "severity": "critical",
+      "group_by": ["trace_id"],
+      "mappings": ["ASI03 Identity and Privilege Abuse", "ASI09 Human-Agent Trust Exploitation", "ASI10 Rogue Agents"],
+      "required_fields": ["attributes.evidence_digest_match", "event_type", "identity_binding_valid", "trace_id"],
+      "expected_sources": ["agent_runtime"],
+      "expression": {"type": "match", "predicates": [
+        {"field": "event_type", "operator": "eq", "value": "agent.feedback.submitted"},
+        {"field": "identity_binding_valid", "operator": "eq", "value": false},
+        {"field": "attributes.evidence_digest_match", "operator": "eq", "value": false}
+      ]},
+      "metadata": {"disposition": "reject the verdict and require an authenticated human to re-bind current evidence"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.alert-trace-reconciliation-mismatch",
+      "name": "Alert reconciliation crossed trace and tenant boundaries",
+      "description": "Finds alert reconciliation results whose evidence disagrees with both trace and tenant bindings.",
+      "severity": "high",
+      "group_by": ["trace_id"],
+      "mappings": ["ASI03 Identity and Privilege Abuse", "ASI07 Insecure Inter-Agent Communication"],
+      "required_fields": ["attributes.alert_trace_match", "attributes.tenant_binding_valid", "event_type", "trace_id"],
+      "expected_sources": ["agent_runtime"],
+      "expression": {"type": "match", "predicates": [
+        {"field": "event_type", "operator": "eq", "value": "agent.alert.reconciled"},
+        {"field": "attributes.alert_trace_match", "operator": "eq", "value": false},
+        {"field": "attributes.tenant_binding_valid", "operator": "eq", "value": false}
+      ]},
+      "metadata": {"disposition": "quarantine the verdict from tuning until trace and tenant evidence converge"}
+    },
+    {
+      "schema_version": "1.0",
+      "rule_id": "agentsim.detection-tuning-recall-collapse",
+      "name": "Suppression expansion caused detection coverage regression",
+      "description": "Traverses a proposed suppression expansion into a directly caused monitoring-coverage regression.",
+      "severity": "critical",
+      "group_by": ["trace_id"],
+      "mappings": ["ASI08 Cascading Failures", "ASI10 Rogue Agents", "Impair Defenses"],
+      "required_fields": ["attributes.drift_exceeds_threshold", "attributes.suppression_expanded", "event_type", "parent_event_id", "source_record_id", "trace_id"],
+      "expected_sources": ["agent_runtime"],
+      "expression": {"type": "causal_graph", "link_field": "parent_event_id", "steps": [
+        {"type": "match", "predicates": [
+          {"field": "event_type", "operator": "eq", "value": "agent.detection.tuned"},
+          {"field": "attributes.suppression_expanded", "operator": "eq", "value": true}
+        ]},
+        {"type": "match", "predicates": [
+          {"field": "event_type", "operator": "eq", "value": "agent.monitoring.coverage"},
+          {"field": "attributes.drift_exceeds_threshold", "operator": "eq", "value": true}
+        ]}
+      ]},
+      "metadata": {"disposition": "block deployment and restore malicious and benign baseline coverage"}
     }
   ]
 }

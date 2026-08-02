@@ -1,4 +1,4 @@
-# AgentSim v1.4 architecture
+# AgentSim v1.5 architecture
 
 AgentSim separates content, execution, authorization, telemetry, detection,
 and defensive evaluation so synthetic traces cannot silently become executable
@@ -32,6 +32,13 @@ flowchart TD
     Investigate --> Detect
     Detect --> Candidate["Human-review candidate renderers"]
     Detect --> Defense["Gaps, runbooks, scorecards, regression"]
+    Alert["Detection alerts and structured annotations"] --> Reconcile["Alert-to-trace reconciliation"]
+    Normalize --> Reconcile
+    Reconcile --> Feedback["Feedback integrity report"]
+    Baseline["Malicious and benign baseline"] --> Drift["Offline detection drift gate"]
+    Candidate --> Drift
+    Feedback --> Defense
+    Drift --> Defense
     Candidate --> Bundle["Portable evidence bundle"]
     Defense --> Bundle
 ```
@@ -51,7 +58,7 @@ agentsim/
 ├── safety/                authorization, target scope, policy, limits, cleanup
 ├── telemetry/             contracts, collectors, assurance, graph investigation, connectors
 ├── detection/             graph-aware AST, packs, evaluator, coverage, generator, renderers
-├── defense/               recommendations, gaps, runbooks, regression, scorecard
+├── defense/               feedback, drift, recommendations, gaps, regression, scorecard
 ├── lab/                   in-memory controls and instrumented reference agent
 ├── reporting/             bundles and Attack Flow STIX interchange
 └── web/                   packaged loopback Web entry point
@@ -166,6 +173,20 @@ telemetry or execute an action.
 code. They traverse only explicit source record IDs, accept configured link
 fields, enforce depth 1–50, and remain inside the rule's grouping boundary.
 
+Detection feedback is also treated as untrusted structured data. The bundle
+accepts alerts plus enumerated annotations and rejects unknown/free-form
+fields. Reconciliation uses explicit trace IDs and stable record IDs; it does
+not inspect prompts, arguments, results, or message text. Agent-authored final
+verdicts, evidence-digest mismatch, unresolved evidence, contradictory
+dispositions, and high-risk trace dismissal become explicit findings rather
+than silent tuning inputs.
+
+Detection drift compares typed malicious/benign snapshots. It derives
+precision, recall, false-positive and benign-rejection rates, reconciliation
+coverage, and checkpoint latency, then applies caller-selected thresholds.
+Reports are advisory artifacts: no code path promotes or deploys a candidate
+or changes a suppression.
+
 ## Persistence and evidence
 
 SQLite stores immutable manifest JSON/hash, action results, append-only
@@ -180,6 +201,6 @@ evidence is persisted.
 
 The public schemas are in [schemas](schemas/), including normalized events,
 detection rules, external plans, agent trace events, live query plans,
-reference-lab results, telemetry-assurance and multi-agent investigation
-reports, detection packs and sweep reports, signed packs, authorization, and
-lifecycle v3.
+reference-lab results, telemetry-assurance, multi-agent investigation,
+detection-feedback, and detection-drift reports, detection packs and sweep
+reports, signed packs, authorization, and lifecycle v3.

@@ -28,7 +28,15 @@ from flask import (
 
 from core import AgentSim
 from agentsim.content import load_ability_registry, load_campaign_registry
-from agentsim.defense import analyze_gaps, generate_runbook
+from agentsim.defense import (
+    DetectionAlert,
+    DetectionSnapshot,
+    OperatorAnnotation,
+    analyze_gaps,
+    compare_detection_snapshots,
+    generate_runbook,
+    reconcile_detection_feedback,
+)
 from agentsim.detection import (
     analyze_coverage,
     evaluate_rule,
@@ -794,6 +802,21 @@ HTML_TEMPLATE = """
         .investigation-remediation { margin: 0; padding-left: 17px; color: var(--muted); font-size: 9px; line-height: 1.55; }
         .investigation-path { margin-top: 13px; padding: 9px; border: 1px solid rgba(101, 174, 247, 0.25); border-radius: 8px; color: var(--blue); background: var(--blue-soft); font: 8px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 
+        .feedback-card { min-width: 0; overflow: hidden; }
+        .feedback-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--line); background: rgba(7, 16, 23, 0.28); }
+        .feedback-toolbar p { margin: 0; color: var(--subtle); font-size: 9.5px; line-height: 1.5; }
+        .feedback-summary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; padding: 12px 13px; border-bottom: 1px solid var(--line); }
+        .feedback-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 205px; }
+        .feedback-panel { min-width: 0; padding: 14px 16px; }
+        .feedback-panel + .feedback-panel { border-left: 1px solid var(--line); }
+        .feedback-panel h3 { margin: 0 0 4px; font-size: 12px; }
+        .feedback-panel > p { margin: 0 0 11px; color: var(--subtle); font-size: 9px; line-height: 1.5; }
+        .feedback-list { display: grid; gap: 6px; }
+        .feedback-row { display: grid; grid-template-columns: minmax(115px, 0.65fr) minmax(0, 1.35fr) auto; gap: 8px; align-items: start; padding: 8px 9px; border: 1px solid var(--line); border-radius: 8px; background: rgba(7, 16, 23, 0.34); }
+        .feedback-row strong { color: var(--text); font: 700 8.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+        .feedback-row span { color: var(--muted); font-size: 8.5px; line-height: 1.45; overflow-wrap: anywhere; }
+        .feedback-row em { color: var(--amber); font: 800 8px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+
         .content-grid { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: stretch; }
         .events-card { min-width: 0; min-height: 510px; display: flex; flex-direction: column; overflow: hidden; }
         .events-header { padding: 16px 17px 13px; border-bottom: 1px solid var(--line); }
@@ -910,6 +933,7 @@ HTML_TEMPLATE = """
             .watch-list { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
             .investigation-grid { grid-template-columns: 230px minmax(330px, 1fr); }
             .investigation-detail { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+            .feedback-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
         @media (max-width: 860px) {
             .topbar { padding: 0 18px; }
@@ -927,6 +951,8 @@ HTML_TEMPLATE = """
             .investigation-grid { grid-template-columns: 1fr; }
             .investigation-findings { max-height: 240px; border-right: 0; border-bottom: 1px solid var(--line); }
             .investigation-detail { grid-column: auto; }
+            .feedback-grid { grid-template-columns: 1fr; }
+            .feedback-panel + .feedback-panel { border-left: 0; border-top: 1px solid var(--line); }
         }
         @media (max-width: 620px) {
             .topbar { height: 64px; padding: 0 14px; }
@@ -956,6 +982,9 @@ HTML_TEMPLATE = """
             .investigation-summary { grid-template-columns: repeat(3, 1fr); }
             .investigation-node { grid-template-columns: 62px minmax(95px, 0.7fr) minmax(130px, 1.3fr); margin-left: 0; }
             .investigation-node-flags { grid-column: 1 / -1; justify-content: flex-start; }
+            .feedback-toolbar { align-items: stretch; flex-direction: column; }
+            .feedback-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .feedback-row { grid-template-columns: 1fr; }
             .metric { min-height: 75px; }
             .event-row { grid-template-columns: 48px 70px minmax(0, 1fr); gap: 6px; padding: 8px 10px; }
             .events-header { padding: 14px 12px 12px; }
@@ -1208,7 +1237,7 @@ HTML_TEMPLATE = """
                         <h2>Authorized campaign foundation</h2>
                         <p>Run a directed campaign through authorization, provider preparation, lifecycle-v3 ground truth, cleanup verification, defense recommendations, and persistent history. The dashboard exposes simulation only.</p>
                     </div>
-                    <span class="campaign-version">v1.4.0</span>
+                    <span class="campaign-version">v1.5.0</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="campaign-select" aria-label="Campaign">
@@ -1237,9 +1266,9 @@ HTML_TEMPLATE = """
                     <div>
                         <div class="eyebrow">Detection validation engine</div>
                         <h2>Validate visibility and agent safeguards</h2>
-                        <p>Exercise a generated candidate against redacted synthetic telemetry, inspect field coverage and gaps, or run twenty-one instrumented malicious/benign agentic control pairs. Nothing here starts a host process or opens an external network connection.</p>
+                        <p>Exercise a generated candidate against redacted synthetic telemetry, inspect field coverage and gaps, or run twenty-two instrumented malicious/benign agentic control pairs. Nothing here starts a host process or opens an external network connection.</p>
                     </div>
-                    <span class="campaign-version">v1.4 graph-aware</span>
+                    <span class="campaign-version">v1.5 feedback-aware</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="v1-ability-select" aria-label="Detection validation ability">
@@ -1253,6 +1282,45 @@ HTML_TEMPLATE = """
                 </div>
                 <div class="campaign-result" id="v1-validation-result">
                     <div class="debug-placeholder">Choose an ability to inspect a candidate rule, evidence, field coverage, and defensive guidance.</div>
+                </div>
+            </section>
+
+            <section class="card feedback-card" id="feedback-integrity" aria-label="Detection feedback integrity and drift">
+                <div class="campaign-header">
+                    <div>
+                        <div class="eyebrow">Human verdict integrity</div>
+                        <h2>Detection feedback and tuning drift</h2>
+                        <p>Reconcile alerts to causal traces, verify structured operator annotations, and compare offline tuning candidates against malicious and benign baselines before any suppression is accepted.</p>
+                    </div>
+                    <span class="campaign-version">v1.5 feedback-aware</span>
+                </div>
+                <div class="feedback-toolbar">
+                    <p>Fixed synthetic corpus · no prompts, free-form notes, processes, network, or configuration deployment.</p>
+                    <button class="primary-button campaign-run" id="feedback-run" type="button">Analyze feedback loop</button>
+                </div>
+                <div class="feedback-summary" id="feedback-summary">
+                    <div class="investigation-stat"><strong>—</strong><span>alert match</span></div>
+                    <div class="investigation-stat"><strong>—</strong><span>annotation coverage</span></div>
+                    <div class="investigation-stat"><strong>—</strong><span>conflicts</span></div>
+                    <div class="investigation-stat"><strong>—</strong><span>feedback score</span></div>
+                    <div class="investigation-stat"><strong>—</strong><span>drift score</span></div>
+                    <div class="investigation-stat"><strong>—</strong><span>candidate status</span></div>
+                </div>
+                <div class="feedback-grid">
+                    <div class="feedback-panel">
+                        <h3>Verdict conflicts</h3>
+                        <p>Identity, evidence, trace, and reviewer checks that must resolve before tuning.</p>
+                        <div class="feedback-list" id="feedback-conflicts">
+                            <div class="debug-placeholder">Analyze the fixed fixture to inspect feedback conflicts.</div>
+                        </div>
+                    </div>
+                    <div class="feedback-panel">
+                        <h3>Offline drift gate</h3>
+                        <p>Candidate deltas measured against the reviewed malicious and benign baseline.</p>
+                        <div class="feedback-list" id="feedback-drift">
+                            <div class="debug-placeholder">Recall, false-positive rate, reconciliation, and latency deltas will appear here.</div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -1488,6 +1556,10 @@ HTML_TEMPLATE = """
             v1AssuranceRun: document.getElementById("v1-assurance-run"),
             v1LabRun: document.getElementById("v1-lab-run"),
             v1Result: document.getElementById("v1-validation-result"),
+            feedbackRun: document.getElementById("feedback-run"),
+            feedbackSummary: document.getElementById("feedback-summary"),
+            feedbackConflicts: document.getElementById("feedback-conflicts"),
+            feedbackDrift: document.getElementById("feedback-drift"),
             investigationRun: document.getElementById("investigation-run"),
             investigationTrace: document.getElementById("investigation-trace"),
             investigationSeverity: document.getElementById("investigation-severity"),
@@ -1525,6 +1597,7 @@ HTML_TEMPLATE = """
             selectedDebugTrace: null,
             debugLoading: false,
             campaignLoading: false,
+            feedbackLoading: false,
             investigationData: null,
             selectedInvestigationTrace: null,
             selectedInvestigationFinding: null,
@@ -1753,9 +1826,99 @@ HTML_TEMPLATE = """
             }
         }
 
+        function feedbackRow(identity, detail, status) {
+            const row = document.createElement("div");
+            row.className = "feedback-row";
+            row.appendChild(textNode("strong", "", identity));
+            row.appendChild(textNode("span", "", detail));
+            row.appendChild(textNode("em", "", status));
+            return row;
+        }
+
+        function renderFeedbackAnalysis(payload) {
+            const feedback = payload.feedback || {};
+            const drift = payload.drift || {};
+            const summary = feedback.summary || {};
+            const summaryValues = [
+                [String(summary.match_rate_percent || 0) + "%", "alert match"],
+                [String(summary.annotation_coverage_percent || 0) + "%", "annotation coverage"],
+                [summary.conflicts || 0, "conflicts"],
+                [String(feedback.score || 0) + " / 100", "feedback score"],
+                [String(drift.score || 0) + " / 100", "drift score"],
+                [drift.status || "unknown", "candidate status"]
+            ];
+            const stats = document.createDocumentFragment();
+            summaryValues.forEach(function (item) {
+                const stat = document.createElement("div");
+                stat.className = "investigation-stat";
+                stat.appendChild(textNode("strong", "", item[0]));
+                stat.appendChild(textNode("span", "", item[1]));
+                stats.appendChild(stat);
+            });
+            elements.feedbackSummary.replaceChildren(stats);
+
+            const conflicts = Array.isArray(feedback.conflicts) ? feedback.conflicts : [];
+            if (!conflicts.length) {
+                setCampaignPlaceholder(elements.feedbackConflicts, "No feedback integrity conflicts were found.");
+            } else {
+                const values = document.createDocumentFragment();
+                conflicts.forEach(function (item) {
+                    values.appendChild(feedbackRow(
+                        item.code,
+                        (item.remediation || ["Review the structured evidence binding."])[0],
+                        item.severity
+                    ));
+                });
+                elements.feedbackConflicts.replaceChildren(values);
+            }
+
+            const findings = Array.isArray(drift.findings) ? drift.findings : [];
+            if (!findings.length) {
+                setCampaignPlaceholder(elements.feedbackDrift, "The tuning candidate remained inside every regression threshold.");
+            } else {
+                const values = document.createDocumentFragment();
+                findings.forEach(function (item) {
+                    const direction = Number(item.delta) >= 0 ? "+" : "";
+                    values.appendChild(feedbackRow(
+                        item.metric.replaceAll("_", " "),
+                        "baseline " + item.baseline + " → candidate " + item.candidate
+                            + " · delta " + direction + item.delta + " · limit " + item.threshold,
+                        item.severity
+                    ));
+                });
+                elements.feedbackDrift.replaceChildren(values);
+            }
+        }
+
+        async function runFeedbackAnalysis() {
+            if (state.feedbackLoading) return;
+            state.feedbackLoading = true;
+            elements.feedbackRun.disabled = true;
+            elements.feedbackRun.textContent = "Reconciling…";
+            setCampaignPlaceholder(elements.feedbackConflicts, "Binding alerts, evidence, traces, and structured verdicts…");
+            setCampaignPlaceholder(elements.feedbackDrift, "Comparing the offline tuning candidate to both baselines…");
+            try {
+                const response = await fetch("/api/v1/defense/feedback-demo", {
+                    method: "POST",
+                    headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                    body: JSON.stringify({corpus: "detection-feedback-integrity"})
+                });
+                if (!response.ok) throw new Error();
+                renderFeedbackAnalysis(await response.json());
+                showToast("Feedback reconciliation and drift report ready");
+            } catch (_error) {
+                setCampaignPlaceholder(elements.feedbackConflicts, "Unable to reconcile the synthetic feedback fixture.");
+                setCampaignPlaceholder(elements.feedbackDrift, "Unable to compare the offline tuning candidate.");
+            } finally {
+                state.feedbackLoading = false;
+                elements.feedbackRun.disabled = false;
+                elements.feedbackRun.textContent = "Analyze feedback loop";
+            }
+        }
+
         async function runV1Lab() {
             elements.v1LabRun.disabled = true;
-            setCampaignPlaceholder(elements.v1Result, "Running twenty-one instrumented reference-agent fixtures…");
+            setCampaignPlaceholder(elements.v1Result, "Running twenty-two instrumented reference-agent fixtures…");
             try {
                 const response = await fetch("/api/v1/lab/reference", {
                     method: "POST",
@@ -2659,6 +2822,7 @@ HTML_TEMPLATE = """
         elements.v1DetectionRun.addEventListener("click", runV1Detection);
         elements.v1AssuranceRun.addEventListener("click", runV1Assurance);
         elements.v1LabRun.addEventListener("click", runV1Lab);
+        elements.feedbackRun.addEventListener("click", runFeedbackAnalysis);
         elements.investigationRun.addEventListener("click", runInvestigation);
         elements.investigationTrace.addEventListener("change", function () {
             state.selectedInvestigationTrace = elements.investigationTrace.value;
@@ -2789,7 +2953,7 @@ def api_foundation_catalog() -> Response:
     history = RunStore(CAMPAIGN_DATABASE_PATH).history(25) if CAMPAIGN_DATABASE_PATH.exists() else []
     return jsonify(
         {
-            "version": "1.4.0",
+            "version": "1.5.0",
             "workflow": ["emulate", "observe", "detect", "defend", "retest"],
             "capabilities": {
                 "offline_collectors": ["jsonl", "otel", "otel_genai", "sysmon", "auditd", "cloudtrail", "crowdstrike", "splunk", "elastic", "sentinel", "logscale", "panther", "graylog", "agent_runtime", "mcp_audit"],
@@ -2806,6 +2970,8 @@ def api_foundation_catalog() -> Response:
                 "multi_agent_investigation": True,
                 "graph_detection_primitives": ["graph_path", "graph_fanout"],
                 "detection_pack_rules": len(load_detection_pack().rules),
+                "detection_feedback_reconciliation": True,
+                "detection_tuning_drift": True,
             },
             "abilities": [
                 {
@@ -2995,6 +3161,65 @@ def api_telemetry_investigation() -> Response:
     )
 
 
+@app.route("/api/v1/defense/feedback-demo", methods=["POST"])
+def api_detection_feedback_demo() -> Response:
+    """Reconcile a fixed unsafe verdict and compare an offline tuning candidate."""
+
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400, description="JSON request body is required")
+    if payload.get("corpus", "detection-feedback-integrity") != "detection-feedback-integrity":
+        abort(400, description="unsupported feedback corpus")
+    run = run_reference_fixture("detection-feedback-integrity")
+    malicious = tuple(
+        event
+        for event in run.events
+        if event.attributes.get("variant") == "malicious"
+    )
+    alert_event = malicious[0]
+    feedback_event = malicious[1]
+    alert = DetectionAlert(
+        alert_id=str(alert_event.attributes["alert_id"]),
+        rule_id="agentsim.feedback-identity-evidence-tampering",
+        detected_at=alert_event.timestamp,
+        severity="critical",
+        trace_id=alert_event.trace_id,
+        source_record_ids=(alert_event.event_id,),
+        agent_id=alert_event.agent_id,
+    )
+    annotation = OperatorAnnotation(
+        annotation_id=f"{run.run_id}:unsafe-verdict",
+        target_type="alert",
+        target_id=alert.alert_id,
+        disposition="false_positive",
+        reason_code="insufficient_evidence",
+        author_id=feedback_event.agent_id,
+        author_type="agent",
+        created_at=feedback_event.timestamp,
+        evidence_ids=(alert_event.event_id,),
+        evidence_digest_match=False,
+    )
+    report = reconcile_detection_feedback(
+        (alert,),
+        tuple(event.to_normalized_event() for event in run.events),
+        (annotation,),
+    )
+    drift = compare_detection_snapshots(
+        DetectionSnapshot("reviewed-baseline", 38, 0, 38, 0, 3.0, 4, 4),
+        DetectionSnapshot("unsafe-tuning-candidate", 31, 4, 34, 7, 6.0, 2, 4),
+    )
+    return jsonify(
+        {
+            "execution_mode": "synthetic_feedback_analysis",
+            "process_started": False,
+            "network_opened": False,
+            "feedback": report.to_dict(),
+            "drift": drift.to_dict(),
+        }
+    )
+
+
 @app.route("/api/v1/lab/run", methods=["POST"])
 def api_v1_lab_run() -> Response:
     _validate_api_token()
@@ -3035,7 +3260,7 @@ def api_v1_reference_lab_run() -> Response:
         abort(400, description=str(exc))
     return jsonify(
         {
-            "version": "1.4.0",
+            "version": "1.5.0",
             "passed": all(result.passed for result in results),
             "results": [result.to_dict() for result in results],
         }

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/detection-feedback.schema.json",
+  "title": "AgentSim content-safe detection feedback bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "alerts", "annotations"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "alerts": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {"$ref": "#/$defs/alert"}
+    },
+    "annotations": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/annotation"}
+    }
+  },
+  "$defs": {
+    "identifier": {"type": "string", "minLength": 1, "maxLength": 512},
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alert_id", "rule_id", "detected_at", "severity"],
+      "properties": {
+        "alert_id": {"$ref": "#/$defs/identifier"},
+        "rule_id": {"$ref": "#/$defs/identifier"},
+        "detected_at": {"type": "string", "format": "date-time"},
+        "severity": {"enum": ["low", "medium", "high", "critical"]},
+        "trace_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+        "source_record_ids": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "agent_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 512}
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "annotation_id", "target_type", "target_id", "disposition",
+        "reason_code", "author_id", "author_type", "created_at"
+      ],
+      "properties": {
+        "annotation_id": {"$ref": "#/$defs/identifier"},
+        "target_type": {"enum": ["alert", "trace"]},
+        "target_id": {"$ref": "#/$defs/identifier"},
+        "disposition": {
+          "enum": [
+            "confirmed_true_positive", "false_positive", "benign_expected",
+            "needs_review", "tuning_candidate", "accepted_risk"
+          ]
+        },
+        "reason_code": {
+          "enum": [
+            "control_failure", "expected_behavior", "identity_mismatch",
+            "visibility_gap", "duplicate", "insufficient_evidence",
+            "policy_exception", "other_structured"
+          ]
+        },
+        "author_id": {"$ref": "#/$defs/identifier"},
+        "author_type": {"enum": ["human", "service", "agent"]},
+        "created_at": {"type": "string", "format": "date-time"},
+        "evidence_ids": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "evidence_digest_match": {"type": ["boolean", "null"]}
+      }
+    }
+  }
+}

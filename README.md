@@ -9,11 +9,12 @@ behavior to ground truth, telemetry coverage, detection validation, defensive
 guidance, cleanup verification, and repeatable evidence. It is deliberately not
 a general exploitation toolkit or command-and-control platform.
 
-Version 1.4.0 adds multi-agent causal investigation, delegation and identity
-invariants, goal and memory continuity checks, graph-path/fan-out detections,
-and a substantially richer human investigation workbench. Operators can move
-from a detection result to the agents, causal path, failed invariant, evidence,
-and remediation without recording prompt or tool content. The release
+Version 1.5.0 adds structured detection-feedback reconciliation, alert-to-trace
+evidence binding, operator-verdict integrity checks, and explicit tuning-drift
+gates over malicious and benign baselines. Five new malicious/benign scenarios,
+a disposable feedback-integrity fixture, three reusable detections, and a new
+dashboard workspace make feedback-loop and automated-remediation failures
+directly testable without recording prompt or tool content. The release
 preserves the v1 simulation-first and non-exploitation boundaries.
 
 ## Core workflow
@@ -30,7 +31,7 @@ AgentSim then correlates exported telemetry, evaluates vendor-neutral rules,
 checks field availability, creates human-review candidate detections, explains
 defensive gaps, and emits regression-ready evidence.
 
-## v1.4 capabilities
+## v1.5 capabilities
 
 - Eight reviewed endpoint/cloud abilities and two directed campaigns.
 - Strict scenario, ability, and campaign content boundaries.
@@ -52,7 +53,7 @@ defensive gaps, and emits regression-ready evidence.
   identity, agent correlation coverage, causal links, and content-redaction
   boundaries. Results are `healthy`, `degraded`, or `unusable` with bounded
   findings and remediation.
-- A strict, reusable detection-pack contract and twelve-rule built-in agent
+- A strict, reusable detection-pack contract and fifteen-rule built-in agent
   security pack. Pack sweeps use normalized evidence only—never scenario
   labels—and classify each rule as `detected`, `not_detected`, or
   `visibility_gap`.
@@ -60,16 +61,25 @@ defensive gaps, and emits regression-ready evidence.
   caused-by, delegation, memory, and data-lineage edges; checks delegation
   endpoints, principal continuity, goal fingerprints, memory provenance, and
   retention; and produces evidence-backed operator paths and remediation.
+- Strict feedback bundles for alerts and enumerated operator annotations;
+  alert-to-trace/evidence reconciliation; detection of unresolved evidence,
+  digest mismatch, agent-authored final verdicts, contradictory dispositions,
+  and high-risk trace dismissal; and a content-safe feedback report.
+- Detection-drift reports that compare precision, recall, false-positive rate,
+  benign rejection, alert reconciliation, and checkpoint latency against
+  explicit thresholds. Candidates remain offline and are never deployed.
 - Candidate renderers for Sigma, Microsoft KQL, Splunk SPL, CrowdStrike
   LogScale, Elastic EQL, Panther Python, and Graylog.
 - Telemetry coverage, defensive gap analysis, investigation runbooks,
   malicious/benign regression, and readiness scorecards.
-- Thirty-three declarative agentic scenarios plus twenty-one disposable control
+- Thirty-eight declarative agentic scenarios plus twenty-two disposable control
   fixtures and an instrumented reference-agent runtime. Coverage includes
   cross-turn and cross-agent goal hijacking, provenance/tool-result poisoning,
   delegation identity drift, shared-memory retention escape, multi-agent trust
-  cascades, configuration and supply-chain tampering, replay, delayed
-  exfiltration, scope challenge abuse, and deceptive summaries.
+  cascades, alert-verdict poisoning, reconciliation confusion, annotation trust
+  abuse, recall collapse, feedback-loop suppression, configuration and
+  supply-chain tampering, replay, delayed exfiltration, scope challenge abuse,
+  and deceptive summaries.
 - Version-pinned, non-executing plans for Atomic Red Team, Stratus Red Team,
   and MITRE CALDERA. The public core does not execute these plans.
 - Attack Flow STIX 2.1 import/export.
@@ -256,6 +266,22 @@ agentsim defense regress rule.json \
   --collector jsonl
 ```
 
+Reconcile structured alert feedback to trace evidence, then reject detection
+tuning that regresses either baseline:
+
+```bash
+agentsim defense reconcile feedback.json agent-events.jsonl \
+  --collector agent_runtime \
+  --output feedback-report.json \
+  --fail-on elevated
+
+agentsim defense drift baseline.json candidate.json \
+  --output detection-drift.json
+```
+
+See [DETECTION_FEEDBACK.md](DETECTION_FEEDBACK.md) for the strict schemas,
+conflict semantics, drift metrics, and change-control workflow.
+
 Exit code `0` means the requested detection/regression condition passed; `1`
 means it did not. Generated rules always retain candidate/human-review status.
 See [DETECTION_ENGINE.md](DETECTION_ENGINE.md) and [DETECTIONS.md](DETECTIONS.md).
@@ -306,7 +332,7 @@ agentsim --scenario all --variant both --mutations 1 --mutation-seed 42 --speed 
 agentsim --mcp-lab
 ```
 
-The v1.4 control fixtures are smaller disposable policy exercises:
+The v1.5 control fixtures are smaller disposable policy exercises:
 
 ```bash
 agentsim lab list
@@ -326,7 +352,9 @@ docker compose -f labs/reference-agent/compose.yaml up --build
 
 The reference runtime emits requested → policy decision → completed/blocked
 causal traces, explicit MCP audience and per-client-consent checkpoints, and a
-longer three-agent delegation/goal/memory graph. It only applies fixed changes
+longer three-agent delegation/goal/memory graph. The feedback fixture adds
+alert, verdict, reconciliation, tuning, coverage, and policy checkpoints. It
+only applies fixed changes
 to an in-memory dictionary for the benign twin. See [SCENARIOS.md](SCENARIOS.md) and
 [`labs/reference-agent/README.md`](labs/reference-agent/README.md).
 
@@ -376,8 +404,9 @@ Debugger, authorized simulation-only campaigns, SQLite history, a synthetic
 detection/coverage workspace, a telemetry-assurance and detection-pack view,
 and a multi-agent investigation workbench with trace filters, causal
 checkpoints, failed invariants, highlighted evidence paths, and remediation.
-All twenty-one control fixtures and the instrumented reference-agent run are
-available.
+The feedback workspace shows reconciliation coverage, verdict conflicts, and
+offline tuning drift. All twenty-two control fixtures and the instrumented
+reference-agent run are available.
 Local, Docker, and external execution are intentionally unavailable in the UI.
 
 ## Plugin SDK
@@ -422,9 +451,9 @@ Interfaces remain subject to review until they are documented as stable.
 
 | Release horizon | Status | Defensive focus |
 | --- | --- | --- |
-| v1.4 | Current | Multi-agent causal graphs, delegation/identity/goal/memory invariants, graph-path and fan-out detections, four longer campaign scenarios, and an interactive investigation workbench. |
-| v1.5 | Next | Detection feedback ingestion, alert-to-trace reconciliation, operator annotations, and tuning/drift metrics over malicious and benign baselines. |
-| v1.6 | Planned | Portable OTel/ECS/OCSF field mappings, signed community detection-pack review, pack provenance, and cross-runtime fixture conformance. |
+| v1.5 | Current | Structured feedback ingestion, alert-to-trace reconciliation, operator-verdict integrity, offline tuning drift, five feedback-loop scenarios, and an interactive feedback workspace. |
+| v1.6 | Next | Portable OTel/ECS/OCSF field mappings, signed community detection-pack review, pack provenance, and cross-runtime fixture conformance. |
+| v1.7 | Planned | Detection lifecycle history, explainable baseline comparisons, signed feedback exports, and organization-defined reviewer quorum policies. |
 | v2.0 | Direction | Stable content-registry and evidence contracts, reproducible cross-runtime conformance suites, and organization-scale regression orchestration with no implicit production execution. |
 
 Across these releases, AgentSim will remain a detection-validation framework.
@@ -450,6 +479,7 @@ python -m build
 - [Agent telemetry contract](AGENT_TELEMETRY.md)
 - [Telemetry assurance and detection packs](TELEMETRY_ASSURANCE.md)
 - [Multi-agent investigation](MULTI_AGENT_INVESTIGATION.md)
+- [Detection feedback and drift](DETECTION_FEEDBACK.md)
 - [Live telemetry connectors](LIVE_CONNECTORS.md)
 - [Agentic scenarios](SCENARIOS.md)
 - [External providers](EXTERNAL_PROVIDERS.md)

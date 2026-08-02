@@ -13,7 +13,15 @@ from typing import Mapping, Sequence
 
 from agentsim import __version__
 from agentsim.content import load_ability_registry, load_campaign_registry
-from agentsim.defense import analyze_gaps, generate_runbook, run_regression
+from agentsim.defense import (
+    analyze_gaps,
+    compare_detection_snapshots,
+    detection_snapshot_from_mapping,
+    generate_runbook,
+    parse_feedback_bundle,
+    reconcile_detection_feedback,
+    run_regression,
+)
 from agentsim.detection import (
     analyze_coverage,
     evaluate_live_registry,
@@ -181,7 +189,9 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     detection_generate.add_argument("--output-dir")
     detection_generate.add_argument("--ability-pack", action="append", default=[], metavar="PATH")
 
-    defense = commands.add_parser("defense", help="Analyze visibility and run detection regression.")
+    defense = commands.add_parser(
+        "defense", help="Analyze visibility, feedback, drift, and detection regression."
+    )
     defense_commands = defense.add_subparsers(dest="defense_command", required=True)
     defense_analyze = defense_commands.add_parser("analyze", help="Find telemetry gaps for one ability.")
     defense_analyze.add_argument("ability_id")
@@ -193,6 +203,29 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     defense_regress.add_argument("--malicious", required=True)
     defense_regress.add_argument("--benign", required=True)
     defense_regress.add_argument("--collector", choices=COLLECTOR_NAMES, default="jsonl")
+    defense_reconcile = defense_commands.add_parser(
+        "reconcile", help="Join structured alert feedback to content-safe trace evidence."
+    )
+    defense_reconcile.add_argument("feedback", metavar="FEEDBACK_JSON")
+    defense_reconcile.add_argument("telemetry", metavar="TELEMETRY")
+    defense_reconcile.add_argument("--collector", choices=COLLECTOR_NAMES, default="jsonl")
+    defense_reconcile.add_argument("--output")
+    defense_reconcile.add_argument(
+        "--fail-on", choices=("never", "review", "elevated", "critical"), default="critical"
+    )
+    defense_drift = defense_commands.add_parser(
+        "drift", help="Compare candidate detection metrics with a malicious/benign baseline."
+    )
+    defense_drift.add_argument("baseline", metavar="BASELINE_JSON")
+    defense_drift.add_argument("candidate", metavar="CANDIDATE_JSON")
+    defense_drift.add_argument("--max-recall-drop", type=float, default=0.05)
+    defense_drift.add_argument("--max-fpr-increase", type=float, default=0.05)
+    defense_drift.add_argument("--max-latency-increase", type=float, default=1.0)
+    defense_drift.add_argument("--max-reconciliation-drop", type=float, default=0.05)
+    defense_drift.add_argument("--output")
+    defense_drift.add_argument(
+        "--fail-on", choices=("never", "review", "regressed"), default="regressed"
+    )
 
     lab = commands.add_parser("lab", help="Run in-memory or instrumented reference-agent fixtures.")
     lab_commands = lab.add_subparsers(dest="lab_command", required=True)
@@ -270,6 +303,13 @@ def _emit_json(value: object, path: str | None = None) -> None:
         print(path)
     else:
         print(rendered, end="")
+
+
+def _load_json_object(path: str, name: str) -> Mapping[str, object]:
+    value = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{name} must be a JSON object")
+    return value
 
 
 def _campaign_value(campaign: CampaignDefinition) -> dict[str, object]:
@@ -446,6 +486,41 @@ def _run_v1(args: argparse.Namespace) -> int | None:
         )
         _emit_json(result.to_dict())
         return 0 if result.passed else 1
+    if args.command == "defense" and args.defense_command == "reconcile":
+        alerts, annotations = parse_feedback_bundle(
+            _load_json_object(args.feedback, "feedback bundle")
+        )
+        report = reconcile_detection_feedback(
+            alerts,
+            collector_for(args.collector).collect(args.telemetry),
+            annotations,
+        )
+        _emit_json(report.to_dict(), args.output)
+        if args.fail_on == "never":
+            return 0
+        levels = {"clean": 0, "review": 1, "elevated": 2, "critical": 3}
+        return 1 if levels[report.status] >= levels[args.fail_on] else 0
+    if args.command == "defense" and args.defense_command == "drift":
+        baseline = detection_snapshot_from_mapping(
+            _load_json_object(args.baseline, "baseline snapshot"), default_id="baseline"
+        )
+        candidate = detection_snapshot_from_mapping(
+            _load_json_object(args.candidate, "candidate snapshot"), default_id="candidate"
+        )
+        report = compare_detection_snapshots(
+            baseline,
+            candidate,
+            max_recall_drop=args.max_recall_drop,
+            max_false_positive_rate_increase=args.max_fpr_increase,
+            max_latency_increase=args.max_latency_increase,
+            max_reconciliation_drop=args.max_reconciliation_drop,
+        )
+        _emit_json(report.to_dict(), args.output)
+        if args.fail_on == "never":
+            return 0
+        if args.fail_on == "review":
+            return 0 if report.status == "stable" else 1
+        return 1 if report.status == "regressed" else 0
     if args.command == "lab" and args.lab_command == "list":
         _emit_json(
             [

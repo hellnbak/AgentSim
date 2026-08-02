@@ -1,10 +1,11 @@
 # Telemetry assurance and detection packs
 
-AgentSim 1.4 separates two questions that are often conflated during detection
+AgentSim 1.5 separates three questions that are often conflated during detection
 testing:
 
 1. Is the evidence safe and trustworthy enough to correlate?
 2. Given that evidence, which reviewed detection rules match?
+3. Can alert feedback be reconciled safely, and did a tuning candidate regress?
 
 The telemetry doctor answers the first question. Detection-pack sweeps answer
 the second without consulting scenario ground truth. Neither feature queries a
@@ -49,8 +50,8 @@ or that a detection should alert.
 
 ## Detection packs
 
-The packaged default is `agentsim.agent-security-core` version `1.1.0`. It
-contains twelve content-safe investigative rules covering:
+The packaged default is `agentsim.agent-security-core` version `1.2.0`. It
+contains fifteen content-safe investigative rules covering:
 
 - untrusted or tainted high-risk tool requests;
 - allowed high-risk requests and defended policy denials;
@@ -59,11 +60,15 @@ contains twelve content-safe investigative rules covering:
 - high-risk MCP tool requests; and
 - invalid authorization audience or per-client consent;
 - goal-integrity failure reaching shared memory and a risky tool; and
-- invalid memory provenance fanning out across agent identities.
+- invalid memory provenance fanning out across agent identities;
+- feedback identity and evidence-digest failure;
+- alert trace/tenant reconciliation mismatch; and
+- a causal suppression-expansion and monitoring-coverage regression.
 
 The built-in reference-agent corpus supplies malicious and benign MCP
 authorization checkpoints for both audience and consent plus a longer
-three-agent goal/delegation/memory trace, so all twelve default
+three-agent goal/delegation/memory trace plus a feedback/tuning trace, so all
+fifteen default
 rules have the declared source fields. A real export can still produce a
 visibility gap when its runtime omits those checkpoints.
 
@@ -100,6 +105,8 @@ Schemas are
 ```python
 from agentsim.api import (
     collect_telemetry,
+    detection_drift,
+    detection_feedback_reconciliation,
     detection_pack_sweep,
     telemetry_assurance,
     telemetry_investigation,
@@ -109,6 +116,8 @@ events = collect_telemetry("agent-events.jsonl", collector="agent_runtime")
 quality = telemetry_assurance(events)
 sweep = detection_pack_sweep(events)
 graph = telemetry_investigation(events)
+# feedback = detection_feedback_reconciliation(alerts, events, annotations)
+# drift = detection_drift(baseline_snapshot, candidate_snapshot)
 ```
 
 Pass `pack_path="reviewed-pack.json"` to `detection_pack_sweep` for custom
@@ -122,8 +131,10 @@ content. The returned values are JSON-serializable schema objects.
 4. Reconstruct the multi-agent graph when delegation, goal, or memory fields
    are available.
 5. Run a detection-pack sweep for investigative coverage.
-6. Run malicious/benign regression separately when ground truth exists.
-7. Tune and validate the vendor-native candidate outside AgentSim before any
+6. Reconcile alert feedback before accepting any verdict as tuning input.
+7. Compare each tuning candidate with malicious and benign baseline snapshots.
+8. Run malicious/benign regression separately when ground truth exists.
+9. Tune and validate the vendor-native candidate outside AgentSim before any
    production deployment.
 
 The Web workspace exposes the same checks against the synthetic reference-agent

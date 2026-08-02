@@ -17,6 +17,13 @@ principal continuity, shared-memory provenance/retention, a synthetic tool
 proposal, and policy outcome. The malicious proposal is denied; the benign
 twin only changes the resettable in-memory dictionary.
 
+The `detection-feedback-integrity` fixture emits malicious and benign
+six-checkpoint chains covering alert creation, structured feedback, alert-to-
+trace reconciliation, a simulated tuning proposal, monitoring coverage, and a
+final policy decision. The malicious agent-authored verdict fails identity and
+evidence binding and its suppression proposal is denied. The benign human
+verdict preserves the configuration. Neither twin deploys a detection change.
+
 Start the hardened container:
 
 ```sh

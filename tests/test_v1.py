@@ -244,7 +244,7 @@ class V1PlatformTests(unittest.TestCase):
                 verify_integrity(tampered, key)
 
     def test_agentic_lab_covers_all_release_fixtures_without_execution(self):
-        self.assertEqual(len(list_fixtures()), 21)
+        self.assertEqual(len(list_fixtures()), 22)
         results = run_lab_suite()
         self.assertTrue(all(result.passed for result in results))
         self.assertTrue(all(not result.safety["process_started"] for result in results))

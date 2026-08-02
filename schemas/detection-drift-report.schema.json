@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/detection-drift-report.schema.json",
+  "title": "AgentSim detection drift report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "status", "score", "baseline", "candidate",
+    "deltas", "findings", "content_values_recorded"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "detection-drift-report"},
+    "status": {"enum": ["stable", "review", "regressed"]},
+    "score": {"type": "integer", "minimum": 0, "maximum": 100},
+    "baseline": {"$ref": "#/$defs/snapshot"},
+    "candidate": {"$ref": "#/$defs/snapshot"},
+    "deltas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "precision", "recall", "false_positive_rate", "benign_rejection_rate",
+        "reconciliation_rate", "mean_checkpoints_to_detection"
+      ],
+      "properties": {
+        "precision": {"type": "number"},
+        "recall": {"type": "number"},
+        "false_positive_rate": {"type": "number"},
+        "benign_rejection_rate": {"type": "number"},
+        "reconciliation_rate": {"type": "number"},
+        "mean_checkpoints_to_detection": {"type": ["number", "null"]}
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "finding_id", "metric", "severity", "baseline", "candidate",
+          "delta", "threshold", "remediation"
+        ],
+        "properties": {
+          "finding_id": {"type": "string"},
+          "metric": {"type": "string"},
+          "severity": {"enum": ["low", "medium", "high", "critical"]},
+          "baseline": {"type": "number"},
+          "candidate": {"type": "number"},
+          "delta": {"type": "number"},
+          "threshold": {"type": "number", "minimum": 0},
+          "remediation": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "content_values_recorded": {"const": false}
+  },
+  "$defs": {
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id", "true_positive", "false_positive", "true_negative",
+        "false_negative", "mean_checkpoints_to_detection", "reconciled_alerts",
+        "total_alerts", "precision", "recall", "false_positive_rate",
+        "benign_rejection_rate", "reconciliation_rate"
+      ],
+      "properties": {
+        "snapshot_id": {"type": "string"},
+        "true_positive": {"type": "integer", "minimum": 0},
+        "false_positive": {"type": "integer", "minimum": 0},
+        "true_negative": {"type": "integer", "minimum": 0},
+        "false_negative": {"type": "integer", "minimum": 0},
+        "mean_checkpoints_to_detection": {"type": ["number", "null"], "minimum": 0},
+        "reconciled_alerts": {"type": "integer", "minimum": 0},
+        "total_alerts": {"type": "integer", "minimum": 0},
+        "precision": {"type": "number", "minimum": 0, "maximum": 1},
+        "recall": {"type": "number", "minimum": 0, "maximum": 1},
+        "false_positive_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "benign_rejection_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "reconciliation_rate": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    }
+  }
+}

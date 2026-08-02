@@ -17,11 +17,12 @@ analytics below remain fully supported. See
 [`DETECTION_ENGINE.md`](DETECTION_ENGINE.md) for the vendor-neutral rule format
 and CLI workflow.
 
-## Reusable v1.4 detection pack
+## Reusable v1.5 detection pack
 
-The packaged `agentsim.agent-security-core` pack provides twelve answer-key-free
-AST rules for agent/tool/MCP and multi-agent graph telemetry. It is intended for exploratory
-validation before vendor-specific tuning:
+The packaged `agentsim.agent-security-core` pack provides fifteen
+answer-key-free AST rules for agent/tool/MCP, multi-agent graph, and detection
+feedback telemetry. It is intended for exploratory validation before
+vendor-specific tuning:
 
 ```bash
 agentsim telemetry doctor agent-events.jsonl --collector agent_runtime
@@ -36,7 +37,9 @@ otherwise it is a `visibility_gap`. The pack neither reads
 malicious/benign scoring below. See
 [`TELEMETRY_ASSURANCE.md`](TELEMETRY_ASSURANCE.md) for pack authoring and report
 semantics and [`MULTI_AGENT_INVESTIGATION.md`](MULTI_AGENT_INVESTIGATION.md)
-for graph evidence and invariant interpretation.
+for graph evidence and invariant interpretation. Feedback reconciliation and
+tuning drift are documented in
+[`DETECTION_FEEDBACK.md`](DETECTION_FEEDBACK.md).
 
 ## Data requirements
 
@@ -62,7 +65,9 @@ workflow detections. Preserve these fields when mapping it into a SIEM:
 - `input_trust`, `tool_name`, `tool_risk`, and `policy_decision`;
 - `scenario_variant` and `expected_detection` in a ground-truth-only table; and
 - relevant `attributes`, especially permission expansion, signature validity,
-  data classification, destination scope, and execution state.
+  data classification, destination scope, feedback author/disposition,
+  evidence-digest and alert-trace binding, suppression expansion, coverage
+  drift, and execution state.
 
 Do not let production analytics query `expected_detection`; it is the answer
 key. Use it only after evaluation to score the analytic. The built-in AgentSim

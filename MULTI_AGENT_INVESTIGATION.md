@@ -1,6 +1,6 @@
 # Multi-agent investigation
 
-AgentSim 1.4 reconstructs content-safe causal graphs from normalized agent
+AgentSim 1.5 reconstructs content-safe causal graphs from normalized agent
 telemetry. The investigation report is intended to answer four operator
 questions:
 

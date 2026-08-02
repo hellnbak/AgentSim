@@ -16,6 +16,7 @@ from agentsim.content.ability_loader import parse_ability_pack
 from agentsim.content.campaign_loader import parse_campaign_pack
 from agentsim.content.catalog import load_command_catalog
 from agentsim.content.integrity import content_digest, verify_integrity
+from agentsim.execution.local import host_platform_name
 from agentsim.models.campaign import CampaignDefinition, CampaignStep
 from agentsim.models.target import TargetProfile
 from agentsim.orchestration.planner import plan_campaign
@@ -74,6 +75,15 @@ class FoundationTests(unittest.TestCase):
                 self.assertTrue(ability.defenses)
                 if ability.execution.state_changes:
                     self.assertIsNotNone(ability.execution.cleanup_ref)
+
+    def test_local_platform_detection_does_not_spawn_a_process(self):
+        cases = (("darwin", "macOS"), ("linux", "Linux"), ("win32", "Windows"))
+        for observed, expected in cases:
+            with self.subTest(platform=observed), mock.patch(
+                "agentsim.execution.local.sys.platform", observed
+            ), mock.patch("agentsim.execution.local.subprocess.run") as run_mock:
+                self.assertEqual(host_platform_name(), expected)
+                run_mock.assert_not_called()
 
     def test_ability_pack_integrity_and_no_embedded_commands(self):
         source = Path("agentsim/content/packs/endpoint_discovery.json")

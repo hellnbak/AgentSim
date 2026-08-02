@@ -260,6 +260,14 @@ class LiveConnectorTests(unittest.TestCase):
             self.assertEqual(history[0]["query_id"], "query-1")
             self.assertNotIn("not-persisted", json.dumps(history))
 
+    def test_run_store_closes_each_sqlite_connection(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = RunStore(Path(temp_dir) / "runs.sqlite3")
+            with store._connect() as connection:
+                connection.execute("SELECT 1").fetchone()
+            with self.assertRaises(sqlite3.ProgrammingError):
+                connection.execute("SELECT 1").fetchone()
+
     def test_query_history_schema_migrates_existing_v1_database(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             database = Path(temp_dir) / "runs.sqlite3"

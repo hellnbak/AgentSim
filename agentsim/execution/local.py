@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-import platform
 import subprocess
+import sys
 import time
 
 from agentsim.content.catalog import resolve_command_sequence
@@ -16,11 +16,13 @@ from .base import ExecutionProvider, ProviderResult
 
 
 def host_platform_name() -> str:
-    observed = platform.system()
-    if observed == "Darwin":
+    observed = sys.platform.casefold()
+    if observed == "darwin":
         return "macOS"
-    if observed in {"Windows", "Linux"}:
-        return observed
+    if observed.startswith("win"):
+        return "Windows"
+    if observed.startswith("linux"):
+        return "Linux"
     raise RuntimeError(f"unsupported local execution platform: {observed or 'unknown'}")
 
 

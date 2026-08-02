@@ -30,6 +30,8 @@ versioning while its public interfaces mature.
 - Added public schemas for agent trace events, redacted query plans, and
   reference-lab results, plus Python/CLI/Web APIs and plugin API 1.0 telemetry
   connector entry points.
+- Made SQLite lifecycle handling and local platform discovery deterministic on
+  Windows as well as Linux and macOS.
 
 ## 1.0.0 - 2026-08-02
 

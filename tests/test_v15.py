@@ -265,10 +265,10 @@ class V15ContentTests(unittest.TestCase):
             "feedback-loop-alert-suppression",
         }
         self.assertTrue(expected.issubset(SCENARIOS))
-        self.assertEqual(len(SCENARIOS), 38)
+        self.assertEqual(len(SCENARIOS), 41)
         for scenario_id in expected:
             self.assertEqual(SCENARIOS[scenario_id].pack_id, "agentsim.v15-feedback")
-        self.assertEqual(len(list_fixtures()), 22)
+        self.assertEqual(len(list_fixtures()), 23)
         run = run_reference_fixture("detection-feedback-integrity")
         self.assertTrue(run.passed)
         self.assertEqual(len(run.events), 12)

@@ -1,0 +1,2 @@
+AgentSim synthetic lab artifact marker.
+This file contains no executable content and performs no action.

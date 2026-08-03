@@ -9,6 +9,7 @@
     "schema_version": {"const": "1.0"},
     "kind": {"const": "campaign-pack"},
     "pack_id": {"type": "string", "minLength": 3},
+    "provenance": {"$ref": "content-provenance.schema.json"},
     "integrity": {
       "type": "object",
       "additionalProperties": false,

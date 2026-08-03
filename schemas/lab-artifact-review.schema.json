@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/lab-artifact-review.schema.json",
+  "title": "AgentSim Lab Artifact Review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "verdict", "artifact_id", "artifact_type", "artifact_path", "expected_sha256", "observed_sha256", "expected_size_bytes", "observed_size_bytes", "findings", "controls"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "lab-artifact-review"},
+    "verdict": {"enum": ["approved", "review", "blocked"]},
+    "artifact_id": {"type": ["string", "null"]},
+    "artifact_type": {"type": ["string", "null"]},
+    "artifact_path": {"type": ["string", "null"]},
+    "expected_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "observed_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "expected_size_bytes": {"type": ["integer", "null"], "minimum": 1, "maximum": 33554432},
+    "observed_size_bytes": {"type": ["integer", "null"], "minimum": 1},
+    "findings": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "code", "message"],
+        "properties": {
+          "severity": {"enum": ["block", "review", "info"]},
+          "code": {"type": "string", "minLength": 1},
+          "message": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lab_only", "production_allowed", "network_access", "execution_allowed", "artifact_content_returned"],
+      "properties": {
+        "lab_only": {"const": true},
+        "production_allowed": {"const": false},
+        "network_access": {"const": "denied"},
+        "execution_allowed": {"const": false},
+        "artifact_content_returned": {"const": false}
+      }
+    }
+  }
+}

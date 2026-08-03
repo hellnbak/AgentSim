@@ -5,7 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from agentsim.content import load_ability_registry, load_campaign_registry
+from agentsim.content import (
+    load_ability_registry,
+    load_campaign_registry,
+    review_community_pack_file,
+)
 from agentsim.defense import (
     DetectionAlert,
     DetectionSnapshot,
@@ -33,6 +37,7 @@ from agentsim.lab import (
     run_lab_suite,
     run_reference_fixture,
     run_reference_suite,
+    review_lab_artifact_file,
 )
 from agentsim.models.agent_trace import AgentTraceEvent
 from agentsim.models.telemetry import NormalizedEvent
@@ -46,6 +51,12 @@ from agentsim.telemetry.agent_contract import agent_trace_from_record
 from agentsim.telemetry.assurance import assess_telemetry
 from agentsim.telemetry.investigation import investigate_telemetry
 from agentsim.telemetry.flight_recorder import FlightRecorderBundle
+from agentsim.telemetry.mappings import (
+    agent_trace_from_portable_record,
+    map_agent_trace,
+    mapping_catalog,
+)
+from agentsim.telemetry.conformance import run_fixture_conformance
 from agentsim.telemetry.connectors import (
     LiveQueryResult,
     QueryPlan,
@@ -120,6 +131,56 @@ def normalize_agent_telemetry(
     record: Mapping[str, object], *, collector: str = "agent_runtime"
 ) -> AgentTraceEvent:
     return agent_trace_from_record(record, collector=collector)
+
+
+def portable_mapping_catalog() -> dict[str, object]:
+    """Describe pinned OTel, ECS, and OCSF mappings and extension fields."""
+
+    return mapping_catalog()
+
+
+def map_agent_telemetry(
+    record: AgentTraceEvent | Mapping[str, object],
+    *,
+    output_profile: str,
+    input_profile: str = "canonical",
+) -> dict[str, object]:
+    """Convert one content-safe agent event to a portable mapping profile."""
+
+    event = (
+        record
+        if isinstance(record, AgentTraceEvent)
+        else agent_trace_from_record(record, collector="agent_runtime")
+        if input_profile == "canonical"
+        else agent_trace_from_portable_record(record, profile=input_profile)
+    )
+    return map_agent_trace(event, output_profile).to_dict()
+
+
+def cross_runtime_conformance(fixture_id: str) -> dict[str, object]:
+    """Round-trip a fixed reference fixture through every portable profile."""
+
+    return run_fixture_conformance(fixture_id).to_dict()
+
+
+def community_pack_review(
+    path: str | Path,
+    *,
+    trust_store_paths: Sequence[str | Path] = (),
+) -> dict[str, object]:
+    """Verify pack structure, provenance, checksum, signature, and safety."""
+
+    return review_community_pack_file(path, trust_store_paths=trust_store_paths).to_dict()
+
+
+def lab_artifact_review(
+    reference_path: str | Path,
+    *,
+    lab_root: str | Path | None = None,
+) -> dict[str, object]:
+    """Review an artifact reference and hash its local file without executing it."""
+
+    return review_lab_artifact_file(reference_path, lab_root=lab_root).to_dict()
 
 
 def telemetry_assurance(events: Sequence[NormalizedEvent]) -> dict[str, object]:

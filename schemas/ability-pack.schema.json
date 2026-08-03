@@ -9,6 +9,7 @@
     "schema_version": {"const": "1.0"},
     "kind": {"const": "ability-pack"},
     "pack_id": {"type": "string", "minLength": 3, "maxLength": 128},
+    "provenance": {"$ref": "content-provenance.schema.json"},
     "integrity": {
       "type": "object",
       "additionalProperties": false,

@@ -50,7 +50,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Update a reviewed content digest and sign it with an external RSA private key."
     )
     parser.add_argument("path")
-    parser.add_argument("content_key", choices=("abilities", "campaigns", "commands"))
+    parser.add_argument(
+        "content_key", choices=("abilities", "campaigns", "commands", "rules")
+    )
     parser.add_argument("--private-key", required=True)
     parser.add_argument("--key-id", required=True)
     args = parser.parse_args(argv)

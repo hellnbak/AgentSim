@@ -4,7 +4,7 @@ AgentSim produces safe, labeled traces for validating detections at AI-agent
 trust boundaries. It records what an agent observed, proposed, delegated, and
 was allowed or blocked from doing. It never invokes an AI model or tool.
 
-In v1.5, scenario packs remain a separate non-executing content contract.
+In v1.7, scenario packs remain a separate non-executing content contract.
 Gated endpoint or lab behavior belongs in ability packs and directed campaign
 packs documented in [`ABILITIES.md`](ABILITIES.md) and
 [`CAMPAIGNS.md`](CAMPAIGNS.md). A scenario pack cannot opt into lifecycle-v3
@@ -68,6 +68,9 @@ detectors inspect observable event fields and never query `scenario_variant`,
 | `operator-annotation-trust-abuse` | An AI-generated annotation misrepresents critical evidence to obtain suppression approval. |
 | `detection-tuning-recall-collapse` | A tuning proposal lowers malicious recall beyond an explicit regression threshold. |
 | `feedback-loop-alert-suppression` | An agent verdict cascades through remediation and planning agents until monitoring coverage falls. |
+| `portable-mapping-security-field-loss` | A portable translation drops policy and causal fields before defensive evaluation. |
+| `community-pack-provenance-substitution` | A pack's source revision no longer matches the signed provenance presented for review. |
+| `lab-artifact-reference-substitution` | A lab artifact's path or digest no longer matches its reviewed non-executing reference. |
 
 The catalog is declarative JSON under `agentsim_scenarios/packs/`; adding a
 scenario does not require editing the engine.
@@ -93,9 +96,9 @@ loading a plugin, or executing a tool.
 This boundary differs from endpoint behavior mode, which runs the documented
 read-only command catalog unless `--dry-run` is selected.
 
-## v1.5 disposable and reference-agent fixtures
+## v1.7 disposable and reference-agent fixtures
 
-`agentsim lab run all` adds twenty-two smaller in-memory controls alongside the
+`agentsim lab run all` adds twenty-three smaller in-memory controls alongside the
 declarative benchmark. The original prompt, memory, RAG, MCP, delegation,
 approval, decoy-secret, and budget controls now include goal hijacking,
 tool-definition/result poisoning, configuration and supply-chain tampering,
@@ -107,6 +110,12 @@ The `detection-feedback-integrity` fixture adds identity/evidence-bound alert
 feedback, trace/tenant reconciliation, a proposed suppression change, offline
 coverage validation, and a final policy gate. Its malicious twin is denied;
 its benign twin preserves the reviewed configuration.
+
+The `lab-artifact-reference-substitution` fixture adds malicious and benign
+path-scope, digest, review-status, and policy facts. The matching declarative
+scenario carries only `lab-artifact://agentsim.synthetic.marker`; the local
+path and artifact bytes remain outside the scenario pack. The reviewed marker
+is metadata/data only and is never executed.
 
 `agentsim lab reference all` runs those controls through an instrumented
 reference agent. It emits causal requested → policy → outcome events using
@@ -140,6 +149,7 @@ Important correlation fields include:
 | `attributes.goal_*`, `attributes.memory_*`, `attributes.identity_binding_valid` | Goal, retention, provenance, and delegation invariants. |
 | `attributes.feedback_*`, `attributes.evidence_digest_match`, `attributes.alert_trace_match` | Structured feedback authorship, disposition, evidence, and alert reconciliation. |
 | `attributes.suppression_expanded`, `attributes.drift_exceeds_threshold`, `attributes.detection_recall` | Offline tuning scope and coverage-regression observations. |
+| `lab_artifact_ref` | Optional `lab-artifact://...` correlation identifier; never a path, URL, or payload. |
 | `policy_id`, `policy_version`, `policy_decision` | Versioned control result. |
 | `event_type`, `stage`, `outcome` | Runtime checkpoint and disposition. |
 | `input_trust`, `tool_name`, `tool_risk` | Trust and proposed tool context. |

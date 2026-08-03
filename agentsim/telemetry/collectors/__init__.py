@@ -9,6 +9,8 @@ COLLECTOR_NAMES = (
     "jsonl",
     "otel",
     "otel_genai",
+    "ecs",
+    "ocsf",
     "sysmon",
     "auditd",
     "cloudtrail",

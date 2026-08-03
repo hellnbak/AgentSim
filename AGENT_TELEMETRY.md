@@ -1,19 +1,22 @@
 # Agent and MCP telemetry contract
 
-AgentSim 1.6 uses agent trace contract 1.1 for correlating agent,
+AgentSim 1.7 uses agent trace contract 1.1 for correlating agent,
 model, tool, policy, and MCP activity without retaining prompts, reasoning,
 messages, tool arguments/results, model responses, payloads, credentials, or
 unsafe token values.
 
 ## Profiles
 
-The offline collector and Python API accept three agent-oriented profiles:
+The offline collector and Python API accept three agent-oriented source
+profiles plus two portable security-schema collectors:
 
 | Profile | Intended input |
 | --- | --- |
 | `agent_runtime` | Native agent lifecycle/audit events. |
 | `otel_genai` | OpenTelemetry GenAI spans or log records. |
 | `mcp_audit` | MCP client/server authorization and tool audit events. |
+| `ecs` | Elastic Common Schema JSON/JSONL, including AgentSim portable mappings. |
+| `ocsf` | OCSF JSON/JSONL, including API Activity with trace and AI-operation fields. |
 
 ```bash
 agentsim telemetry inspect agent-spans.jsonl --collector otel_genai
@@ -32,6 +35,37 @@ event = normalize_agent_telemetry(record, collector="otel_genai")
 For live runtime flights, strict bundles, OTLP/HTTP JSON, OpenAI Agents SDK
 processor integration, pseudonymous twins, and baseline/candidate gates, see
 [`FLIGHT_RECORDER.md`](FLIGHT_RECORDER.md).
+
+## Portable mappings
+
+The canonical contract can be exported to pinned OpenTelemetry Semantic
+Conventions 1.43.0, ECS 9.4.0, or OCSF 1.8.0. AgentSim distinguishes native
+standard fields from project-specific security extensions:
+
+| Profile | Native examples | Extension namespace |
+| --- | --- | --- |
+| `otel` | trace/span IDs, GenAI operation, agent, conversation, tool, model, and data-source IDs | `attributes.agentsim` |
+| `ecs` | `@timestamp`, `event.id`, `event.action`, `event.dataset`, `trace.id`, `session.id`, `user.id` | `agentsim` |
+| `ocsf` | API Activity, actor, trace/span, message context, AI model, source, and status | `unmapped.agentsim` |
+
+Policy, approval, delegation, goal, memory, and MCP authorization facts remain
+explicit extensions when a standard has no equivalent. Content values are
+never exported. Each result inventories native and extension fields and
+reports native coverage.
+
+```bash
+agentsim telemetry mappings
+agentsim telemetry map agent-events.jsonl \
+  --from-profile canonical --to-profile otel \
+  --output otel-events.json
+agentsim lab conformance multi-agent-delegation-cascade --fail-on-error
+```
+
+Conformance restores each mapped event and compares the canonical security
+invariants and safe attributes. A passing AgentSim round trip does not claim
+general certification for the target standard. Mapping details, version
+references, review boundaries, APIs, and schemas are in
+[`PORTABILITY_AND_TRUST.md`](PORTABILITY_AND_TRUST.md).
 
 The complete machine-readable shape is
 [`schemas/agent-trace-event.schema.json`](schemas/agent-trace-event.schema.json).

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import statistics
 import time
 import uuid
@@ -35,6 +36,9 @@ DEFAULT_OTEL_PATH = "agent_sim_otel.jsonl"
 DEFAULT_COVERAGE_PATH = "agent_sim_coverage.json"
 DEFAULT_BUNDLE_PATH = "agent_sim_evidence.zip"
 VALID_VARIANTS = ("malicious", "benign", "both")
+LAB_ARTIFACT_REFERENCE_PATTERN = re.compile(
+    r"^lab-artifact://[a-z0-9][a-z0-9._-]{2,127}$"
+)
 
 LogCallback = Callable[[str], None]
 StopCallback = Callable[[], bool]
@@ -139,6 +143,7 @@ class ScenarioDefinition:
     malicious_steps: Sequence[ScenarioStep]
     benign_steps: Sequence[ScenarioStep]
     pack_id: str = "agentsim.custom"
+    lab_artifact_ref: str | None = None
 
     def steps_for(self, variant: str) -> Sequence[ScenarioStep]:
         if variant == "malicious":
@@ -396,7 +401,22 @@ def _parse_pack(data: object, source: str) -> dict[str, ScenarioDefinition]:
             malicious_steps=variants["malicious"],
             benign_steps=variants["benign"],
             pack_id=pack_id,
+            lab_artifact_ref=(
+                _require_nonempty_string(
+                    definition_data.get("lab_artifact_ref"),
+                    f"{context}.lab_artifact_ref",
+                )
+                if definition_data.get("lab_artifact_ref") is not None
+                else None
+            ),
         )
+        if (
+            definition.lab_artifact_ref is not None
+            and not LAB_ARTIFACT_REFERENCE_PATTERN.fullmatch(
+                definition.lab_artifact_ref
+            )
+        ):
+            raise ValueError(f"{context}.lab_artifact_ref has an invalid format")
         malicious_detected, _ = detect_ordered_sequence(
             [_event_like_step(step) for step in definition.malicious_steps],
             definition.detector,
@@ -640,6 +660,11 @@ def _build_event(
         "scenario_name": definition.name,
         "scenario_variant": variant,
         "scenario_risk": definition.risk,
+        **(
+            {"lab_artifact_ref": definition.lab_artifact_ref}
+            if definition.lab_artifact_ref
+            else {}
+        ),
         "expected_detection": variant == "malicious",
         "stage": step.stage,
         "event_type": step.event_type,
@@ -847,6 +872,7 @@ def build_coverage_report(
                 "name": definition.name,
                 "risk": definition.risk,
                 "pack_id": definition.pack_id,
+                "lab_artifact_ref": definition.lab_artifact_ref,
                 "malicious_checkpoints": len(definition.malicious_steps),
                 "benign_checkpoints": len(definition.benign_steps),
                 "detector_fields": _detector_field_paths(definition.detector),

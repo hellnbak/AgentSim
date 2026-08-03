@@ -1,0 +1,190 @@
+{
+  "pack_schema_version": "1.0",
+  "pack_id": "agentsim.v17-portability-and-trust",
+  "scenarios": [
+    {
+      "scenario_id": "portable-mapping-security-field-loss",
+      "name": "Portable mapping security-field loss",
+      "description": "Models a telemetry translation that drops policy and causal security fields before detection evaluation.",
+      "risk": "high",
+      "mappings": {
+        "mitre_atlas": ["Impair Defenses", "AI Agent Context Poisoning"],
+        "owasp_agentic": ["ASI08 Cascading Failures", "ASI10 Rogue Agents"]
+      },
+      "detector": {
+        "type": "ordered_sequence",
+        "conditions": [
+          {"event_type": "agent.telemetry.mapping", "equals": {"attributes.required_fields_preserved": false}},
+          {"event_type": "agent.policy.decision", "equals": {"policy_decision": "deny"}}
+        ]
+      },
+      "malicious_steps": [
+        {
+          "event_type": "agent.telemetry.mapping",
+          "stage": "observe",
+          "message": "A synthetic portable mapping omitted required policy and causal fields.",
+          "agent_id": "telemetry-agent",
+          "input_trust": "untrusted",
+          "outcome": "nonconformant",
+          "attributes": {"profile": "otel", "required_fields_preserved": false, "content_recorded": false, "executed": false}
+        },
+        {
+          "event_type": "agent.policy.decision",
+          "stage": "policy",
+          "message": "The nonconformant mapping was rejected before entering the detection pipeline.",
+          "agent_id": "policy-agent",
+          "policy_decision": "deny",
+          "outcome": "prevented",
+          "caused_by_sequences": [1],
+          "attributes": {"executed": false}
+        }
+      ],
+      "benign_steps": [
+        {
+          "event_type": "agent.telemetry.mapping",
+          "stage": "observe",
+          "message": "The pinned mapping preserved every required security field through a synthetic round trip.",
+          "agent_id": "telemetry-agent",
+          "input_trust": "trusted",
+          "outcome": "conformant",
+          "attributes": {"profile": "otel", "required_fields_preserved": true, "content_recorded": false, "executed": false}
+        },
+        {
+          "event_type": "agent.policy.decision",
+          "stage": "policy",
+          "message": "The conformant mapping remained available for detection validation.",
+          "agent_id": "policy-agent",
+          "policy_decision": "allow",
+          "outcome": "verified",
+          "caused_by_sequences": [1],
+          "attributes": {"executed": false}
+        }
+      ]
+    },
+    {
+      "scenario_id": "community-pack-provenance-substitution",
+      "name": "Community pack provenance substitution",
+      "description": "Models content provenance being replaced after review while the pack claims a trusted signature.",
+      "risk": "critical",
+      "mappings": {
+        "mitre_atlas": ["AI Supply Chain Rug Pull", "Modify AI Agent Configuration"],
+        "owasp_agentic": ["ASI04 Agentic Supply Chain Vulnerabilities", "ASI10 Rogue Agents"]
+      },
+      "detector": {
+        "type": "ordered_sequence",
+        "conditions": [
+          {"event_type": "agent.content.review", "equals": {"attributes.provenance_revision_match": false, "attributes.review_verdict": "blocked"}},
+          {"event_type": "agent.policy.decision", "equals": {"policy_decision": "deny"}}
+        ]
+      },
+      "malicious_steps": [
+        {
+          "event_type": "agent.content.review",
+          "stage": "review",
+          "message": "A synthetic community pack presented a revision that did not match its signed provenance.",
+          "agent_id": "content-review-agent",
+          "input_trust": "untrusted",
+          "outcome": "blocked",
+          "attributes": {"signature_valid": false, "provenance_revision_match": false, "review_verdict": "blocked", "executed": false}
+        },
+        {
+          "event_type": "agent.policy.decision",
+          "stage": "policy",
+          "message": "The substituted pack was rejected without loading executable content.",
+          "agent_id": "policy-agent",
+          "policy_decision": "deny",
+          "outcome": "prevented",
+          "caused_by_sequences": [1],
+          "attributes": {"executed": false}
+        }
+      ],
+      "benign_steps": [
+        {
+          "event_type": "agent.content.review",
+          "stage": "review",
+          "message": "The community pack checksum, signature, pinned revision, structure, and safety checks passed.",
+          "agent_id": "content-review-agent",
+          "input_trust": "trusted",
+          "outcome": "approved",
+          "attributes": {"signature_valid": true, "provenance_revision_match": true, "review_verdict": "approved", "executed": false}
+        },
+        {
+          "event_type": "agent.policy.decision",
+          "stage": "policy",
+          "message": "The approved declarative pack remained eligible for operator-controlled loading.",
+          "agent_id": "policy-agent",
+          "policy_decision": "allow",
+          "outcome": "verified",
+          "caused_by_sequences": [1],
+          "attributes": {"executed": false}
+        }
+      ]
+    },
+    {
+      "scenario_id": "lab-artifact-reference-substitution",
+      "name": "Lab artifact reference substitution",
+      "description": "Models a lab artifact whose path or digest no longer matches the reviewed non-executing reference.",
+      "risk": "critical",
+      "lab_artifact_ref": "lab-artifact://agentsim.synthetic.marker",
+      "mappings": {
+        "mitre_atlas": ["AI Supply Chain Rug Pull", "AI Agent Tool Invocation"],
+        "owasp_agentic": ["ASI02 Tool Misuse", "ASI04 Agentic Supply Chain Vulnerabilities"]
+      },
+      "detector": {
+        "type": "ordered_sequence",
+        "conditions": [
+          {"event_type": "agent.artifact.review", "equals": {"attributes.digest_match": false, "attributes.review_verdict": "blocked"}},
+          {"event_type": "agent.tool.requested", "equals": {"attributes.executed": false}}
+        ]
+      },
+      "malicious_steps": [
+        {
+          "event_type": "agent.artifact.review",
+          "stage": "review",
+          "message": "The selected synthetic artifact did not match its reviewed digest or lab-root scope.",
+          "agent_id": "artifact-review-agent",
+          "input_trust": "untrusted",
+          "outcome": "blocked",
+          "attributes": {"digest_match": false, "path_scope_valid": false, "review_verdict": "blocked", "artifact_content_returned": false, "executed": false}
+        },
+        {
+          "event_type": "agent.tool.requested",
+          "stage": "emulate",
+          "message": "The artifact action remained a denied proposal and no content was executed.",
+          "agent_id": "lab-agent",
+          "tool_name": "synthetic.artifact.inspect",
+          "tool_action": "review referenced artifact metadata",
+          "tool_risk": "high",
+          "policy_decision": "deny",
+          "outcome": "prevented",
+          "caused_by_sequences": [1],
+          "attributes": {"executed": false, "network_opened": false}
+        }
+      ],
+      "benign_steps": [
+        {
+          "event_type": "agent.artifact.review",
+          "stage": "review",
+          "message": "The synthetic marker matched its reviewed path, size, digest, and provenance.",
+          "agent_id": "artifact-review-agent",
+          "input_trust": "trusted",
+          "outcome": "approved",
+          "attributes": {"digest_match": true, "path_scope_valid": true, "review_verdict": "approved", "artifact_content_returned": false, "executed": false}
+        },
+        {
+          "event_type": "agent.tool.requested",
+          "stage": "emulate",
+          "message": "The approved marker remained inspection-only and was never executed.",
+          "agent_id": "lab-agent",
+          "tool_name": "synthetic.artifact.inspect",
+          "tool_action": "review referenced artifact metadata",
+          "tool_risk": "low",
+          "policy_decision": "allow",
+          "outcome": "verified",
+          "caused_by_sequences": [1],
+          "attributes": {"executed": false, "network_opened": false}
+        }
+      ]
+    }
+  ]
+}

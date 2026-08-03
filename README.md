@@ -9,14 +9,13 @@ behavior to ground truth, telemetry coverage, detection validation, defensive
 guidance, cleanup verification, and repeatable evidence. It is deliberately not
 a general exploitation toolkit or command-and-control platform.
 
-Version 1.6.0 adds a content-safe agent security flight recorder, optional
-OpenAI Agents SDK trace processor, loopback OTLP/HTTP JSON ingestion,
-pseudonymous non-executing twins, and baseline-versus-candidate Detection CI
-with JSON, Markdown, JUnit, and SARIF output. Eleven simulation-only endpoint
-and cloud control-validation abilities plus four directed campaigns expand
-cross-plane coverage without adding payloads, network calls, or state changes.
-The Web workspace now supports human flight inspection and interactive merge
-gates while preserving the v1 simulation-first and non-exploitation boundaries.
+Version 1.7.0 adds version-pinned OTel, ECS, and OCSF mappings, exact
+cross-runtime fixture conformance, signed community-pack review, signed pack
+provenance, and a reviewed non-executing lab-artifact reference contract. Three
+new malicious/benign scenarios cover portable field loss, provenance
+substitution, and artifact substitution. The Web workspace now combines
+mapping inspection, conformance, community trust review, and artifact identity
+checks with the existing flight, detection, feedback, and investigation tools.
 
 ## Core workflow
 
@@ -32,7 +31,7 @@ AgentSim then correlates exported telemetry, evaluates vendor-neutral rules,
 checks field availability, creates human-review candidate detections, explains
 defensive gaps, and emits regression-ready evidence.
 
-## v1.6 capabilities
+## v1.7 capabilities
 
 - Eight release-signed foundation abilities and two release-signed campaigns,
   plus eleven checksum-labeled simulation-only endpoint/cloud preview
@@ -74,6 +73,16 @@ defensive gaps, and emits regression-ready evidence.
   assurance, agent invariants, answer-key-free detection-pack transitions, and
   checkpoint retention, then produces pass/review/block reports in JSON,
   Markdown, JUnit, and SARIF.
+- Portable, version-pinned mappings to OpenTelemetry Semantic Conventions
+  1.43.0, ECS 9.4.0, and OCSF 1.8.0. Native standard fields remain separate
+  from explicit AgentSim security extensions, and content values are excluded.
+- Cross-runtime conformance that round-trips fixed reference fixtures through
+  every portable profile and reports invariant failures and native coverage.
+- Signed community ability, campaign, and detection-pack review with explicit
+  public trust stores, provenance bound into the signature, strict structure,
+  safety findings, and approved/review/blocked verdicts.
+- A reviewed lab-artifact reference that verifies local path scope, metadata,
+  provenance, size, and SHA-256 without returning or executing artifact bytes.
 - Strict feedback bundles for alerts and enumerated operator annotations;
   alert-to-trace/evidence reconciliation; detection of unresolved evidence,
   digest mismatch, agent-authored final verdicts, contradictory dispositions,
@@ -85,14 +94,15 @@ defensive gaps, and emits regression-ready evidence.
   LogScale, Elastic EQL, Panther Python, and Graylog.
 - Telemetry coverage, defensive gap analysis, investigation runbooks,
   malicious/benign regression, and readiness scorecards.
-- Thirty-eight declarative agentic scenarios plus twenty-two disposable control
+- Forty-one declarative agentic scenarios plus twenty-three disposable control
   fixtures and an instrumented reference-agent runtime. Coverage includes
   cross-turn and cross-agent goal hijacking, provenance/tool-result poisoning,
   delegation identity drift, shared-memory retention escape, multi-agent trust
   cascades, alert-verdict poisoning, reconciliation confusion, annotation trust
-  abuse, recall collapse, feedback-loop suppression, configuration and
-  supply-chain tampering, replay, delayed exfiltration, scope challenge abuse,
-  and deceptive summaries.
+  abuse, recall collapse, feedback-loop suppression, portable mapping loss,
+  community provenance substitution, reviewed artifact substitution,
+  configuration and supply-chain tampering, replay, delayed exfiltration,
+  scope challenge abuse, and deceptive summaries.
 - Version-pinned, non-executing plans for Atomic Red Team, Stratus Red Team,
   and MITRE CALDERA. The public core does not execute these plans.
 - Attack Flow STIX 2.1 import/export.
@@ -110,6 +120,8 @@ defensive gaps, and emits regression-ready evidence.
 | Scenario pack | Malicious/benign agentic traces and detector tests | Never |
 | Ability pack | One reviewed adversary behavior | Policy-gated |
 | Campaign pack | Directed ability graph and defensive objective | Policy-gated |
+| Community pack | Declarative content plus signed provenance | Review before loading |
+| Lab artifact reference | Local identity, provenance, type, size, and digest | Inspection only; never executed by the public core |
 
 | Mode | Provider | Boundary |
 | --- | --- | --- |
@@ -123,12 +135,12 @@ or arbitrary shell text. Abilities reference an independently signed reviewed
 catalog with `catalog://...` identifiers. Scenario actions remain synthetic,
 redacted, and explicitly non-executing.
 
-If a future isolated lab needs a payload, it must live outside packs behind a
-separately reviewed executor and an immutable local artifact reference with a
-verified SHA-256 digest, declared type/size/platform, exact disposable target,
-lab-only authorization, preflight scan, resource limits, and mandatory cleanup
-evidence. Inline bytes, URLs, downloads, unpinned artifacts, production targets,
-and public-core payload execution remain invalid.
+The v1.7 artifact contract can identify and review a local lab artifact, but it
+cannot execute one. Any future execution must live outside packs behind a
+separately reviewed executor with an exact disposable target, independent
+preflight controls, authorization, and cleanup evidence. Inline bytes, URLs,
+downloads, unpinned artifacts, production targets, and public-core payload
+execution remain invalid.
 
 ## Requirements and install
 
@@ -246,6 +258,46 @@ agentsim detection ci baseline-flight.json candidate-flight.json \
 See [FLIGHT_RECORDER.md](FLIGHT_RECORDER.md) for OTLP JSON, the optional
 OpenAI Agents SDK processor, synthetic twins, report semantics, and the Web
 workspace.
+
+### Portable telemetry and trusted community content
+
+Inspect the exact target fields and explicit extension namespaces, then map a
+canonical event export:
+
+```bash
+agentsim telemetry mappings
+agentsim telemetry map agent-events.jsonl \
+  --from-profile canonical --to-profile ocsf \
+  --output ocsf-events.json
+```
+
+Round-trip a fixed runtime fixture through OTel, ECS, and OCSF:
+
+```bash
+agentsim lab conformance multi-agent-delegation-cascade \
+  --output conformance.json --fail-on-error
+```
+
+Review a signed community pack and its explicitly supplied public trust key:
+
+```bash
+agentsim content review examples/community-ability-pack.signed.json \
+  --trust-store examples/community-trust-store.json \
+  --output community-review.json --fail-on review
+```
+
+Verify the bundled inspection-only lab artifact reference:
+
+```bash
+agentsim lab artifact-review \
+  labs/reference-agent/artifacts/synthetic-marker.reference.json \
+  --lab-root labs/reference-agent/artifacts \
+  --output artifact-review.json
+```
+
+See [PORTABILITY_AND_TRUST.md](PORTABILITY_AND_TRUST.md) for mapping pins,
+native-versus-extension semantics, provenance, trust stores, review verdicts,
+artifact constraints, APIs, and schemas.
 
 Check whether the export is trustworthy enough to interpret:
 
@@ -458,8 +510,10 @@ The feedback workspace shows reconciliation coverage, verdict conflicts, and
 offline tuning drift. The Flight Recorder workspace validates local bundles,
 renders a bounded content-safe timeline, exports pseudonymous twins, and runs
 baseline/candidate Detection CI with downloadable JSON, Markdown, and SARIF.
-All twenty-two control fixtures and the instrumented reference-agent run are
-available.
+The Portability and Trust workspace maps a fixed event into OTel, ECS, or OCSF,
+runs cross-runtime conformance, reviews a signed community pack, and verifies a
+non-executing artifact reference. All twenty-three control fixtures and the
+instrumented reference-agent run are available.
 Local, Docker, and external execution are intentionally unavailable in the UI.
 
 ## Plugin SDK
@@ -493,6 +547,12 @@ enforces API version `1.0`. Entry-point groups are `agentsim.collectors`,
   labeled, network denied, production locked, and state-change free.
 - External adapter plans are non-executing, version-pinned, hashed, and require
   cleanup phases.
+- Portable mappings report native versus AgentSim-extension fields and never
+  add content values.
+- Community approval requires a matching checksum, trusted signature, pinned
+  provenance, strict structure, and safety review.
+- Lab artifacts are path-, size-, and digest-checked; the public core never
+  returns or executes their content.
 
 Read-only behavior can still expose local metadata to sensors or trigger
 alerts. Use AgentSim only on systems and accounts you own or are explicitly
@@ -505,9 +565,9 @@ Interfaces remain subject to review until they are documented as stable.
 
 | Release horizon | Status | Defensive focus |
 | --- | --- | --- |
-| v1.6 | Current | Agent Security Flight Recorder, OpenAI/OTLP JSON ingestion, pseudonymous twins, Detection CI, endpoint/cloud control previews, directed campaigns, and interactive flight debugging. |
-| v1.7 | Next | Portable OTel/ECS/OCSF field mappings, signed community pack review, pack provenance, cross-runtime fixture conformance, and a reviewed lab-artifact reference contract. |
-| v1.8 | Planned | Detection lifecycle history, signed feedback exports, organization-defined reviewer quorum policies, and optional organization-owned evidence stores. |
+| v1.7 | Current | Portable OTel/ECS/OCSF mappings, signed community-pack review and provenance, cross-runtime fixture conformance, reviewed lab-artifact references, three new attack scenarios, and an interactive portability/trust workbench. |
+| v1.8 | Next | Detection lifecycle history, signed feedback exports, organization-defined reviewer quorum policies, and optional organization-owned evidence stores. |
+| v1.9 | Planned | Mapping-profile compatibility matrices, community review attestations, fixture provenance catalogs, and organization-scale conformance reporting. |
 | v2.0 | Direction | Stable content-registry and evidence contracts, reproducible cross-runtime conformance suites, and organization-scale regression orchestration with no implicit production execution. |
 
 Across these releases, AgentSim will remain a detection-validation framework.
@@ -535,6 +595,7 @@ python -m build
 - [Multi-agent investigation](MULTI_AGENT_INVESTIGATION.md)
 - [Detection feedback and drift](DETECTION_FEEDBACK.md)
 - [Flight recorder and Detection CI](FLIGHT_RECORDER.md)
+- [Telemetry portability and content trust](PORTABILITY_AND_TRUST.md)
 - [Live telemetry connectors](LIVE_CONNECTORS.md)
 - [Agentic scenarios](SCENARIOS.md)
 - [External providers](EXTERNAL_PROVIDERS.md)

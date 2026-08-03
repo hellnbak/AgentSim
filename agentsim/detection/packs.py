@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
 from agentsim.models.telemetry import NormalizedEvent
+from agentsim.content.integrity import verify_integrity
+from agentsim.content.provenance import parse_provenance
 
 from .ast import (
     AllNode,
@@ -111,6 +113,8 @@ class DetectionPack:
     description: str
     rules: tuple[PackedDetection, ...]
     metadata: Mapping[str, object]
+    integrity: Mapping[str, object] = field(default_factory=dict)
+    provenance: Mapping[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -121,6 +125,8 @@ class DetectionPack:
             "description": self.description,
             "rules": [item.to_dict() for item in self.rules],
             "metadata": dict(self.metadata),
+            **({"integrity": dict(self.integrity)} if self.integrity else {}),
+            **({"provenance": dict(self.provenance)} if self.provenance else {}),
         }
 
 
@@ -171,14 +177,32 @@ class DetectionSweepReport:
         }
 
 
-def parse_detection_pack(value: Mapping[str, object]) -> DetectionPack:
+def parse_detection_pack(
+    value: Mapping[str, object],
+    *,
+    trusted_keys: Mapping[str, object] | None = None,
+) -> DetectionPack:
     _reject_answer_keys(value)
     if value.get("pack_schema_version") != PACK_SCHEMA_VERSION:
         raise ValueError(f"unsupported detection pack schema: {value.get('pack_schema_version')}")
-    allowed = {"pack_schema_version", "pack_id", "name", "version", "description", "rules", "metadata"}
+    allowed = {
+        "pack_schema_version",
+        "pack_id",
+        "name",
+        "version",
+        "description",
+        "rules",
+        "metadata",
+        "integrity",
+        "provenance",
+    }
     unknown = sorted(set(value) - allowed)
     if unknown:
         raise ValueError(f"unknown detection pack fields: {', '.join(unknown)}")
+    if value.get("integrity") is not None:
+        verify_integrity(value, "rules", trusted_keys=trusted_keys)
+    if value.get("provenance") is not None:
+        parse_provenance(value.get("provenance"))
     pack_id = str(value.get("pack_id", ""))
     if not _IDENTIFIER.fullmatch(pack_id):
         raise ValueError("detection pack_id must be a lowercase dotted identifier")
@@ -243,10 +267,16 @@ def parse_detection_pack(value: Mapping[str, object]) -> DetectionPack:
         str(value.get("description", "")),
         tuple(packed),
         dict(metadata),
+        dict(value.get("integrity", {})) if isinstance(value.get("integrity", {}), Mapping) else {},
+        dict(value.get("provenance", {})) if isinstance(value.get("provenance", {}), Mapping) else {},
     )
 
 
-def load_detection_pack(path: str | Path | None = None) -> DetectionPack:
+def load_detection_pack(
+    path: str | Path | None = None,
+    *,
+    trusted_keys: Mapping[str, object] | None = None,
+) -> DetectionPack:
     if path is None:
         data = resources.files("agentsim.detection.pack_content").joinpath(BUILTIN_PACK_NAME).read_text(
             encoding="utf-8"
@@ -261,7 +291,7 @@ def load_detection_pack(path: str | Path | None = None) -> DetectionPack:
     value = json.loads(data)
     if not isinstance(value, Mapping):
         raise ValueError("detection pack must be a JSON object")
-    return parse_detection_pack(value)
+    return parse_detection_pack(value, trusted_keys=trusted_keys)
 
 
 def sweep_detection_pack(

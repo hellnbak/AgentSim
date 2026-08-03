@@ -125,6 +125,24 @@ PROFILE_ALIASES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "timestamp": ("timeUnixNano", "observedTimeUnixNano"),
         "event_type": ("name",),
     },
+    "ecs": {
+        "timestamp": ("@timestamp",),
+        "source": ("event.dataset", "service.name"),
+        "event_type": ("event.action",),
+        "record_id": ("event.id",),
+    },
+    "ocsf": {
+        "timestamp": ("time",),
+        "source": ("metadata.source", "metadata.product.name"),
+        "event_type": ("activity_name", "class_name"),
+        "record_id": ("metadata.original_event_uid", "metadata.uid"),
+        "trace_id": ("trace.uid",),
+        "session_id": ("message_context.uid",),
+        "agent_id": ("actor.app_uid",),
+        "principal_id": ("actor.user.uid",),
+        "parent_event_id": ("trace.span.parent_uid",),
+        "outcome": ("status",),
+    },
     "agent_runtime": {"source": ("event_source",), "event_type": ("event_type",)},
 }
 
@@ -220,7 +238,9 @@ def normalize_record(
     timestamp = _first(
         record, tuple(profile.get("timestamp", ())) + CANONICAL_ALIASES["timestamp"]
     )
-    record_id = _first(record, CANONICAL_ALIASES["record_id"])
+    record_id = _first(
+        record, tuple(profile.get("record_id", ())) + CANONICAL_ALIASES["record_id"]
+    )
     normalized_timestamp, timestamp_present, timestamp_valid = _timestamp_with_status(timestamp)
     return NormalizedEvent(
         timestamp=normalized_timestamp,

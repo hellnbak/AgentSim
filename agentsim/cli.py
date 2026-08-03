@@ -12,7 +12,11 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from agentsim import __version__
-from agentsim.content import load_ability_registry, load_campaign_registry
+from agentsim.content import (
+    load_ability_registry,
+    load_campaign_registry,
+    review_community_pack_file,
+)
 from agentsim.defense import (
     analyze_gaps,
     compare_detection_snapshots,
@@ -40,6 +44,7 @@ from agentsim.lab import (
     run_lab_suite,
     run_reference_fixture,
     run_reference_suite,
+    review_lab_artifact_file,
 )
 from agentsim.lab.server import serve_reference_lab
 from agentsim.models.campaign import CampaignDefinition, CampaignStep
@@ -56,6 +61,14 @@ from agentsim.telemetry.assurance import assess_telemetry
 from agentsim.telemetry.flight_recorder import FlightRecorder, load_flight_bundle
 from agentsim.telemetry.flight_server import serve_flight_recorder
 from agentsim.telemetry.investigation import investigate_telemetry
+from agentsim.telemetry.mappings import (
+    PORTABLE_PROFILES,
+    agent_trace_from_portable_record,
+    map_agent_trace,
+    mapping_catalog,
+)
+from agentsim.telemetry.conformance import run_fixture_conformance
+from agentsim.telemetry.agent_contract import agent_trace_from_record
 from agentsim.telemetry.connectors import CONNECTOR_NAMES, QuerySpec, build_query_plan, execute_query_plan
 
 
@@ -70,6 +83,7 @@ FOUNDATION_COMMANDS = {
     "external",
     "attack-flow",
     "plugin",
+    "content",
 }
 
 
@@ -196,6 +210,24 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     )
     telemetry_serve_otlp.add_argument("--output", required=True)
     telemetry_serve_otlp.add_argument("--allow-loopback", action="store_true")
+    telemetry_commands.add_parser(
+        "mappings", help="Inspect the pinned OTel, ECS, and OCSF field mappings."
+    )
+    telemetry_map = telemetry_commands.add_parser(
+        "map", help="Convert content-safe agent events between portable profiles."
+    )
+    telemetry_map.add_argument("path", metavar="JSON_OR_JSONL")
+    telemetry_map.add_argument(
+        "--from-profile",
+        choices=("canonical", *PORTABLE_PROFILES),
+        default="canonical",
+    )
+    telemetry_map.add_argument(
+        "--to-profile",
+        choices=("canonical", *PORTABLE_PROFILES),
+        required=True,
+    )
+    telemetry_map.add_argument("--output", required=True)
 
     detection = commands.add_parser("detection", help="Evaluate and generate detection rules.")
     detection_commands = detection.add_subparsers(dest="detection_command", required=True)
@@ -290,6 +322,24 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     lab_serve.add_argument("--host", default="127.0.0.1")
     lab_serve.add_argument("--port", type=int, default=8765)
     lab_serve.add_argument("--allow-loopback", action="store_true")
+    lab_conformance = lab_commands.add_parser(
+        "conformance", help="Round-trip a fixed fixture through portable runtime profiles."
+    )
+    lab_conformance.add_argument("fixture_id", nargs="?", default="multi-agent-delegation-cascade")
+    lab_conformance.add_argument(
+        "--profile", action="append", choices=PORTABLE_PROFILES, default=[]
+    )
+    lab_conformance.add_argument("--output")
+    lab_conformance.add_argument("--fail-on-error", action="store_true")
+    lab_artifact = lab_commands.add_parser(
+        "artifact-review", help="Verify a reviewed local lab artifact without executing it."
+    )
+    lab_artifact.add_argument("reference", metavar="REFERENCE_JSON")
+    lab_artifact.add_argument("--lab-root")
+    lab_artifact.add_argument("--output")
+    lab_artifact.add_argument(
+        "--fail-on", choices=("never", "review", "blocked"), default="blocked"
+    )
 
     external = commands.add_parser("external", help="Build version-pinned external provider plans.")
     external_commands = external.add_subparsers(dest="external_command", required=True)
@@ -318,6 +368,20 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     plugin = commands.add_parser("plugin", help="Inspect installed v1 plugin entry points.")
     plugin_commands = plugin.add_subparsers(dest="plugin_command", required=True)
     plugin_commands.add_parser("list", help="List plugins without importing their code.")
+
+    content = commands.add_parser(
+        "content", help="Review community pack provenance, signatures, structure, and safety."
+    )
+    content_commands = content.add_subparsers(dest="content_command", required=True)
+    content_review = content_commands.add_parser(
+        "review", help="Review a signed ability, campaign, or detection pack."
+    )
+    content_review.add_argument("pack", metavar="PACK_JSON")
+    content_review.add_argument("--trust-store", action="append", default=[], metavar="PATH")
+    content_review.add_argument("--output")
+    content_review.add_argument(
+        "--fail-on", choices=("never", "review", "blocked"), default="blocked"
+    )
     return parser
 
 
@@ -517,6 +581,37 @@ def _run_v1(args: argparse.Namespace) -> int | None:
             output_path=args.output,
         )
         return 0
+    if args.command == "telemetry" and args.telemetry_command == "mappings":
+        _emit_json(mapping_catalog())
+        return 0
+    if args.command == "telemetry" and args.telemetry_command == "map":
+        records = read_json_records(args.path)
+        if len(records) > 10_000:
+            raise ValueError("portable mapping is limited to 10,000 records per invocation")
+        events = tuple(
+            agent_trace_from_record(record, collector="agent_runtime")
+            if args.from_profile == "canonical"
+            else agent_trace_from_portable_record(record, profile=args.from_profile)
+            for record in records
+        )
+        mapped = (
+            [event.to_dict() for event in events]
+            if args.to_profile == "canonical"
+            else [map_agent_trace(event, args.to_profile).to_dict() for event in events]
+        )
+        _emit_json(
+            {
+                "schema_version": "1.0",
+                "kind": "portable-mapping-batch",
+                "input_profile": args.from_profile,
+                "output_profile": args.to_profile,
+                "record_count": len(mapped),
+                "records": mapped,
+                "content_values_recorded": False,
+            },
+            args.output,
+        )
+        return 0
     if args.command == "detection" and args.detection_command == "evaluate":
         result = evaluate_rule(
             load_rule(args.rule), collector_for(args.collector).collect(args.telemetry)
@@ -670,6 +765,21 @@ def _run_v1(args: argparse.Namespace) -> int | None:
             allow_loopback=args.allow_loopback,
         )
         return 0
+    if args.command == "lab" and args.lab_command == "conformance":
+        report = run_fixture_conformance(
+            args.fixture_id,
+            profiles=args.profile or PORTABLE_PROFILES,
+        )
+        _emit_json(report.to_dict(), args.output)
+        return 1 if args.fail_on_error and not report.passed else 0
+    if args.command == "lab" and args.lab_command == "artifact-review":
+        report = review_lab_artifact_file(args.reference, lab_root=args.lab_root)
+        _emit_json(report.to_dict(), args.output)
+        if args.fail_on == "never":
+            return 0
+        if args.fail_on == "review":
+            return 0 if report.verdict == "approved" else 1
+        return 1 if report.verdict == "blocked" else 0
     if args.command == "external" and args.external_command == "list":
         _emit_json(
             {
@@ -731,6 +841,17 @@ def _run_v1(args: argparse.Namespace) -> int | None:
             }
         )
         return 0
+    if args.command == "content" and args.content_command == "review":
+        report = review_community_pack_file(
+            args.pack,
+            trust_store_paths=args.trust_store,
+        )
+        _emit_json(report.to_dict(), args.output)
+        if args.fail_on == "never":
+            return 0
+        if args.fail_on == "review":
+            return 0 if report.verdict == "approved" else 1
+        return 1 if report.verdict == "blocked" else 0
     return None
 
 

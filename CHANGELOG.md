@@ -3,6 +3,36 @@
 Notable changes to AgentSim are documented here. The project follows semantic
 versioning while its public interfaces mature.
 
+## 1.7.0 - 2026-08-02
+
+- Added content-safe mappings from canonical agent trace events to pinned
+  OpenTelemetry Semantic Conventions 1.43.0, ECS 9.4.0, and OCSF 1.8.0
+  profiles, with explicit AgentSim extension namespaces and native field
+  coverage instead of overstating standard-native semantics.
+- Added offline ECS and OCSF collectors plus canonical import/round-trip APIs,
+  `agentsim telemetry mappings`, and bounded batch `telemetry map` conversion.
+- Added cross-runtime conformance that round-trips fixed reference-agent events
+  through every portable profile and reports field-level invariant failures,
+  profile pins, check counts, native coverage, and non-execution safety facts.
+- Added strict pack provenance with HTTPS repository, immutable revision,
+  source path, authorship, license, and timestamped review metadata bound into
+  the existing RSA signature payload.
+- Added signed community ability, campaign, and detection-pack review with
+  explicitly supplied public trust stores, checksum/signature/provenance/
+  structure/safety gates, bounded findings, and approved/review/blocked
+  verdicts. External stores cannot replace built-in trust keys.
+- Added a reviewed lab-artifact reference contract that constrains artifacts to
+  an explicit local lab root, rejects traversal and symlinks, verifies size and
+  SHA-256 by streaming, and always denies public-core execution and network use.
+- Added portable mapping loss, community provenance substitution, and artifact
+  reference substitution scenarios, expanding the benchmark to 41 scenarios,
+  82 baseline malicious/benign checks, and 23 disposable/reference fixtures.
+- Added stable Python APIs, CLI commands, six JSON schemas, signed and artifact
+  examples, package data, CI smoke coverage, and a Web Portability and Trust
+  workbench for mapping, conformance, pack review, and artifact verification.
+- Updated architecture, telemetry, scenario, security, contribution,
+  reference-lab, roadmap, and release documentation for the v1.7 boundaries.
+
 ## 1.6.0 - 2026-08-02
 
 - Added a bounded, digest-protected Agent Security Flight Recorder bundle that

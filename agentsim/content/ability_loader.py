@@ -11,12 +11,13 @@ from typing import Mapping, Sequence
 from agentsim.models.ability import AbilityDefinition, ExecutionSpec
 
 from .integrity import verify_integrity
+from .provenance import parse_provenance
 
 
 _ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_.-]{2,127}$")
 _RISKS = {"low", "medium", "high"}
 _PROVIDERS = {"simulate", "local", "docker"}
-_PACK_FIELDS = {"schema_version", "kind", "pack_id", "integrity", "abilities"}
+_PACK_FIELDS = {"schema_version", "kind", "pack_id", "integrity", "provenance", "abilities"}
 _ABILITY_FIELDS = {
     "id",
     "name",
@@ -72,13 +73,20 @@ def _reject_unknown_fields(
         raise ValueError(f"{context} contains unsupported fields: {', '.join(unknown)}")
 
 
-def parse_ability_pack(value: object, source: str) -> dict[str, AbilityDefinition]:
+def parse_ability_pack(
+    value: object,
+    source: str,
+    *,
+    trusted_keys: Mapping[str, object] | None = None,
+) -> dict[str, AbilityDefinition]:
     pack = _mapping(value, source)
     if pack.get("schema_version") != "1.0" or pack.get("kind") != "ability-pack":
         raise ValueError(f"{source} must be an ability-pack with schema_version 1.0")
     _reject_unknown_fields(pack, _PACK_FIELDS, source)
     pack_id = _string(pack.get("pack_id"), f"{source}.pack_id")
-    verify_integrity(pack, "abilities")
+    verify_integrity(pack, "abilities", trusted_keys=trusted_keys)
+    if pack.get("provenance") is not None:
+        parse_provenance(pack.get("provenance"))
     raw_abilities = pack.get("abilities")
     if not isinstance(raw_abilities, list) or not raw_abilities:
         raise ValueError(f"{source}.abilities must be a non-empty array")
@@ -186,7 +194,10 @@ def _load_path(path: Path) -> object:
 
 
 def load_ability_registry(
-    pack_paths: Sequence[str | Path] = (), *, include_builtin: bool = True
+    pack_paths: Sequence[str | Path] = (),
+    *,
+    include_builtin: bool = True,
+    trusted_keys: Mapping[str, object] | None = None,
 ) -> dict[str, AbilityDefinition]:
     sources: list[tuple[object, str]] = []
     if include_builtin:
@@ -217,7 +228,9 @@ def load_ability_registry(
                     value = json.load(input_file)
             except json.JSONDecodeError as exc:
                 raise ValueError(f"invalid ability-pack JSON in {source}: {exc}") from exc
-        for ability_id, definition in parse_ability_pack(value, source).items():
+        for ability_id, definition in parse_ability_pack(
+            value, source, trusted_keys=trusted_keys
+        ).items():
             if ability_id in registry:
                 raise ValueError(f"duplicate ability ID across packs: {ability_id}")
             registry[ability_id] = definition

@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "kind": "ability-pack",
+  "pack_id": "community.example.agent-controls",
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "6d357b41b25048c02f500ddad3392e94ef79213efa5e97181b8ed2cb835faeab",
+    "signature": {
+      "algorithm": "rsa-pkcs1v15-sha256",
+      "key_id": "agentsim-community-example-1",
+      "value": "BrxOrxP4Bnz4VtoEoPHeTOyBkVkXLjiQG9i4Mv8nbXtmOIa86sfstMxqx/9GHlFQLPV55MZOfK+yvI+AMo7UkjJ9HUOBei1ka+9OiaUwMUB3FOADXHTD5v4y4F9KvyXKyf6r5abC/NIkzPNzavzDI4w98MrxWQbTyMvgteoEyOuj3SGfA1gzwmYSZHsdW50fOo33QwEm+jp6dQCs8uvPBb+Twe64MA8Y1H5UkuoQrIaJE8bB/NV1q+DM2U5CaqP34VIn2pXJ8Nul1ZODAwZyt9BHhwCw9E2m4v2cYRvtm0wM7823VqtpXcNCy/LWKlaYzcjUShsSGimwPbd2dT4Obg=="
+    }
+  },
+  "provenance": {
+    "schema_version": "1.0",
+    "source": {
+      "repository": "https://github.com/hellnbak/AgentSim",
+      "revision": "8230f73a89841e7696771ce7ebd2109d7693ff04",
+      "path": "examples/community-ability-pack.signed.json"
+    },
+    "authors": [
+      "AgentSim contributors"
+    ],
+    "license": "MIT",
+    "created_at": "2026-08-02T17:30:00Z",
+    "review": {
+      "status": "approved",
+      "reviewer_id": "agentsim-example-reviewer",
+      "reviewed_at": "2026-08-02T17:30:00Z",
+      "policy_id": "agentsim-community-review-v1"
+    }
+  },
+  "abilities": [
+    {
+      "id": "community.agent.policy-check",
+      "name": "Synthetic agent policy check",
+      "description": "Emit a synthetic policy checkpoint for community-pack review and conformance testing.",
+      "risk": "low",
+      "platforms": [
+        "synthetic"
+      ],
+      "mappings": {
+        "mitre_atlas": [
+          "AI Agent Tool Invocation"
+        ]
+      },
+      "execution": {
+        "supported_providers": [
+          "simulate"
+        ],
+        "default_provider": "simulate",
+        "requires_elevation": false,
+        "network_access": "denied",
+        "timeout_seconds": 10,
+        "command_ref": "catalog://community/example/agent-policy-check",
+        "cleanup_ref": null,
+        "state_changes": false
+      },
+      "target_constraints": {
+        "allowed_target_types": [
+          "synthetic"
+        ],
+        "production_allowed": false
+      },
+      "expected_telemetry": [
+        {
+          "source": "agent_runtime",
+          "required_fields": [
+            "timestamp",
+            "event_type",
+            "agent_id",
+            "policy_decision"
+          ]
+        }
+      ],
+      "validation": {
+        "detection_objectives": [
+          "agent_policy_decision_observed"
+        ],
+        "benign_controls": [
+          "approved_synthetic_policy_check"
+        ]
+      },
+      "defenses": [
+        "bind_policy_decisions_to_agent_trace_ids"
+      ],
+      "metadata": {
+        "simulation_only": true,
+        "content_values_recorded": false
+      }
+    }
+  ]
+}

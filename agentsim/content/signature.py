@@ -9,12 +9,14 @@ import json
 from importlib import resources
 from typing import Mapping
 
+from .provenance import provenance_digest
+
 
 SIGNATURE_ALGORITHM = "rsa-pkcs1v15-sha256"
 _SHA256_DIGEST_INFO = bytes.fromhex("3031300d060960864801650304020105000420")
 
 
-def _trust_store() -> Mapping[str, object]:
+def built_in_trust_store() -> Mapping[str, object]:
     resource = resources.files("agentsim.content").joinpath("trusted_keys.json")
     with resource.open("r", encoding="utf-8") as input_file:
         value = json.load(input_file)
@@ -29,18 +31,25 @@ def signature_payload(pack: Mapping[str, object], content_key: str) -> bytes:
         raise ValueError("pack.integrity must be an object")
     identifier = pack.get("pack_id", pack.get("catalog_id"))
     value = {
-        "schema_version": pack.get("schema_version"),
+        "schema_version": pack.get("schema_version", pack.get("pack_schema_version")),
         "kind": pack.get("kind"),
         "content_id": identifier,
         "content_key": content_key,
         "digest": integrity.get("digest"),
     }
+    if pack.get("provenance") is not None:
+        value["provenance_digest"] = provenance_digest(pack.get("provenance"))
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode(
         "utf-8"
     )
 
 
-def verify_signature(pack: Mapping[str, object], content_key: str) -> str | None:
+def verify_signature(
+    pack: Mapping[str, object],
+    content_key: str,
+    *,
+    trusted_keys: Mapping[str, object] | None = None,
+) -> str | None:
     """Verify an optional trusted RSA signature and return its key ID."""
 
     integrity = pack.get("integrity")
@@ -57,7 +66,12 @@ def verify_signature(pack: Mapping[str, object], content_key: str) -> str | None
     encoded = signature.get("value")
     if not isinstance(key_id, str) or not isinstance(encoded, str):
         raise ValueError("pack signature requires key_id and base64 value")
-    key = _trust_store().get(key_id)
+    trust = dict(built_in_trust_store())
+    for candidate, key_value in dict(trusted_keys or {}).items():
+        if candidate in trust and trust[candidate] != key_value:
+            raise ValueError(f"external trust store may not replace built-in key: {candidate}")
+        trust[candidate] = key_value
+    key = trust.get(key_id)
     if not isinstance(key, Mapping):
         raise ValueError(f"pack signature key is not trusted: {key_id}")
     if key.get("algorithm") != SIGNATURE_ALGORITHM:
@@ -82,3 +96,11 @@ def verify_signature(pack: Mapping[str, object], content_key: str) -> str | None
     if padding_length < 8 or not hmac.compare_digest(recovered, expected):
         raise ValueError("pack signature verification failed")
     return key_id
+
+
+__all__ = [
+    "SIGNATURE_ALGORITHM",
+    "built_in_trust_store",
+    "signature_payload",
+    "verify_signature",
+]

@@ -37,13 +37,15 @@ reference reviewed `catalog://` commands; campaign files must only reference
 abilities. A parser accepting embedded commands, scripts, payloads, downloads,
 or arbitrary interpolation is a security issue.
 
-A future payload-capable lab executor must not weaken that parser boundary.
-Payloads may only be represented outside packs by immutable, local,
-allowlisted artifact metadata with a verified SHA-256 digest, declared type and
-size, explicit disposable target, lab-only authority, preflight scan, resource
-limits, and mandatory cleanup/evidence. Inline bytes, URLs, downloads, shell
-fragments, unpinned artifacts, credential material, production targets, or a
-public-core payload execution path are security issues.
+The lab-artifact reference contract must not weaken that parser boundary. It
+may identify an immutable local file under an explicit lab root and verify
+provenance, path, SHA-256, size, type, platform, and non-execution controls.
+Traversal, symlinks, path escape, substitutions, returned artifact bytes, or
+execution by the public core are security issues. A future payload-capable
+executor must remain separately reviewed and must independently enforce an
+exact disposable target, lab-only authority, preflight controls, resource
+limits, and cleanup/evidence. Inline bytes, URLs, downloads, shell fragments,
+unpinned artifacts, credential material, and production targets remain invalid.
 
 The safety engine must fail closed for expired authority, unallowlisted targets
 or abilities, wildcard target scope, production lockout, elevation, network
@@ -74,6 +76,12 @@ scenario answer keys, and never import code or deploy vendor rules. Telemetry
 assurance must not retain raw invalid timestamps or content-bearing values, and
 must report—rather than hide—generated identities, broken causal links, and
 redaction-boundary violations.
+
+Portable OTel/ECS/OCSF records are untrusted input. Profile pins, record-size
+limits, content redaction, native-versus-extension separation, and
+cross-runtime invariant checks must fail closed. Mapping an AgentSim-only field
+into an invented standard-native field, silently dropping a required security
+invariant, or accepting content-bearing extensions is a security issue.
 
 Multi-agent investigation accepts at most 5,000 normalized events and must
 traverse only explicit content-safe record identifiers. Graph construction,
@@ -134,6 +142,15 @@ denied, production locked, and state-change free. Signature bypass, trust-store
 substitution, acceptance of an untrusted key ID, or a content change that
 preserves verification is a security issue. The release private key must never
 be committed or distributed with a package.
+
+Community packs additionally require strict provenance and an explicitly
+trusted public key. Provenance must pin an HTTPS repository, immutable
+revision, repository-relative source path, authorship, license, reviewer,
+review timestamp, and policy. Provenance is covered by the signature. External
+trust stores may add but never replace built-in key IDs. Approval without all
+checksum, signature, provenance, structure, and safety checks is a security
+issue. Review must not import code, retain uploaded content, or resolve an
+executable command.
 
 External adapters in the public core must remain non-executing. They may create
 typed, version-pinned plans but must not start tools, send CALDERA requests,

@@ -43,6 +43,7 @@
     "scenario_name": {"type": "string", "minLength": 1},
     "scenario_variant": {"enum": ["malicious", "benign"]},
     "scenario_risk": {"enum": ["low", "medium", "high", "critical"]},
+    "lab_artifact_ref": {"type": "string", "pattern": "^lab-artifact://[a-z0-9][a-z0-9._-]+$"},
     "expected_detection": {"type": "boolean"},
     "stage": {"type": "string", "minLength": 1},
     "event_type": {"type": "string", "pattern": "^agent\\."},

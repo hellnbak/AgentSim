@@ -11,6 +11,7 @@ import secrets
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,12 @@ from flask import (
 )
 
 from core import AgentSim
-from agentsim.content import load_ability_registry, load_campaign_registry
+from agentsim.content import (
+    load_ability_registry,
+    load_campaign_registry,
+    parse_community_trust_store,
+    review_community_pack,
+)
 from agentsim.defense import (
     DetectionAlert,
     DetectionSnapshot,
@@ -48,6 +54,7 @@ from agentsim.detection import (
 from agentsim.external import adapter_names
 from agentsim.lab import (
     list_fixtures,
+    review_lab_artifact_file,
     run_fixture,
     run_lab_suite,
     run_reference_fixture,
@@ -61,7 +68,13 @@ from agentsim.storage import RunStore
 from agentsim.telemetry.normalization import normalize_records
 from agentsim.telemetry.assurance import assess_telemetry
 from agentsim.telemetry.investigation import investigate_telemetry
-from agentsim.telemetry import FlightRecorderBundle, flight_bundle_from_mapping
+from agentsim.telemetry import (
+    FlightRecorderBundle,
+    flight_bundle_from_mapping,
+    map_agent_trace,
+    mapping_catalog,
+    run_fixture_conformance,
+)
 from scenarios import (
     DEFAULT_BUNDLE_PATH,
     DEFAULT_COVERAGE_PATH,
@@ -767,6 +780,11 @@ HTML_TEMPLATE = """
         .ci-finding.critical, .ci-finding.high { border-left-color: var(--red); background: var(--red-soft); }
         .ci-finding strong { display: block; color: var(--text); font-size: 8.5px; line-height: 1.4; }
         .ci-finding span { display: block; margin-top: 4px; color: var(--subtle); font: 7.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .portability-toolbar { display: grid; grid-template-columns: minmax(110px, 0.7fr) minmax(135px, 1fr) minmax(135px, 1fr); gap: 7px; margin-bottom: 10px; }
+        .portability-toolbar select { min-width: 0; height: 38px; border: 1px solid var(--line); border-radius: 8px; padding: 0 9px; color: var(--text); background: rgba(7, 16, 23, 0.62); font-size: 9px; }
+        .portable-record { margin: 0; padding: 9px; color: #b7d8e4; white-space: pre-wrap; overflow-wrap: anywhere; font: 8px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .trust-files { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px; }
+        .trust-result { min-height: 176px; }
 
         .debugger-card { min-width: 0; overflow: hidden; }
         .debugger-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 17px 18px 14px; border-bottom: 1px solid var(--line); }
@@ -1288,7 +1306,7 @@ HTML_TEMPLATE = """
                         <h2>Authorized campaign foundation</h2>
                         <p>Run a directed campaign through authorization, provider preparation, lifecycle-v3 ground truth, cleanup verification, defense recommendations, and persistent history. The dashboard exposes simulation only.</p>
                     </div>
-                    <span class="campaign-version">v1.6.0</span>
+                    <span class="campaign-version">v1.7.0</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="campaign-select" aria-label="Campaign">
@@ -1367,14 +1385,64 @@ HTML_TEMPLATE = """
                 </div>
             </section>
 
+            <section class="card flight-card" id="portability-trust" aria-label="Telemetry portability and content trust workbench">
+                <div class="flight-header">
+                    <div>
+                        <div class="eyebrow">Map → conform → verify → review</div>
+                        <h2>Portability and trust workbench</h2>
+                        <p>Inspect version-pinned OTel, ECS, and OCSF mappings; round-trip a fixed runtime fixture; review signed community content; and verify an inspection-only lab artifact reference.</p>
+                    </div>
+                    <span class="flight-safety">no content or artifact execution</span>
+                </div>
+                <div class="flight-grid">
+                    <div class="flight-pane">
+                        <h3>Portable telemetry mapping</h3>
+                        <p>Native standard fields stay separate from explicit AgentSim security extensions, so operators can see exactly which semantics are portable and which remain project-specific.</p>
+                        <div class="portability-toolbar">
+                            <select id="mapping-profile" aria-label="Portable telemetry profile">
+                                <option value="otel">OTel</option>
+                                <option value="ecs">ECS</option>
+                                <option value="ocsf">OCSF</option>
+                            </select>
+                            <button class="primary-button campaign-run" id="mapping-demo" type="button">Map safe trace</button>
+                            <button class="tool-button" id="conformance-run" type="button">Run conformance</button>
+                        </div>
+                        <div class="flight-stats" id="mapping-stats">
+                            <div class="flight-stat"><strong>—</strong><span>profile</span></div>
+                            <div class="flight-stat"><strong>—</strong><span>version</span></div>
+                            <div class="flight-stat"><strong>—</strong><span>native %</span></div>
+                            <div class="flight-stat"><strong>—</strong><span>extensions</span></div>
+                        </div>
+                        <div class="flight-result" id="mapping-result">
+                            <div class="debug-placeholder">Choose a profile to see one content-safe reference event mapped into the pinned standard.</div>
+                        </div>
+                    </div>
+                    <div class="flight-pane">
+                        <h3>Community and artifact review</h3>
+                        <p>Community packs require a valid checksum, trusted RSA signature, pinned provenance, strict structure, and safety review. Lab artifacts are hashed and path-checked, never loaded or executed.</p>
+                        <div class="trust-files">
+                            <label class="ci-file file-button"><input id="community-pack-file" type="file" aria-label="Signed community pack JSON" accept="application/json,.json"><strong>Signed pack</strong><span id="community-pack-name">Choose a pack</span></label>
+                            <label class="ci-file file-button"><input id="community-trust-file" type="file" aria-label="Community trust store JSON" accept="application/json,.json"><strong>Trust store</strong><span id="community-trust-name">Optional trust store</span></label>
+                        </div>
+                        <div class="flight-actions">
+                            <button class="primary-button campaign-run" id="community-review" type="button" disabled>Review pack</button>
+                            <button class="tool-button" id="artifact-demo" type="button">Verify safe artifact</button>
+                        </div>
+                        <div class="flight-result trust-result" id="trust-result">
+                            <div class="debug-placeholder">Open the signed example pack and trust store, or verify the bundled non-executing artifact reference.</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section class="card campaign-card" id="defense-validation" aria-label="Detection and agentic validation">
                 <div class="campaign-header">
                     <div>
                         <div class="eyebrow">Detection validation engine</div>
                         <h2>Validate visibility and agent safeguards</h2>
-                        <p>Exercise a generated candidate against redacted synthetic telemetry, inspect field coverage and gaps, or run twenty-two instrumented malicious/benign agentic control pairs. Nothing here starts a host process or opens an external network connection.</p>
+                        <p>Exercise a generated candidate against redacted synthetic telemetry, inspect field coverage and gaps, or run twenty-three instrumented malicious/benign agentic control pairs. Nothing here starts a host process or opens an external network connection.</p>
                     </div>
-                    <span class="campaign-version">v1.6 flight-aware</span>
+                    <span class="campaign-version">v1.7 portable</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="v1-ability-select" aria-label="Detection validation ability">
@@ -1398,7 +1466,7 @@ HTML_TEMPLATE = """
                         <h2>Detection feedback and tuning drift</h2>
                         <p>Reconcile alerts to causal traces, verify structured operator annotations, and compare offline tuning candidates against malicious and benign baselines before any suppression is accepted.</p>
                     </div>
-                    <span class="campaign-version">v1.6 flight-aware</span>
+                    <span class="campaign-version">v1.7 portable</span>
                 </div>
                 <div class="feedback-toolbar">
                     <p>Fixed synthetic corpus · no prompts, free-form notes, processes, network, or configuration deployment.</p>
@@ -1672,6 +1740,18 @@ HTML_TEMPLATE = """
             ciMdDownload: document.getElementById("ci-md-download"),
             ciSarifDownload: document.getElementById("ci-sarif-download"),
             ciResult: document.getElementById("ci-result"),
+            mappingProfile: document.getElementById("mapping-profile"),
+            mappingDemo: document.getElementById("mapping-demo"),
+            conformanceRun: document.getElementById("conformance-run"),
+            mappingStats: document.getElementById("mapping-stats"),
+            mappingResult: document.getElementById("mapping-result"),
+            communityPackFile: document.getElementById("community-pack-file"),
+            communityTrustFile: document.getElementById("community-trust-file"),
+            communityPackName: document.getElementById("community-pack-name"),
+            communityTrustName: document.getElementById("community-trust-name"),
+            communityReview: document.getElementById("community-review"),
+            artifactDemo: document.getElementById("artifact-demo"),
+            trustResult: document.getElementById("trust-result"),
             v1Ability: document.getElementById("v1-ability-select"),
             v1DetectionRun: document.getElementById("v1-detection-run"),
             v1AssuranceRun: document.getElementById("v1-assurance-run"),
@@ -1725,6 +1805,9 @@ HTML_TEMPLATE = """
             ciCandidate: null,
             ciArtifacts: null,
             ciLoading: false,
+            communityPack: null,
+            communityTrust: null,
+            portabilityLoading: false,
             feedbackLoading: false,
             investigationData: null,
             selectedInvestigationTrace: null,
@@ -2057,6 +2140,196 @@ HTML_TEMPLATE = """
             }
         }
 
+        async function readReviewJson(file, label) {
+            if (!file) throw new Error("Choose " + label + " JSON.");
+            if (file.size > 4 * 1024 * 1024) throw new Error(label + " is limited to 4 MiB in the dashboard.");
+            const value = JSON.parse(await file.text());
+            if (!value || typeof value !== "object" || Array.isArray(value)) {
+                throw new Error(label + " must be a JSON object.");
+            }
+            return value;
+        }
+
+        function replaceMappingStats(values) {
+            const fragment = document.createDocumentFragment();
+            values.forEach(function (item) {
+                const stat = document.createElement("div");
+                stat.className = "flight-stat";
+                stat.appendChild(textNode("strong", "", item[0]));
+                stat.appendChild(textNode("span", "", item[1]));
+                fragment.appendChild(stat);
+            });
+            elements.mappingStats.replaceChildren(fragment);
+        }
+
+        function renderPortableMapping(payload) {
+            const mapped = payload.mapping || {};
+            const detail = mapped.mapping || {};
+            replaceMappingStats([
+                [(mapped.profile || "—").toUpperCase(), "profile"],
+                [mapped.profile_version || "—", "version"],
+                [detail.native_coverage_percent == null ? "—" : detail.native_coverage_percent, "native %"],
+                [Array.isArray(detail.extension_fields) ? detail.extension_fields.length : 0, "extensions"]
+            ]);
+            const record = textNode("pre", "portable-record", JSON.stringify(mapped.record || {}, null, 2));
+            elements.mappingResult.replaceChildren(record);
+        }
+
+        async function runMappingDemo() {
+            if (state.portabilityLoading) return;
+            state.portabilityLoading = true;
+            elements.mappingDemo.disabled = true;
+            setCampaignPlaceholder(elements.mappingResult, "Mapping a fixed content-safe event…");
+            try {
+                const response = await fetch("/api/v1/telemetry/mapping-demo", {
+                    method: "POST",
+                    headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                    body: JSON.stringify({profile: elements.mappingProfile.value, fixture_id: "multi-agent-delegation-cascade"})
+                });
+                if (!response.ok) throw new Error("The portable mapping request was rejected.");
+                renderPortableMapping(await response.json());
+                showToast("Content-safe " + elements.mappingProfile.value.toUpperCase() + " mapping ready");
+            } catch (error) {
+                setCampaignPlaceholder(elements.mappingResult, error.message || "Portable mapping failed.");
+            } finally {
+                state.portabilityLoading = false;
+                elements.mappingDemo.disabled = false;
+            }
+        }
+
+        function renderConformance(payload) {
+            const report = payload.report || {};
+            const profiles = Array.isArray(report.profiles) ? report.profiles : [];
+            const average = profiles.length ? profiles.reduce(function (sum, item) { return sum + Number(item.native_coverage_percent || 0); }, 0) / profiles.length : 0;
+            replaceMappingStats([
+                [report.passed ? "PASS" : "FAIL", "result"],
+                [profiles.length, "profiles"],
+                [report.event_count || 0, "events"],
+                [average.toFixed(1), "avg native %"]
+            ]);
+            const fragment = document.createDocumentFragment();
+            const gate = document.createElement("div");
+            gate.className = "ci-gate " + (report.passed ? "pass" : "block");
+            gate.appendChild(textNode("strong", "", report.passed ? "pass" : "fail"));
+            gate.appendChild(textNode("span", "", (report.fixture_id || "fixture") + " · round-trip security invariants · content values excluded"));
+            fragment.appendChild(gate);
+            profiles.forEach(function (profile) {
+                const finding = document.createElement("div");
+                finding.className = "ci-finding " + (profile.passed ? "" : "high");
+                finding.appendChild(textNode("strong", "", profile.profile.toUpperCase() + " " + profile.profile_version + " · " + (profile.passed ? "passed" : "failed")));
+                finding.appendChild(textNode("span", "", profile.invariant_checks + " checks · " + profile.native_coverage_percent + "% native · " + (profile.failures || []).length + " failures"));
+                fragment.appendChild(finding);
+            });
+            elements.mappingResult.replaceChildren(fragment);
+        }
+
+        async function runConformance() {
+            if (state.portabilityLoading) return;
+            state.portabilityLoading = true;
+            elements.conformanceRun.disabled = true;
+            setCampaignPlaceholder(elements.mappingResult, "Round-tripping the fixture through OTel, ECS, and OCSF…");
+            try {
+                const response = await fetch("/api/v1/lab/conformance", {
+                    method: "POST",
+                    headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                    body: JSON.stringify({fixture_id: "multi-agent-delegation-cascade"})
+                });
+                if (!response.ok) throw new Error("Cross-runtime conformance failed to run.");
+                const payload = await response.json();
+                renderConformance(payload);
+                showToast("Portable profile conformance " + (payload.report.passed ? "passed" : "failed"));
+            } catch (error) {
+                setCampaignPlaceholder(elements.mappingResult, error.message || "Conformance failed.");
+            } finally {
+                state.portabilityLoading = false;
+                elements.conformanceRun.disabled = false;
+            }
+        }
+
+        function renderTrustReview(review, heading) {
+            const fragment = document.createDocumentFragment();
+            const verdict = review.verdict || "review";
+            const gate = document.createElement("div");
+            gate.className = "ci-gate " + (verdict === "approved" ? "pass" : verdict === "blocked" ? "block" : "review");
+            gate.appendChild(textNode("strong", "", verdict));
+            gate.appendChild(textNode("span", "", heading + " · content or artifact execution was not performed"));
+            fragment.appendChild(gate);
+            const checks = review.checks || {};
+            Object.keys(checks).forEach(function (key) {
+                const row = document.createElement("div");
+                row.className = "ci-finding " + (checks[key] ? "" : "high");
+                row.appendChild(textNode("strong", "", key.replaceAll("_", " ") + " · " + (checks[key] ? "passed" : "failed")));
+                fragment.appendChild(row);
+            });
+            const findings = Array.isArray(review.findings) ? review.findings : [];
+            findings.forEach(function (finding) {
+                const row = document.createElement("div");
+                row.className = "ci-finding " + (finding.severity === "block" ? "high" : "");
+                row.appendChild(textNode("strong", "", finding.severity.toUpperCase() + " · " + finding.code.replaceAll("_", " ")));
+                row.appendChild(textNode("span", "", finding.message));
+                fragment.appendChild(row);
+            });
+            if (!findings.length) fragment.appendChild(textNode("div", "debug-placeholder", "All required review gates passed."));
+            elements.trustResult.replaceChildren(fragment);
+        }
+
+        async function selectReviewFile(kind, file) {
+            try {
+                const value = await readReviewJson(file, kind === "pack" ? "community pack" : "trust store");
+                if (kind === "pack") {
+                    state.communityPack = value;
+                    elements.communityPackName.textContent = file.name;
+                } else {
+                    state.communityTrust = value;
+                    elements.communityTrustName.textContent = file.name;
+                }
+                elements.communityReview.disabled = !state.communityPack;
+            } catch (error) {
+                showToast(error.message || "Unable to read review JSON");
+            }
+        }
+
+        async function runCommunityReview() {
+            if (!state.communityPack) return;
+            elements.communityReview.disabled = true;
+            setCampaignPlaceholder(elements.trustResult, "Verifying checksum, signature, provenance, structure, and safety…");
+            try {
+                const response = await fetch("/api/v1/content/review", {
+                    method: "POST",
+                    headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                    body: JSON.stringify({pack: state.communityPack, trust_store: state.communityTrust})
+                });
+                if (!response.ok) throw new Error("Community pack review was rejected before evaluation.");
+                const payload = await response.json();
+                renderTrustReview(payload.review || {}, "signed community pack");
+                showToast("Community pack verdict: " + payload.review.verdict.toUpperCase());
+            } catch (error) {
+                setCampaignPlaceholder(elements.trustResult, error.message || "Community pack review failed.");
+            } finally {
+                elements.communityReview.disabled = !state.communityPack;
+            }
+        }
+
+        async function runArtifactDemo() {
+            elements.artifactDemo.disabled = true;
+            setCampaignPlaceholder(elements.trustResult, "Checking artifact provenance, path boundary, size, and SHA-256…");
+            try {
+                const response = await fetch("/api/v1/lab/artifact-demo", {
+                    method: "POST",
+                    headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                    body: JSON.stringify({artifact_id: "agentsim.synthetic.marker"})
+                });
+                if (!response.ok) throw new Error("The artifact reference could not be reviewed.");
+                const payload = await response.json();
+                renderTrustReview(payload.review || {}, "reviewed lab artifact reference");
+                showToast("Lab artifact verdict: " + payload.review.verdict.toUpperCase());
+            } catch (error) {
+                setCampaignPlaceholder(elements.trustResult, error.message || "Artifact review failed.");
+            } finally {
+                elements.artifactDemo.disabled = false;
+            }
+        }
+
         function renderV1Detection(payload) {
             const container = document.createDocumentFragment();
             const evaluation = payload.evaluation || {};
@@ -2240,7 +2513,7 @@ HTML_TEMPLATE = """
 
         async function runV1Lab() {
             elements.v1LabRun.disabled = true;
-            setCampaignPlaceholder(elements.v1Result, "Running twenty-two instrumented reference-agent fixtures…");
+            setCampaignPlaceholder(elements.v1Result, "Running twenty-three instrumented reference-agent fixtures…");
             try {
                 const response = await fetch("/api/v1/lab/reference", {
                     method: "POST",
@@ -3167,6 +3440,16 @@ HTML_TEMPLATE = """
         elements.ciSarifDownload.addEventListener("click", function () {
             if (state.ciArtifacts) downloadValue("agentsim-detection-ci.sarif", JSON.stringify(state.ciArtifacts.sarif, null, 2) + "\\n", "application/sarif+json");
         });
+        elements.mappingDemo.addEventListener("click", runMappingDemo);
+        elements.conformanceRun.addEventListener("click", runConformance);
+        elements.communityPackFile.addEventListener("change", function () {
+            selectReviewFile("pack", elements.communityPackFile.files[0]);
+        });
+        elements.communityTrustFile.addEventListener("change", function () {
+            selectReviewFile("trust", elements.communityTrustFile.files[0]);
+        });
+        elements.communityReview.addEventListener("click", runCommunityReview);
+        elements.artifactDemo.addEventListener("click", runArtifactDemo);
         elements.v1DetectionRun.addEventListener("click", runV1Detection);
         elements.v1AssuranceRun.addEventListener("click", runV1Assurance);
         elements.v1LabRun.addEventListener("click", runV1Lab);
@@ -3301,7 +3584,7 @@ def api_foundation_catalog() -> Response:
     history = RunStore(CAMPAIGN_DATABASE_PATH).history(25) if CAMPAIGN_DATABASE_PATH.exists() else []
     return jsonify(
         {
-            "version": "1.6.0",
+            "version": "1.7.0",
             "workflow": ["emulate", "observe", "detect", "defend", "retest"],
             "capabilities": {
                 "offline_collectors": ["jsonl", "otel", "otel_genai", "sysmon", "auditd", "cloudtrail", "crowdstrike", "splunk", "elastic", "sentinel", "logscale", "panther", "graylog", "agent_runtime", "mcp_audit"],
@@ -3323,6 +3606,11 @@ def api_foundation_catalog() -> Response:
                 "detection_tuning_drift": True,
                 "agent_security_flight_recorder": True,
                 "agent_detection_ci": True,
+                "portable_telemetry_profiles": ["otel", "ecs", "ocsf"],
+                "cross_runtime_fixture_conformance": True,
+                "signed_community_pack_review": True,
+                "pack_provenance": True,
+                "reviewed_lab_artifact_references": True,
             },
             "abilities": [
                 {
@@ -3352,6 +3640,126 @@ def api_foundation_catalog() -> Response:
                 for campaign in CAMPAIGNS.values()
             ],
             "history": history,
+        }
+    )
+
+
+@app.route("/api/v1/telemetry/mappings")
+def api_portable_mapping_catalog() -> Response:
+    """Expose the version-pinned field catalog without any event content."""
+
+    return jsonify(mapping_catalog())
+
+
+@app.route("/api/v1/telemetry/mapping-demo", methods=["POST"])
+def api_portable_mapping_demo() -> Response:
+    """Map one fixed reference event for interactive human inspection."""
+
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400, description="JSON request body is required")
+    profile = payload.get("profile", "otel")
+    fixture_id = payload.get("fixture_id", "multi-agent-delegation-cascade")
+    if profile not in {"otel", "ecs", "ocsf"} or not isinstance(fixture_id, str):
+        abort(400, description="profile or fixture_id is invalid")
+    try:
+        run = run_reference_fixture(fixture_id)
+        event = next(
+            (
+                candidate
+                for candidate in run.events
+                if candidate.attributes.get("variant", "malicious") == "malicious"
+            ),
+            run.events[0],
+        )
+        mapped = map_agent_trace(event, str(profile))
+    except (IndexError, TypeError, ValueError) as exc:
+        abort(400, description=str(exc))
+    return jsonify(
+        {
+            "execution_mode": "synthetic_mapping_demo",
+            "process_started": False,
+            "network_opened": False,
+            "mapping": mapped.to_dict(),
+        }
+    )
+
+
+@app.route("/api/v1/lab/conformance", methods=["POST"])
+def api_portable_conformance() -> Response:
+    """Round-trip a reference fixture through the portable profiles."""
+
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400, description="JSON request body is required")
+    fixture_id = payload.get("fixture_id", "multi-agent-delegation-cascade")
+    if not isinstance(fixture_id, str):
+        abort(400, description="fixture_id must be a string")
+    try:
+        report = run_fixture_conformance(fixture_id)
+    except ValueError as exc:
+        abort(400, description=str(exc))
+    return jsonify({"report": report.to_dict()})
+
+
+@app.route("/api/v1/content/review", methods=["POST"])
+def api_community_pack_review() -> Response:
+    """Review a signed community pack without importing executable code."""
+
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or not isinstance(payload.get("pack"), dict):
+        abort(400, description="pack must be a JSON object")
+    trust_value = payload.get("trust_store")
+    try:
+        trust = (
+            parse_community_trust_store(trust_value)
+            if trust_value is not None
+            else {}
+        )
+        review = review_community_pack(payload["pack"], trusted_keys=trust)
+    except ValueError as exc:
+        abort(400, description=str(exc))
+    return jsonify(
+        {
+            "review": review.to_dict(),
+            "pack_retained": False,
+            "code_imported": False,
+            "execution_performed": False,
+            "network_opened": False,
+        }
+    )
+
+
+@app.route("/api/v1/lab/artifact-demo", methods=["POST"])
+def api_lab_artifact_demo() -> Response:
+    """Review the bundled data marker by reference, never by execution."""
+
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or payload.get("artifact_id") not in {
+        None,
+        "agentsim.synthetic.marker",
+    }:
+        abort(400, description="unsupported artifact_id")
+    artifact_root = Path(str(resources.files("agentsim.lab.artifact_content")))
+    try:
+        review = review_lab_artifact_file(
+            artifact_root / "synthetic-marker.reference.json",
+            lab_root=artifact_root,
+        )
+    except (OSError, ValueError) as exc:
+        abort(400, description=str(exc))
+    value = review.to_dict()
+    value["artifact_path"] = "labs/reference-agent/artifacts/synthetic-marker.txt"
+    return jsonify(
+        {
+            "review": value,
+            "artifact_content_returned": False,
+            "execution_performed": False,
+            "network_opened": False,
         }
     )
 
@@ -3688,8 +4096,8 @@ def api_detection_feedback_demo() -> Response:
         (annotation,),
     )
     drift = compare_detection_snapshots(
-        DetectionSnapshot("reviewed-baseline", 38, 0, 38, 0, 3.0, 4, 4),
-        DetectionSnapshot("unsafe-tuning-candidate", 31, 4, 34, 7, 6.0, 2, 4),
+        DetectionSnapshot("reviewed-baseline", 41, 0, 41, 0, 3.0, 4, 4),
+        DetectionSnapshot("unsafe-tuning-candidate", 34, 7, 37, 4, 6.0, 2, 4),
     )
     return jsonify(
         {
@@ -3742,7 +4150,7 @@ def api_v1_reference_lab_run() -> Response:
         abort(400, description=str(exc))
     return jsonify(
         {
-            "version": "1.6.0",
+            "version": "1.7.0",
             "passed": all(result.passed for result in results),
             "results": [result.to_dict() for result in results],
         }

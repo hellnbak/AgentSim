@@ -33,6 +33,11 @@ python -m agentsim.cli lab reference all
 python -m agentsim.cli telemetry investigate agent_sim_events.jsonl --collector agent_runtime --fail-on never
 python -m unittest tests.test_v15 -v
 python -m unittest tests.test_v16 -v
+python -m unittest tests.test_v17 -v
+python -m agentsim.cli telemetry mappings
+python -m agentsim.cli lab conformance multi-agent-delegation-cascade --fail-on-error
+python -m agentsim.cli content review examples/community-ability-pack.signed.json --trust-store examples/community-trust-store.json --fail-on review
+python -m agentsim.cli lab artifact-review labs/reference-agent/artifacts/synthetic-marker.reference.json
 python -m agentsim.cli telemetry query elastic --base-url https://elastic.example.test --dataset logs-test --target host-test --since 2026-08-02T00:00:00Z --until 2026-08-02T00:05:00Z
 ```
 
@@ -78,12 +83,14 @@ tests for success, failure, cancellation, and cleanup. Higher-risk behaviors
 belong in disposable labs or external adapters rather than the public core.
 
 Do not add payload bytes, URLs, downloads, or artifact paths to ability or
-campaign packs. A proposed lab payload integration must be a separately
-reviewed executor contract over an immutable local artifact reference. It must
-verify SHA-256, type, size, platform, exact disposable target, lab-only
-authorization, preflight scanning, resource limits, and cleanup/evidence before
-execution. The public core must reject unpinned artifacts and retain no payload
-content.
+campaign packs. The v1.7 lab-artifact reference is an inspection-only metadata
+contract: it verifies provenance, lab-root path scope, SHA-256, type, size,
+platform, resource limits, and cleanup requirements but cannot execute or
+return the artifact. A proposed execution integration must remain a separately
+reviewed executor contract over that immutable reference and independently add
+an exact disposable target, lab-only authorization, preflight controls, and
+cleanup evidence. The public core must reject unpinned artifacts and retain no
+payload content.
 
 Campaign packs may only reference abilities. Dependencies must point to an
 earlier declared step, and stop behavior must be explicit. See
@@ -169,6 +176,21 @@ and non-executing pseudonymous twins. Detection CI changes must include stable,
 malicious-regression, benign-regression, visibility-gap, JSON, Markdown, JUnit,
 SARIF, CLI, API, and Web tests. See
 [`FLIGHT_RECORDER.md`](FLIGHT_RECORDER.md).
+
+Portable mapping changes must name the exact OTel, ECS, or OCSF version and
+cite the official field definition. Do not call AgentSim policy, delegation,
+goal, memory, or MCP fields standard-native when no equivalent exists. Add
+map/import round-trip tests, content-redaction tests, collector coverage, and
+cross-runtime conformance. Update the mapping catalog and
+[`PORTABILITY_AND_TRUST.md`](PORTABILITY_AND_TRUST.md).
+
+Community content must include strict provenance and a signature from a key the
+reviewing organization explicitly trusts. Contributors may update the example
+public key and signed fixture, but must never commit a private key. Add tests
+for missing trust, checksum substitution, provenance substitution, prohibited
+executable fields, and each review verdict. Artifact-reference changes must
+test traversal, symlinks, path escape, size/digest substitution, content
+non-return, and execution denial.
 
 Feedback contract changes must keep alerts and annotations structured and
 content-safe. Do not add a free-form analyst note, prompt, argument, result,

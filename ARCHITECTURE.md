@@ -1,4 +1,4 @@
-# AgentSim v1.6 architecture
+# AgentSim v1.7 architecture
 
 AgentSim separates content, execution, authorization, telemetry, detection,
 and defensive evaluation so synthetic traces cannot silently become executable
@@ -20,6 +20,8 @@ flowchart TD
     Export["Offline vendor exports"] --> Collect["Bounded collectors and redaction"]
     Live["Explicit read-only SIEM query"] --> Collect
     Runtime["Agent / OTel GenAI / MCP audit"] --> Contract["Content-safe agent trace contract"]
+    Contract --> Portable["Pinned OTel / ECS / OCSF mapping"]
+    Portable --> Conform["Cross-runtime fixture conformance"]
     Runtime --> Flight["Agent security flight recorder"]
     Flight --> Twin["Pseudonymous non-executing twin"]
     Flight --> FlightGate["Baseline / candidate Detection CI"]
@@ -45,6 +47,11 @@ flowchart TD
     Drift --> Defense
     Candidate --> Bundle["Portable evidence bundle"]
     Defense --> Bundle
+    Community["Community declarative pack"] --> Review["Checksum + signature + provenance + safety review"]
+    Trust["Built-in or explicit public trust store"] --> Review
+    Review --> Campaign
+    ArtifactRef["Reviewed lab-artifact reference"] --> ArtifactReview["Path + provenance + size + SHA-256"]
+    ArtifactReview --> Timeline
 ```
 
 ## Package layout
@@ -55,15 +62,15 @@ agentsim/
 ├── api.py                 stable Python API
 ├── plugins.py             entry-point metadata and API 1.0 contracts
 ├── models/                ability, campaign, target, result, event, agent telemetry
-├── content/               strict loaders, integrity, RSA trust, signed content
+├── content/               strict loaders, provenance, RSA trust, community review
 ├── orchestration/         directed planning and lifecycle runner
 ├── execution/             simulate, local, and Docker provider interfaces
 ├── external/              non-executing Atomic, Stratus, CALDERA plans
 ├── safety/                authorization, target scope, policy, limits, cleanup
-├── telemetry/             contracts, flight recorder, collectors, assurance, investigation, connectors
+├── telemetry/             contracts, mappings, conformance, flight recorder, collectors, assurance, investigation, connectors
 ├── detection/             graph-aware AST, packs, evaluator, coverage, generator, renderers
 ├── defense/               Detection CI, feedback, drift, recommendations, gaps, regression
-├── lab/                   in-memory controls and instrumented reference agent
+├── lab/                   controls, reference agent, reviewed artifact references
 ├── reporting/             bundles and Attack Flow STIX interchange
 └── web/                   packaged loopback Web entry point
 ```
@@ -88,15 +95,18 @@ abilities. Unknown executable fields fail closed. Canonical SHA-256 digests
 protect content arrays. Release-foundation content adds an RSA PKCS#1 v1.5
 SHA-256 signature verified against `agentsim/content/trusted_keys.json`.
 
-The v1.6 endpoint/cloud control-validation preview is checksum protected,
+The endpoint/cloud control-validation preview is checksum protected,
 visibly marked `checksum-review-preview`, restricted to the simulation
 provider, network denied, production locked, and unable to change state. It is
 not represented as release-signed executable content. A maintainer can promote
 a reviewed preview pack only by signing it with the offline release key.
 
-The signing private key is not distributed. Third-party packs may use checksum
-integrity without claiming AgentSim trust; deployments can maintain their own
-review/signing pipeline rather than modifying the built-in trust key.
+The signing private key is not distributed. Community packs must not claim
+approval from a checksum alone. The v1.7 reviewer requires a trusted signature,
+strict provenance, a valid pack shape, and a safety review. Explicit public
+trust stores can add keys but cannot replace a built-in key ID. Provenance is
+part of the signed payload, so a revision, source-path, authorship, license, or
+review-record change invalidates the signature.
 
 ### External adapters and plugins
 
@@ -109,13 +119,13 @@ an explicit act and enforces plugin API `1.0`. An external executor is outside
 the public core and must independently enforce authorization, version, target,
 resource, cleanup, and evidence contracts.
 
-Payload-bearing lab work, if added by a separately reviewed executor, must use
-an immutable artifact reference rather than inline pack content. The reference
-must bind a local allowlisted artifact to a SHA-256 digest, declared media type,
-size, platform, exact disposable target, preflight result, resource limits,
-authorization, and cleanup/evidence plan. URLs, downloads, raw bytes, shell
-fragments, unpinned artifacts, production targets, and implicit execution
-remain invalid in the public core.
+The v1.7 lab-artifact reference binds a repository-relative file under an
+explicit lab root to provenance, SHA-256, size, media type, artifact type,
+platform, resource limits, an ephemeral-container requirement, and cleanup.
+Review rejects traversal, symlinks, path escape, substitutions, and oversized
+files. It streams a digest and never returns bytes. Script or executable types
+remain inspection-only. URLs, downloads, raw bytes, shell fragments, unpinned
+artifacts, production targets, and execution remain invalid in the public core.
 
 ### Live telemetry connectors
 
@@ -157,6 +167,14 @@ Agent trace contract 1.1 adds stable correlation and authorization fields for
 agent runtimes, OpenTelemetry GenAI spans, and MCP audit records. Raw prompts,
 messages, tool arguments/results, and model responses are excluded by design.
 Live connector responses pass through the same normalized/redacted event model.
+
+Portable mappings project that contract to pinned OTel 1.43.0 semantic
+conventions, ECS 9.4.0, or OCSF 1.8.0. Only defensible standard fields are
+native; every remaining AgentSim security field is placed under an explicit
+extension namespace. Importers prefer the extension for lossy enumerations and
+restore bounded security attributes without content values. Conformance runs a
+fixed reference fixture through map/import and compares identity, causality,
+delegation, goal, memory, policy, trust, outcome, and safe attribute invariants.
 
 The flight recorder consumes the same contract from exported records, OTLP
 JSON, or an optional runtime processor. SDK processors select structural span
@@ -235,5 +253,6 @@ The public schemas are in [schemas](schemas/), including normalized events,
 detection rules, external plans, agent trace events, live query plans,
 reference-lab results, telemetry-assurance, multi-agent investigation,
 detection-feedback, detection-drift, flight-recorder, and detection-CI reports,
-detection packs and sweep reports, signed packs, authorization, and lifecycle
-v3.
+detection packs and sweep reports, signed packs, content provenance, portable
+mappings, runtime conformance, community review, lab-artifact references and
+reviews, authorization, and lifecycle v3.

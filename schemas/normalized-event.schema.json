@@ -12,7 +12,7 @@
     "event_type": {"type": "string", "minLength": 1},
     "fields": {"type": "object"},
     "available_fields": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-    "collector": {"enum": ["jsonl", "otel", "sysmon", "auditd", "cloudtrail", "crowdstrike", "splunk", "agent_runtime"]},
+    "collector": {"enum": ["jsonl", "otel", "otel_genai", "ecs", "ocsf", "sysmon", "auditd", "cloudtrail", "crowdstrike", "elastic", "sentinel", "logscale", "panther", "graylog", "splunk", "agent_runtime", "mcp_audit"]},
     "synthetic": {"type": "boolean"},
     "source_record_id": {"type": ["string", "null"]},
     "metadata": {"type": "object"}

@@ -11,10 +11,11 @@ from typing import Mapping, Sequence
 from agentsim.models.campaign import CampaignDefinition, CampaignStep
 
 from .integrity import verify_integrity
+from .provenance import parse_provenance
 
 
 _ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_.-]{2,127}$")
-_PACK_FIELDS = {"schema_version", "kind", "pack_id", "integrity", "campaigns"}
+_PACK_FIELDS = {"schema_version", "kind", "pack_id", "integrity", "provenance", "campaigns"}
 _CAMPAIGN_FIELDS = {
     "id",
     "name",
@@ -52,14 +53,21 @@ def _reject_unknown_fields(
         raise ValueError(f"{context} contains unsupported fields: {', '.join(unknown)}")
 
 
-def parse_campaign_pack(value: object, source: str) -> dict[str, CampaignDefinition]:
+def parse_campaign_pack(
+    value: object,
+    source: str,
+    *,
+    trusted_keys: Mapping[str, object] | None = None,
+) -> dict[str, CampaignDefinition]:
     if not isinstance(value, Mapping):
         raise ValueError(f"{source} must be an object")
     if value.get("schema_version") != "1.0" or value.get("kind") != "campaign-pack":
         raise ValueError(f"{source} must be a campaign-pack with schema_version 1.0")
     _reject_unknown_fields(value, _PACK_FIELDS, source)
     pack_id = _string(value.get("pack_id"), f"{source}.pack_id")
-    verify_integrity(value, "campaigns")
+    verify_integrity(value, "campaigns", trusted_keys=trusted_keys)
+    if value.get("provenance") is not None:
+        parse_provenance(value.get("provenance"))
     campaigns = value.get("campaigns")
     if not isinstance(campaigns, list) or not campaigns:
         raise ValueError(f"{source}.campaigns must be a non-empty array")
@@ -129,7 +137,10 @@ def parse_campaign_pack(value: object, source: str) -> dict[str, CampaignDefinit
 
 
 def load_campaign_registry(
-    pack_paths: Sequence[str | Path] = (), *, include_builtin: bool = True
+    pack_paths: Sequence[str | Path] = (),
+    *,
+    include_builtin: bool = True,
+    trusted_keys: Mapping[str, object] | None = None,
 ) -> dict[str, CampaignDefinition]:
     sources: list[tuple[object, str]] = []
     if include_builtin:
@@ -160,7 +171,9 @@ def load_campaign_registry(
                     value = json.load(input_file)
         except json.JSONDecodeError as exc:
             raise ValueError(f"invalid campaign-pack JSON in {source}: {exc}") from exc
-        for campaign_id, definition in parse_campaign_pack(value, source).items():
+        for campaign_id, definition in parse_campaign_pack(
+            value, source, trusted_keys=trusted_keys
+        ).items():
             if campaign_id in registry:
                 raise ValueError(f"duplicate campaign ID across packs: {campaign_id}")
             registry[campaign_id] = definition

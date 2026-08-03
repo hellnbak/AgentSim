@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/community-pack-review.schema.json",
+  "title": "AgentSim Community Pack Review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "verdict", "pack_id", "pack_kind", "content_key", "content_digest", "signature_key_id", "provenance", "provenance_digest", "item_count", "checks", "findings", "execution_performed"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "community-pack-review"},
+    "verdict": {"enum": ["approved", "review", "blocked"]},
+    "pack_id": {"type": "string"},
+    "pack_kind": {"enum": ["ability-pack", "campaign-pack", "detection-pack"]},
+    "content_key": {"enum": ["abilities", "campaigns", "rules"]},
+    "content_digest": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "signature_key_id": {"type": ["string", "null"]},
+    "provenance": {"oneOf": [{"$ref": "content-provenance.schema.json"}, {"type": "null"}]},
+    "provenance_digest": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "item_count": {"type": "integer", "minimum": 0},
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checksum", "signature", "provenance", "structure", "safety"],
+      "properties": {
+        "checksum": {"type": "boolean"},
+        "signature": {"type": "boolean"},
+        "provenance": {"type": "boolean"},
+        "structure": {"type": "boolean"},
+        "safety": {"type": "boolean"}
+      }
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "code", "message", "path"],
+        "properties": {
+          "severity": {"enum": ["block", "review", "info"]},
+          "code": {"type": "string", "minLength": 1},
+          "message": {"type": "string", "minLength": 1},
+          "path": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "execution_performed": {"const": false}
+  }
+}

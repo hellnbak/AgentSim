@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/portable-mapping.schema.json",
+  "title": "AgentSim Portable Agent Telemetry Mapping",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "profile", "profile_version", "record", "mapping", "content_values_recorded"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "portable-agent-telemetry-mapping"},
+    "profile": {"enum": ["otel", "ecs", "ocsf"]},
+    "profile_version": {"type": "string", "minLength": 1},
+    "record": {"type": "object"},
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["native_fields", "extension_fields", "omitted_fields", "native_coverage_percent"],
+      "properties": {
+        "native_fields": {"$ref": "#/$defs/fields"},
+        "extension_fields": {"$ref": "#/$defs/fields"},
+        "omitted_fields": {"$ref": "#/$defs/fields"},
+        "native_coverage_percent": {"type": "number", "minimum": 0, "maximum": 100}
+      }
+    },
+    "content_values_recorded": {"const": false}
+  },
+  "$defs": {
+    "fields": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  }
+}

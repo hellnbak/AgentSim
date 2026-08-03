@@ -95,6 +95,8 @@ class WebUiTests(unittest.TestCase):
         self.assertIn("Multi-agent investigation workbench", page)
         self.assertIn("Agent security flight recorder", page)
         self.assertIn("Detection CI merge gate", page)
+        self.assertIn("Portability and trust workbench", page)
+        self.assertIn("Community and artifact review", page)
         self.assertIn("Agentic attack scenarios", page)
         self.assertIn("Indirect prompt injection", page)
         self.assertIn("message.textContent", page)
@@ -120,10 +122,10 @@ class WebUiTests(unittest.TestCase):
         catalog_response = self.client.get("/api/v1/catalog")
         self.assertEqual(catalog_response.status_code, 200)
         catalog = catalog_response.get_json()
-        self.assertEqual(catalog["version"], "1.6.0")
+        self.assertEqual(catalog["version"], "1.7.0")
         self.assertEqual(len(catalog["abilities"]), 19)
         self.assertEqual(len(catalog["campaigns"]), 6)
-        self.assertEqual(catalog["capabilities"]["agentic_fixtures"], 22)
+        self.assertEqual(catalog["capabilities"]["agentic_fixtures"], 23)
         self.assertTrue(catalog["capabilities"]["detection_feedback_reconciliation"])
         self.assertTrue(catalog["capabilities"]["detection_tuning_drift"])
         self.assertTrue(catalog["capabilities"]["multi_agent_investigation"])
@@ -132,6 +134,8 @@ class WebUiTests(unittest.TestCase):
         self.assertTrue(catalog["capabilities"]["checksum_review_preview_content"])
         self.assertTrue(catalog["capabilities"]["agent_security_flight_recorder"])
         self.assertTrue(catalog["capabilities"]["agent_detection_ci"])
+        self.assertEqual(catalog["capabilities"]["portable_telemetry_profiles"], ["otel", "ecs", "ocsf"])
+        self.assertTrue(catalog["capabilities"]["signed_community_pack_review"])
         self.assertEqual(catalog["history"], [])
 
         denied = self.client.post(
@@ -193,6 +197,59 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(report["report"]["status"], "pass")
         self.assertFalse(report["content_values_recorded"])
 
+    def test_portability_trust_and_artifact_workbench_apis(self):
+        headers = {"X-AgentSim-Form-Token": web_ui.form_token}
+
+        catalog = self.client.get("/api/v1/telemetry/mappings")
+        self.assertEqual(catalog.status_code, 200)
+        self.assertEqual(
+            [profile["profile"] for profile in catalog.get_json()["profiles"]],
+            ["otel", "ecs", "ocsf"],
+        )
+
+        mapped = self.client.post(
+            "/api/v1/telemetry/mapping-demo",
+            json={"profile": "ocsf", "fixture_id": "multi-agent-delegation-cascade"},
+            headers=headers,
+        )
+        self.assertEqual(mapped.status_code, 200)
+        mapped_value = mapped.get_json()
+        self.assertEqual(mapped_value["mapping"]["profile"], "ocsf")
+        self.assertFalse(mapped_value["mapping"]["content_values_recorded"])
+        self.assertFalse(mapped_value["process_started"])
+
+        conformance = self.client.post(
+            "/api/v1/lab/conformance",
+            json={"fixture_id": "multi-agent-delegation-cascade"},
+            headers=headers,
+        )
+        self.assertEqual(conformance.status_code, 200)
+        self.assertTrue(conformance.get_json()["report"]["passed"])
+
+        pack = json.loads(Path("examples/community-ability-pack.signed.json").read_text())
+        trust = json.loads(Path("examples/community-trust-store.json").read_text())
+        reviewed = self.client.post(
+            "/api/v1/content/review",
+            json={"pack": pack, "trust_store": trust},
+            headers=headers,
+        )
+        self.assertEqual(reviewed.status_code, 200)
+        reviewed_value = reviewed.get_json()
+        self.assertEqual(reviewed_value["review"]["verdict"], "approved")
+        self.assertFalse(reviewed_value["pack_retained"])
+        self.assertFalse(reviewed_value["execution_performed"])
+
+        artifact = self.client.post(
+            "/api/v1/lab/artifact-demo",
+            json={"artifact_id": "agentsim.synthetic.marker"},
+            headers=headers,
+        )
+        self.assertEqual(artifact.status_code, 200)
+        artifact_value = artifact.get_json()
+        self.assertEqual(artifact_value["review"]["verdict"], "approved")
+        self.assertFalse(artifact_value["artifact_content_returned"])
+        self.assertFalse(artifact_value["execution_performed"])
+
     def test_v1_detection_and_agentic_lab_apis_are_synthetic(self):
         headers = {"X-AgentSim-Form-Token": web_ui.form_token}
         detection = self.client.post(
@@ -213,7 +270,7 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(lab.status_code, 200)
         lab_value = lab.get_json()
         self.assertTrue(lab_value["passed"])
-        self.assertEqual(len(lab_value["results"]), 22)
+        self.assertEqual(len(lab_value["results"]), 23)
         self.assertTrue(
             all(not result["safety"]["tool_executed"] for result in lab_value["results"])
         )

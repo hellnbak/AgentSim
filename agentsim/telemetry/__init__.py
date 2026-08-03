@@ -23,6 +23,19 @@ from .flight_recorder import (
     otlp_records,
 )
 from .flight_server import serve_flight_recorder
+from .mappings import (
+    PORTABLE_PROFILES,
+    PROFILE_VERSIONS,
+    PortableMappingResult,
+    agent_trace_from_portable_record,
+    map_agent_trace,
+    mapping_catalog,
+)
+from .conformance import (
+    RuntimeConformanceReport,
+    evaluate_fixture_conformance,
+    run_fixture_conformance,
+)
 
 __all__ = [
     "append_event",
@@ -48,6 +61,15 @@ __all__ = [
     "normalize_records",
     "normalize_agent_records",
     "otlp_records",
+    "PORTABLE_PROFILES",
+    "PROFILE_VERSIONS",
+    "PortableMappingResult",
+    "RuntimeConformanceReport",
+    "agent_trace_from_portable_record",
+    "evaluate_fixture_conformance",
+    "map_agent_trace",
+    "mapping_catalog",
+    "run_fixture_conformance",
     "serve_flight_recorder",
     "TelemetryAssuranceReport",
 ]

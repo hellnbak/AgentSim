@@ -14,7 +14,7 @@ README = Path(__file__).with_name("README.md").read_text(encoding="utf-8")
 
 setup(
     name="agentsim",
-    version="1.6.0",
+    version="1.7.0",
     description="Detection-first adversary emulation for endpoints, cloud, and agentic AI",
     url="https://github.com/hellnbak/AgentSim",
     project_urls={
@@ -42,6 +42,7 @@ setup(
         "agentsim.content.catalogs": ["*.json"],
         "agentsim.content": ["trusted_keys.json"],
         "agentsim.detection.pack_content": ["*.json"],
+        "agentsim.lab.artifact_content": ["*.json", "*.txt"],
     },
     data_files=[
         (
@@ -69,6 +70,12 @@ setup(
                 "schemas/detection-drift-report.schema.json",
                 "schemas/flight-recorder-bundle.schema.json",
                 "schemas/detection-ci-report.schema.json",
+                "schemas/content-provenance.schema.json",
+                "schemas/portable-mapping.schema.json",
+                "schemas/runtime-conformance-report.schema.json",
+                "schemas/community-pack-review.schema.json",
+                "schemas/lab-artifact-reference.schema.json",
+                "schemas/lab-artifact-review.schema.json",
             ],
         )
     ],

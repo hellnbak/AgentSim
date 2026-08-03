@@ -199,6 +199,25 @@ def _fixtures() -> tuple[LabFixture, ...]:
             ),
             "synthetic.feedback.preview",
         ),
+        (
+            "lab-artifact-reference-substitution",
+            "Lab artifact reference substitution",
+            "artifact_provenance_tampering",
+            "artifact_path_digest_and_review_binding",
+            {
+                "artifact_digest_match": False,
+                "artifact_reviewed": False,
+                "artifact_scope_valid": False,
+            },
+            {
+                "artifact_digest_match": True,
+                "artifact_reviewed": True,
+                "artifact_scope_valid": True,
+            },
+            ("AI Agent Tool Invocation", "AI Supply Chain Rug Pull"),
+            ("ASI02 Tool Misuse", "ASI04 Agentic Supply Chain Vulnerabilities"),
+            "synthetic.artifact.inspect",
+        ),
     )
     return tuple(LabFixture(*value) for value in values)
 
@@ -239,6 +258,9 @@ def _allowed(request: Mapping[str, object]) -> tuple[bool, str]:
         "memory_retention_allowed",
         "identity_binding_valid",
         "evidence_digest_match",
+        "artifact_digest_match",
+        "artifact_reviewed",
+        "artifact_scope_valid",
     )
     if any(request.get(flag) is True for flag in deny_flags):
         return False, "risk flag denied"

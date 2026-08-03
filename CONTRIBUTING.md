@@ -32,6 +32,7 @@ python -m agentsim.cli campaign run endpoint-discovery-baseline --mode simulate 
 python -m agentsim.cli lab reference all
 python -m agentsim.cli telemetry investigate agent_sim_events.jsonl --collector agent_runtime --fail-on never
 python -m unittest tests.test_v15 -v
+python -m unittest tests.test_v16 -v
 python -m agentsim.cli telemetry query elastic --base-url https://elastic.example.test --dataset logs-test --target host-test --since 2026-08-02T00:00:00Z --until 2026-08-02T00:05:00Z
 ```
 
@@ -75,6 +76,14 @@ commit a private key or disable integrity verification to make a change load.
 State-changing abilities require an idempotent cleanup catalog reference and
 tests for success, failure, cancellation, and cleanup. Higher-risk behaviors
 belong in disposable labs or external adapters rather than the public core.
+
+Do not add payload bytes, URLs, downloads, or artifact paths to ability or
+campaign packs. A proposed lab payload integration must be a separately
+reviewed executor contract over an immutable local artifact reference. It must
+verify SHA-256, type, size, platform, exact disposable target, lab-only
+authorization, preflight scanning, resource limits, and cleanup/evidence before
+execution. The public core must reject unpinned artifacts and retain no payload
+content.
 
 Campaign packs may only reference abilities. Dependencies must point to an
 earlier declared step, and stop behavior must be explicit. See
@@ -153,6 +162,13 @@ record IDs, and grouping isolation. Investigation invariants require a failing
 trace, a closely matched clean twin, evidence/remediation assertions, and a
 content-boundary test. Web changes must use text-safe DOM construction and be
 verified in the local browser at desktop and narrow viewport widths.
+
+Flight-recorder changes must test SDK-callback failure isolation, content-key
+redaction, bounded OTLP JSON, loopback receiver denial, bundle digest tamper,
+and non-executing pseudonymous twins. Detection CI changes must include stable,
+malicious-regression, benign-regression, visibility-gap, JSON, Markdown, JUnit,
+SARIF, CLI, API, and Web tests. See
+[`FLIGHT_RECORDER.md`](FLIGHT_RECORDER.md).
 
 Feedback contract changes must keep alerts and annotations structured and
 content-safe. Do not add a free-form analyst note, prompt, argument, result,

@@ -13,15 +13,31 @@ from .investigation import (
     InvestigationReport,
     investigate_telemetry,
 )
+from .flight_recorder import (
+    AgentSimTraceProcessor,
+    FlightRecorder,
+    FlightRecorderBundle,
+    attach_to_openai_agents,
+    flight_bundle_from_mapping,
+    load_flight_bundle,
+    otlp_records,
+)
+from .flight_server import serve_flight_recorder
 
 __all__ = [
     "append_event",
+    "AgentSimTraceProcessor",
     "AGENT_COLLECTOR_NAMES",
     "agent_trace_from_record",
     "AssuranceFinding",
     "assess_telemetry",
     "correlate_lifecycle",
+    "FlightRecorder",
+    "FlightRecorderBundle",
+    "attach_to_openai_agents",
+    "flight_bundle_from_mapping",
     "load_lifecycle_events",
+    "load_flight_bundle",
     "InvariantFinding",
     "InvestigationEdge",
     "InvestigationNode",
@@ -31,5 +47,7 @@ __all__ = [
     "normalize_record",
     "normalize_records",
     "normalize_agent_records",
+    "otlp_records",
+    "serve_flight_recorder",
     "TelemetryAssuranceReport",
 ]

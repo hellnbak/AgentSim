@@ -37,6 +37,14 @@ reference reviewed `catalog://` commands; campaign files must only reference
 abilities. A parser accepting embedded commands, scripts, payloads, downloads,
 or arbitrary interpolation is a security issue.
 
+A future payload-capable lab executor must not weaken that parser boundary.
+Payloads may only be represented outside packs by immutable, local,
+allowlisted artifact metadata with a verified SHA-256 digest, declared type and
+size, explicit disposable target, lab-only authority, preflight scan, resource
+limits, and mandatory cleanup/evidence. Inline bytes, URLs, downloads, shell
+fragments, unpinned artifacts, credential material, production targets, or a
+public-core payload execution path are security issues.
+
 The safety engine must fail closed for expired authority, unallowlisted targets
 or abilities, wildcard target scope, production lockout, elevation, network
 policy, process/action/time limits, and missing cleanup. Cleanup must be
@@ -94,6 +102,17 @@ update, or delete a vendor rule. Any path from a feedback or drift report to
 automatic production detection mutation is outside AgentSim's security model
 and should be treated as a security issue.
 
+Flight bundles and OTLP JSON are untrusted input. Event, request, attribute,
+counter, identifier, and file-size limits; strict fields; digest validation;
+and content-key redaction must remain fail closed. Runtime processors must not
+call a general span export method or raise into the application. The OTLP
+receiver must remain loopback-only with explicit opt-in and no outbound path.
+Synthetic twins must pseudonymize identity fields and remain non-executing.
+
+Detection CI must use explicit malicious, benign, or unknown ground truth and
+must not infer it from a detector result. Reports may block a merge but cannot
+change an agent, deploy a rule, suppress an alert, or mutate vendor state.
+
 Live telemetry connectors are read-only query clients and are disabled until
 both execution and network access are explicitly enabled. Wildcard datasets or
 targets, windows over 24 hours, limits over 10,000 records, responses over 32
@@ -109,10 +128,12 @@ tool definitions, arguments, tokens, credentials, or arbitrary code. A host
 process, filesystem change, outbound network request, external tool call, or
 failure to reset state is a security issue.
 
-Built-in ability, campaign, and command content is RSA-signed. Signature
-bypass, trust-store substitution, acceptance of an untrusted key ID, or a
-content change that preserves verification is a security issue. The release
-private key must never be committed or distributed with a package.
+Release-foundation ability, campaign, and command content is RSA-signed.
+Checksum-only preview packs must be visibly labeled, simulation-only, network
+denied, production locked, and state-change free. Signature bypass, trust-store
+substitution, acceptance of an untrusted key ID, or a content change that
+preserves verification is a security issue. The release private key must never
+be committed or distributed with a package.
 
 External adapters in the public core must remain non-executing. They may create
 typed, version-pinned plans but must not start tools, send CALDERA requests,

@@ -16,7 +16,7 @@ MAX_REQUEST_BYTES = 64 * 1024
 
 
 class ReferenceLabHandler(BaseHTTPRequestHandler):
-    server_version = "AgentSimReferenceLab/1.5"
+    server_version = "AgentSimReferenceLab/1.6"
 
     def _json(self, status: int, value: object) -> None:
         body = json.dumps(value, sort_keys=True).encode("utf-8")
@@ -30,7 +30,7 @@ class ReferenceLabHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - standard-library handler contract
         if self.path == "/health":
-            self._json(200, {"status": "ok", "version": "1.5.0", "synthetic_only": True})
+            self._json(200, {"status": "ok", "version": "1.6.0", "synthetic_only": True})
             return
         if self.path == "/fixtures":
             self._json(

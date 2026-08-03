@@ -19,6 +19,13 @@ from .feedback import (
     parse_feedback_bundle,
     reconcile_detection_feedback,
 )
+from .detection_ci import (
+    DetectionCiFinding,
+    DetectionCiReport,
+    DetectionCiTransition,
+    compare_flight_bundles,
+    evaluate_detection_ci,
+)
 from .recommendations import recommendations_for_action
 from .regression import RegressionResult, run_regression
 from .runbooks import generate_runbook, generate_runbooks
@@ -29,6 +36,9 @@ __all__ = [
     "GapFinding",
     "AlertReconciliation",
     "DetectionAlert",
+    "DetectionCiFinding",
+    "DetectionCiReport",
+    "DetectionCiTransition",
     "DetectionDriftReport",
     "DetectionSnapshot",
     "DriftFinding",
@@ -38,6 +48,7 @@ __all__ = [
     "RegressionResult",
     "analyze_gaps",
     "compare_detection_snapshots",
+    "compare_flight_bundles",
     "detection_alert_from_mapping",
     "detection_snapshot_from_mapping",
     "build_scorecard",
@@ -48,4 +59,5 @@ __all__ = [
     "generate_runbooks",
     "recommendations_for_action",
     "run_regression",
+    "evaluate_detection_ci",
 ]

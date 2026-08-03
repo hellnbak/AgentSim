@@ -1,6 +1,6 @@
 # Agent and MCP telemetry contract
 
-AgentSim 1.5 uses agent trace contract 1.1 for correlating agent,
+AgentSim 1.6 uses agent trace contract 1.1 for correlating agent,
 model, tool, policy, and MCP activity without retaining prompts, reasoning,
 messages, tool arguments/results, model responses, payloads, credentials, or
 unsafe token values.
@@ -28,6 +28,10 @@ from agentsim.api import normalize_agent_telemetry
 
 event = normalize_agent_telemetry(record, collector="otel_genai")
 ```
+
+For live runtime flights, strict bundles, OTLP/HTTP JSON, OpenAI Agents SDK
+processor integration, pseudonymous twins, and baseline/candidate gates, see
+[`FLIGHT_RECORDER.md`](FLIGHT_RECORDER.md).
 
 The complete machine-readable shape is
 [`schemas/agent-trace-event.schema.json`](schemas/agent-trace-event.schema.json).

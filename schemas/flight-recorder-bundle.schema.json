@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/flight-recorder-bundle.schema.json",
+  "title": "AgentSim content-safe agent security flight recorder",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "recorder_id", "source_runtime", "classification",
+    "started_at", "ended_at", "summary", "events", "metadata", "sanitization",
+    "content_values_recorded", "bundle_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "agent-security-flight-recorder"},
+    "recorder_id": {"$ref": "#/$defs/identifier"},
+    "source_runtime": {"$ref": "#/$defs/identifier"},
+    "classification": {"enum": ["malicious", "benign", "unknown"]},
+    "started_at": {"type": "string", "format": "date-time"},
+    "ended_at": {"type": "string", "format": "date-time"},
+    "summary": {"$ref": "#/$defs/summary"},
+    "events": {
+      "type": "array",
+      "maxItems": 50000,
+      "items": {"$ref": "agent-trace-event.schema.json"}
+    },
+    "metadata": {"type": "object", "maxProperties": 100},
+    "sanitization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prompts_recorded", "messages_recorded", "tool_arguments_recorded",
+        "tool_results_recorded", "credentials_recorded"
+      ],
+      "properties": {
+        "prompts_recorded": {"const": false},
+        "messages_recorded": {"const": false},
+        "tool_arguments_recorded": {"const": false},
+        "tool_results_recorded": {"const": false},
+        "credentials_recorded": {"const": false}
+      }
+    },
+    "content_values_recorded": {"const": false},
+    "bundle_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "minLength": 1, "maxLength": 512},
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "events", "traces", "agents", "dropped_events", "recording_errors",
+        "event_types"
+      ],
+      "properties": {
+        "events": {"type": "integer", "minimum": 0, "maximum": 50000},
+        "traces": {"type": "integer", "minimum": 0},
+        "agents": {"type": "integer", "minimum": 0},
+        "dropped_events": {"type": "integer", "minimum": 0},
+        "recording_errors": {"type": "integer", "minimum": 0},
+        "event_types": {
+          "type": "array",
+          "maxItems": 50000,
+          "items": {"type": "string", "minLength": 1, "maxLength": 512}
+        }
+      }
+    }
+  }
+}

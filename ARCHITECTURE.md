@@ -1,4 +1,4 @@
-# AgentSim v1.5 architecture
+# AgentSim v1.6 architecture
 
 AgentSim separates content, execution, authorization, telemetry, detection,
 and defensive evaluation so synthetic traces cannot silently become executable
@@ -20,6 +20,9 @@ flowchart TD
     Export["Offline vendor exports"] --> Collect["Bounded collectors and redaction"]
     Live["Explicit read-only SIEM query"] --> Collect
     Runtime["Agent / OTel GenAI / MCP audit"] --> Contract["Content-safe agent trace contract"]
+    Runtime --> Flight["Agent security flight recorder"]
+    Flight --> Twin["Pseudonymous non-executing twin"]
+    Flight --> FlightGate["Baseline / candidate Detection CI"]
     Contract --> Collect
     Collect --> Normalize["Normalized event model"]
     Normalize --> Assure["Telemetry assurance and causal integrity"]
@@ -30,6 +33,7 @@ flowchart TD
     Correlate --> Detect["Detection AST and coverage analysis"]
     Sweep --> Detect
     Investigate --> Detect
+    FlightGate --> Detect
     Detect --> Candidate["Human-review candidate renderers"]
     Detect --> Defense["Gaps, runbooks, scorecards, regression"]
     Alert["Detection alerts and structured annotations"] --> Reconcile["Alert-to-trace reconciliation"]
@@ -56,9 +60,9 @@ agentsim/
 ├── execution/             simulate, local, and Docker provider interfaces
 ├── external/              non-executing Atomic, Stratus, CALDERA plans
 ├── safety/                authorization, target scope, policy, limits, cleanup
-├── telemetry/             contracts, collectors, assurance, graph investigation, connectors
+├── telemetry/             contracts, flight recorder, collectors, assurance, investigation, connectors
 ├── detection/             graph-aware AST, packs, evaluator, coverage, generator, renderers
-├── defense/               feedback, drift, recommendations, gaps, regression, scorecard
+├── defense/               Detection CI, feedback, drift, recommendations, gaps, regression
 ├── lab/                   in-memory controls and instrumented reference agent
 ├── reporting/             bundles and Attack Flow STIX interchange
 └── web/                   packaged loopback Web entry point
@@ -81,8 +85,14 @@ reading ground-truth labels.
 
 Abilities reference reviewed `catalog://` argv; campaign steps reference
 abilities. Unknown executable fields fail closed. Canonical SHA-256 digests
-protect content arrays, and built-in content adds an RSA PKCS#1 v1.5 SHA-256
-signature verified against `agentsim/content/trusted_keys.json`.
+protect content arrays. Release-foundation content adds an RSA PKCS#1 v1.5
+SHA-256 signature verified against `agentsim/content/trusted_keys.json`.
+
+The v1.6 endpoint/cloud control-validation preview is checksum protected,
+visibly marked `checksum-review-preview`, restricted to the simulation
+provider, network denied, production locked, and unable to change state. It is
+not represented as release-signed executable content. A maintainer can promote
+a reviewed preview pack only by signing it with the offline release key.
 
 The signing private key is not distributed. Third-party packs may use checksum
 integrity without claiming AgentSim trust; deployments can maintain their own
@@ -98,6 +108,14 @@ Plugin discovery reads entry-point metadata without importing code. Loading is
 an explicit act and enforces plugin API `1.0`. An external executor is outside
 the public core and must independently enforce authorization, version, target,
 resource, cleanup, and evidence contracts.
+
+Payload-bearing lab work, if added by a separately reviewed executor, must use
+an immutable artifact reference rather than inline pack content. The reference
+must bind a local allowlisted artifact to a SHA-256 digest, declared media type,
+size, platform, exact disposable target, preflight result, resource limits,
+authorization, and cleanup/evidence plan. URLs, downloads, raw bytes, shell
+fragments, unpinned artifacts, production targets, and implicit execution
+remain invalid in the public core.
 
 ### Live telemetry connectors
 
@@ -139,6 +157,14 @@ Agent trace contract 1.1 adds stable correlation and authorization fields for
 agent runtimes, OpenTelemetry GenAI spans, and MCP audit records. Raw prompts,
 messages, tool arguments/results, and model responses are excluded by design.
 Live connector responses pass through the same normalized/redacted event model.
+
+The flight recorder consumes the same contract from exported records, OTLP
+JSON, or an optional runtime processor. SDK processors select structural span
+properties and never invoke a general span exporter that may serialize
+content. The loopback OTLP JSON receiver requires an explicit opt-in and has no
+outbound path. Flight bundles are strict, bounded, digest protected, and always
+declare that content values were not recorded. Synthetic twins pseudonymize
+identities and set `executed: false`.
 
 Telemetry assurance runs before interpretation. It checks source timestamps,
 stable record IDs, native agent identities, causal edge resolution, cross-trace
@@ -187,6 +213,12 @@ coverage, and checkpoint latency, then applies caller-selected thresholds.
 Reports are advisory artifacts: no code path promotes or deploys a candidate
 or changes a suppression.
 
+Detection CI compares reviewed and candidate flight bundles. It runs assurance,
+investigation invariants, and answer-key-free pack rules on both sides, then
+classifies lost malicious coverage, new benign detections, visibility gaps,
+checkpoint loss, and invariant regressions. JSON, Markdown, JUnit, and SARIF
+are advisory artifacts; the gate cannot mutate an agent or vendor rule.
+
 ## Persistence and evidence
 
 SQLite stores immutable manifest JSON/hash, action results, append-only
@@ -202,5 +234,6 @@ evidence is persisted.
 The public schemas are in [schemas](schemas/), including normalized events,
 detection rules, external plans, agent trace events, live query plans,
 reference-lab results, telemetry-assurance, multi-agent investigation,
-detection-feedback, and detection-drift reports, detection packs and sweep
-reports, signed packs, authorization, and lifecycle v3.
+detection-feedback, detection-drift, flight-recorder, and detection-CI reports,
+detection packs and sweep reports, signed packs, authorization, and lifecycle
+v3.

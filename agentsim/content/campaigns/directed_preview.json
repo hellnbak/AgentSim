@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "kind": "campaign-pack",
+  "pack_id": "agentsim.preview.directed-campaigns",
+  "integrity": {"algorithm": "sha256", "digest": "1fb353a0336ffbec671890ef283ee119040c184339865df5c1c8712745550968"},
+  "campaigns": [
+    {
+      "id": "endpoint-agent-execution-chain",
+      "name": "Endpoint agent execution chain",
+      "description": "A simulation-only directed graph from agent interpreter ancestry through decoy access, collection staging, and monitoring-tamper intent.",
+      "objective": "Validate endpoint correlation across agent identity, process ancestry, decoy access, file staging, and policy denial telemetry.",
+      "target_profile": "synthetic-endpoint",
+      "authorization_required": true,
+      "steps": [
+        {"id": "interpreter", "ability_id": "endpoint.execution.interpreter-chain", "depends_on": [], "on_failure": "stop"},
+        {"id": "decoy", "ability_id": "endpoint.credential.decoy-access", "depends_on": ["interpreter"], "on_failure": "stop"},
+        {"id": "archive", "ability_id": "endpoint.collection.archive-staging", "depends_on": ["decoy"], "on_failure": "continue"},
+        {"id": "tamper", "ability_id": "endpoint.defense.monitoring-tamper-proposal", "depends_on": ["archive"], "on_failure": "continue"}
+      ],
+      "required_telemetry": ["agent_runtime", "process_creation", "process_ancestry", "decoy_access", "file_activity", "endpoint_policy"],
+      "stop_conditions": ["authorization_denied", "resource_limit_reached", "kill_switch"],
+      "metadata": {"trust": "checksum-review-preview", "simulation_only": true, "directed": true}
+    },
+    {
+      "id": "endpoint-persistence-control-validation",
+      "name": "Endpoint persistence control validation",
+      "description": "A simulation-only branch that joins endpoint identity context and interpreter ancestry before proposing persistence and monitoring changes.",
+      "objective": "Validate approval, policy, and endpoint audit controls for agent-originated persistence and defense-evasion intent.",
+      "target_profile": "synthetic-endpoint",
+      "authorization_required": true,
+      "steps": [
+        {"id": "identity", "ability_id": "endpoint.discovery.current-user", "depends_on": [], "on_failure": "stop"},
+        {"id": "interpreter", "ability_id": "endpoint.execution.interpreter-chain", "depends_on": [], "on_failure": "stop"},
+        {"id": "autostart", "ability_id": "endpoint.persistence.autostart-proposal", "depends_on": ["identity", "interpreter"], "on_failure": "stop"},
+        {"id": "tamper", "ability_id": "endpoint.defense.monitoring-tamper-proposal", "depends_on": ["autostart"], "on_failure": "continue"}
+      ],
+      "required_telemetry": ["agent_runtime", "process_creation", "endpoint_policy", "approval_audit"],
+      "stop_conditions": ["authorization_denied", "resource_limit_reached", "kill_switch"],
+      "metadata": {"trust": "checksum-review-preview", "simulation_only": true, "directed": true}
+    },
+    {
+      "id": "cloud-identity-to-impact",
+      "name": "Cloud identity-to-impact chain",
+      "description": "A simulation-only cloud graph that branches from role discovery to decoy-secret access and privilege intent before joining at public-access and audit-tamper proposals.",
+      "objective": "Validate multi-stage cloud detections that correlate agent identity, control-plane intent, policy denials, and protected audit controls.",
+      "target_profile": "synthetic-cloud-sandbox",
+      "authorization_required": true,
+      "steps": [
+        {"id": "services", "ability_id": "cloud.discovery.services", "depends_on": [], "on_failure": "stop"},
+        {"id": "roles", "ability_id": "cloud.identity.role-enumeration", "depends_on": ["services"], "on_failure": "stop"},
+        {"id": "secret", "ability_id": "cloud.secrets.decoy-access", "depends_on": ["roles"], "on_failure": "continue"},
+        {"id": "privilege", "ability_id": "cloud.identity.policy-change-proposal", "depends_on": ["roles"], "on_failure": "continue"},
+        {"id": "public", "ability_id": "cloud.storage.public-access-proposal", "depends_on": ["secret", "privilege"], "on_failure": "continue"},
+        {"id": "audit", "ability_id": "cloud.audit.logging-disable-proposal", "depends_on": ["public"], "on_failure": "continue"}
+      ],
+      "required_telemetry": ["agent_runtime", "cloud_audit", "cloud_policy", "principal_context", "approval_audit"],
+      "stop_conditions": ["authorization_denied", "resource_limit_reached", "kill_switch"],
+      "metadata": {"trust": "checksum-review-preview", "simulation_only": true, "directed": true}
+    },
+    {
+      "id": "hybrid-agent-control-chain",
+      "name": "Hybrid endpoint-to-cloud agent chain",
+      "description": "A synthetic cross-plane campaign linking endpoint interpreter behavior and metadata intent to cloud role discovery, decoy-secret access, and blocked impact proposals.",
+      "objective": "Validate correlation by agent and trace identity across endpoint, network-policy, cloud-audit, and cloud-policy sources.",
+      "target_profile": "synthetic-hybrid-lab",
+      "authorization_required": true,
+      "steps": [
+        {"id": "interpreter", "ability_id": "endpoint.execution.interpreter-chain", "depends_on": [], "on_failure": "stop"},
+        {"id": "metadata", "ability_id": "cloud.compute.metadata-access", "depends_on": ["interpreter"], "on_failure": "stop"},
+        {"id": "roles", "ability_id": "cloud.identity.role-enumeration", "depends_on": ["metadata"], "on_failure": "stop"},
+        {"id": "secret", "ability_id": "cloud.secrets.decoy-access", "depends_on": ["roles"], "on_failure": "continue"},
+        {"id": "public", "ability_id": "cloud.storage.public-access-proposal", "depends_on": ["secret"], "on_failure": "continue"},
+        {"id": "audit", "ability_id": "cloud.audit.logging-disable-proposal", "depends_on": ["public"], "on_failure": "continue"}
+      ],
+      "required_telemetry": ["agent_runtime", "process_creation", "network_policy", "cloud_audit", "cloud_policy"],
+      "stop_conditions": ["authorization_denied", "resource_limit_reached", "kill_switch"],
+      "metadata": {"trust": "checksum-review-preview", "simulation_only": true, "directed": true, "cross_plane": true}
+    }
+  ]
+}

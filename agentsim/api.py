@@ -12,6 +12,7 @@ from agentsim.defense import (
     OperatorAnnotation,
     analyze_gaps,
     compare_detection_snapshots,
+    compare_flight_bundles,
     generate_runbook,
     reconcile_detection_feedback,
 )
@@ -44,6 +45,7 @@ from agentsim.telemetry.collectors import collector_for
 from agentsim.telemetry.agent_contract import agent_trace_from_record
 from agentsim.telemetry.assurance import assess_telemetry
 from agentsim.telemetry.investigation import investigate_telemetry
+from agentsim.telemetry.flight_recorder import FlightRecorderBundle
 from agentsim.telemetry.connectors import (
     LiveQueryResult,
     QueryPlan,
@@ -160,6 +162,27 @@ def detection_drift(
         max_false_positive_rate_increase=max_false_positive_rate_increase,
         max_latency_increase=max_latency_increase,
         max_reconciliation_drop=max_reconciliation_drop,
+    ).to_dict()
+
+
+def detection_ci(
+    baseline: FlightRecorderBundle,
+    candidate: FlightRecorderBundle,
+    *,
+    pack_path: str | Path | None = None,
+    expected_classification: str | None = None,
+    max_assurance_drop: int = 5,
+    min_event_retention: float = 0.8,
+) -> dict[str, object]:
+    """Gate an agent-runtime candidate against a content-safe flight baseline."""
+
+    return compare_flight_bundles(
+        baseline,
+        candidate,
+        pack=load_detection_pack(pack_path),
+        expected_classification=expected_classification,
+        max_assurance_drop=max_assurance_drop,
+        min_event_retention=min_event_retention,
     ).to_dict()
 
 

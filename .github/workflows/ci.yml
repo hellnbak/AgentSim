@@ -30,7 +30,7 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: v1 campaign and evidence smoke test
         run: agentsim campaign run endpoint-discovery-baseline --mode simulate --target synthetic://ci --authorization examples/authorization.simulate.json --output-dir smoke-campaign-runs --database smoke-runs.db
-      - name: v1.5 assurance, investigation, detection, feedback, and lab interfaces
+      - name: v1.6 assurance, investigation, detection, feedback, and lab interfaces
         run: |
           agentsim detection generate endpoint.discovery.processes --format sigma
           agentsim lab run all --output smoke-agentic-lab.json
@@ -48,6 +48,8 @@ jobs:
           agentsim telemetry investigate smoke-events.jsonl --collector agent_runtime --output smoke-investigation.json --fail-on never
           agentsim detection sweep smoke-events.jsonl --collector agent_runtime --output smoke-detection-sweep.json
           agentsim defense drift smoke-validation.json smoke-validation.json --output smoke-detection-drift.json
+          agentsim telemetry record smoke-events.jsonl --format agent_runtime --runtime scenario-ci --classification malicious --output smoke-flight.json --twin-output smoke-flight-twin.jsonl
+          agentsim detection ci smoke-flight.json smoke-flight.json --classification malicious --output smoke-detection-ci.json --markdown-output smoke-detection-ci.md --junit-output smoke-detection-ci.xml --sarif-output smoke-detection-ci.sarif --fail-on block
       - name: MCP boundary smoke test
         run: python core.py --mcp-lab --mcp-lab-output smoke-mcp-lab.json
       - name: Upload benchmark evidence
@@ -62,6 +64,12 @@ jobs:
             smoke-assurance.json
             smoke-detection-sweep.json
             smoke-detection-drift.json
+            smoke-flight.json
+            smoke-flight-twin.jsonl
+            smoke-detection-ci.json
+            smoke-detection-ci.md
+            smoke-detection-ci.xml
+            smoke-detection-ci.sarif
             smoke-live-query-plan.json
             smoke-attack-flow.json
             smoke-external-plan.json

@@ -93,6 +93,8 @@ class WebUiTests(unittest.TestCase):
         self.assertIn("Detection debugger", page)
         self.assertIn("Check telemetry assurance", page)
         self.assertIn("Multi-agent investigation workbench", page)
+        self.assertIn("Agent security flight recorder", page)
+        self.assertIn("Detection CI merge gate", page)
         self.assertIn("Agentic attack scenarios", page)
         self.assertIn("Indirect prompt injection", page)
         self.assertIn("message.textContent", page)
@@ -118,15 +120,18 @@ class WebUiTests(unittest.TestCase):
         catalog_response = self.client.get("/api/v1/catalog")
         self.assertEqual(catalog_response.status_code, 200)
         catalog = catalog_response.get_json()
-        self.assertEqual(catalog["version"], "1.5.0")
-        self.assertEqual(len(catalog["abilities"]), 8)
-        self.assertEqual(len(catalog["campaigns"]), 2)
+        self.assertEqual(catalog["version"], "1.6.0")
+        self.assertEqual(len(catalog["abilities"]), 19)
+        self.assertEqual(len(catalog["campaigns"]), 6)
         self.assertEqual(catalog["capabilities"]["agentic_fixtures"], 22)
         self.assertTrue(catalog["capabilities"]["detection_feedback_reconciliation"])
         self.assertTrue(catalog["capabilities"]["detection_tuning_drift"])
         self.assertTrue(catalog["capabilities"]["multi_agent_investigation"])
         self.assertEqual(catalog["capabilities"]["agent_trace_contract"], "1.1")
-        self.assertTrue(catalog["capabilities"]["signed_builtin_content"])
+        self.assertTrue(catalog["capabilities"]["release_signed_foundation_content"])
+        self.assertTrue(catalog["capabilities"]["checksum_review_preview_content"])
+        self.assertTrue(catalog["capabilities"]["agent_security_flight_recorder"])
+        self.assertTrue(catalog["capabilities"]["agent_detection_ci"])
         self.assertEqual(catalog["history"], [])
 
         denied = self.client.post(
@@ -150,6 +155,43 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(payload["history"][0]["run_id"], payload["run_id"])
         self.assertTrue(web_ui.CAMPAIGN_DATABASE_PATH.exists())
         self.assertEqual(len(list(web_ui.CAMPAIGN_OUTPUT_DIRECTORY.glob("*/evidence.zip"))), 1)
+
+    def test_flight_viewer_and_detection_ci_apis_are_content_safe(self):
+        headers = {"X-AgentSim-Form-Token": web_ui.form_token}
+        demo = self.client.post(
+            "/api/v1/flight/demo",
+            json={"fixture_id": "indirect-prompt-injection"},
+            headers=headers,
+        )
+        self.assertEqual(demo.status_code, 200)
+        value = demo.get_json()
+        self.assertFalse(value["process_started"])
+        self.assertFalse(value["network_opened"])
+        self.assertFalse(value["bundle"]["content_values_recorded"])
+        self.assertTrue(value["synthetic_twin"])
+        self.assertTrue(all(event["synthetic"] for event in value["synthetic_twin"]))
+
+        analyzed = self.client.post(
+            "/api/v1/flight/analyze",
+            json={"bundle": value["bundle"]},
+            headers=headers,
+        )
+        self.assertEqual(analyzed.status_code, 200)
+        self.assertFalse(analyzed.get_json()["content_values_recorded"])
+
+        compared = self.client.post(
+            "/api/v1/detection/ci",
+            json={
+                "baseline": value["bundle"],
+                "candidate": value["bundle"],
+                "expected_classification": "malicious",
+            },
+            headers=headers,
+        )
+        self.assertEqual(compared.status_code, 200)
+        report = compared.get_json()
+        self.assertEqual(report["report"]["status"], "pass")
+        self.assertFalse(report["content_values_recorded"])
 
     def test_v1_detection_and_agentic_lab_apis_are_synthetic(self):
         headers = {"X-AgentSim-Form-Token": web_ui.form_token}

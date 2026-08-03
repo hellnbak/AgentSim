@@ -3,6 +3,35 @@
 Notable changes to AgentSim are documented here. The project follows semantic
 versioning while its public interfaces mature.
 
+## 1.6.0 - 2026-08-02
+
+- Added a bounded, digest-protected Agent Security Flight Recorder bundle that
+  retains structural agent/tool/topology/policy metadata while excluding
+  prompts, messages, arguments, results, responses, credentials, and payload
+  values.
+- Added an optional OpenAI Agents SDK trace processor that never invokes
+  content-bearing span export, plus agent-runtime, OpenTelemetry GenAI, and
+  OTLP/HTTP JSON ingestion and an explicit loopback-only JSON receiver.
+- Added deterministic pseudonymous synthetic twins that preserve causal and
+  detection-relevant structure while remaining non-executing.
+- Added baseline/candidate Detection CI over telemetry assurance, multi-agent
+  invariants, answer-key-free detection-pack transitions, and event retention,
+  with pass/review/block semantics and JSON, Markdown, JUnit, and SARIF output.
+- Added CLI and Python APIs for flight recording, OTLP serving, twin export,
+  and Detection CI, plus two strict public JSON schemas and package metadata.
+- Added eleven checksum-labeled, simulation-only endpoint/cloud
+  control-validation abilities and four directed endpoint, cloud, and hybrid
+  campaigns. Preview content is network denied, production locked,
+  state-change free, and cannot use local or Docker providers.
+- Added a Web Flight Recorder timeline, safe demo, twin download, interactive
+  Detection CI comparison, and JSON/Markdown/SARIF downloads.
+- Documented the safe extension boundary for a future lab-only payload artifact
+  reference without permitting payload content in abilities, campaigns, or the
+  public execution core.
+- Added unit, CLI, API, content, schema, GUI, package, and simulation-safety
+  tests and updated architecture, telemetry, security, contribution, ability,
+  campaign, roadmap, and release documentation.
+
 ## 1.5.0 - 2026-08-02
 
 - Added strict, content-safe alert and operator-annotation contracts plus

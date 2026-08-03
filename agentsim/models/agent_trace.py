@@ -41,6 +41,17 @@ _TOKEN_SAFE_SUFFIXES = (
     "_scopes",
     "_valid",
 )
+_SAFE_CONTENT_FLAGS = frozenset(
+    {
+        "arguments_recorded",
+        "result_recorded",
+        "prompts_recorded",
+        "messages_recorded",
+        "tool_arguments_recorded",
+        "tool_results_recorded",
+        "credentials_recorded",
+    }
+)
 
 
 def _utc_timestamp(value: str) -> str:
@@ -65,6 +76,11 @@ def _text(value: object, field_name: str, *, required: bool = False) -> str | No
 
 def _sensitive_key(name: str) -> bool:
     lowered = name.casefold()
+    # These exact boolean field names communicate that content was omitted.
+    # Broader ``*_recorded`` exceptions would let content-bearing keys bypass
+    # the deny-list, so keep this allow-list deliberately narrow.
+    if lowered in _SAFE_CONTENT_FLAGS:
+        return False
     if any(term in lowered for term in _SENSITIVE_KEYS):
         return True
     if "token" in lowered and not lowered.endswith(_TOKEN_SAFE_SUFFIXES):

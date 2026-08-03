@@ -16,6 +16,7 @@ from agentsim.content import load_ability_registry, load_campaign_registry
 from agentsim.defense import (
     analyze_gaps,
     compare_detection_snapshots,
+    compare_flight_bundles,
     detection_snapshot_from_mapping,
     generate_runbook,
     parse_feedback_bundle,
@@ -50,7 +51,10 @@ from agentsim.reporting.attack_flow import export_campaign, import_campaign
 from agentsim.safety.authorization import load_authorization_manifest
 from agentsim.storage import RunStore
 from agentsim.telemetry.collectors import COLLECTOR_NAMES, collector_for
+from agentsim.telemetry.collectors.base import read_json_records
 from agentsim.telemetry.assurance import assess_telemetry
+from agentsim.telemetry.flight_recorder import FlightRecorder, load_flight_bundle
+from agentsim.telemetry.flight_server import serve_flight_recorder
 from agentsim.telemetry.investigation import investigate_telemetry
 from agentsim.telemetry.connectors import CONNECTOR_NAMES, QuerySpec, build_query_plan, execute_query_plan
 
@@ -168,6 +172,30 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     )
     telemetry_history.add_argument("--database", default="agent_sim_runs.db", metavar="PATH")
     telemetry_history.add_argument("--limit", type=int, default=25)
+    telemetry_record = telemetry_commands.add_parser(
+        "record", help="Build a content-safe flight bundle and optional synthetic twin."
+    )
+    telemetry_record.add_argument("path", metavar="TELEMETRY")
+    telemetry_record.add_argument(
+        "--format", choices=("agent_runtime", "otel_genai", "otlp"), default="agent_runtime"
+    )
+    telemetry_record.add_argument("--runtime", default="custom-agent-runtime")
+    telemetry_record.add_argument(
+        "--classification", choices=("malicious", "benign", "unknown"), default="unknown"
+    )
+    telemetry_record.add_argument("--output", required=True)
+    telemetry_record.add_argument("--twin-output")
+    telemetry_serve_otlp = telemetry_commands.add_parser(
+        "serve-otlp", help="Receive bounded OTLP/HTTP JSON traces on loopback."
+    )
+    telemetry_serve_otlp.add_argument("--host", default="127.0.0.1")
+    telemetry_serve_otlp.add_argument("--port", type=int, default=4318)
+    telemetry_serve_otlp.add_argument("--runtime", default="otlp-agent-runtime")
+    telemetry_serve_otlp.add_argument(
+        "--classification", choices=("malicious", "benign", "unknown"), default="unknown"
+    )
+    telemetry_serve_otlp.add_argument("--output", required=True)
+    telemetry_serve_otlp.add_argument("--allow-loopback", action="store_true")
 
     detection = commands.add_parser("detection", help="Evaluate and generate detection rules.")
     detection_commands = detection.add_subparsers(dest="detection_command", required=True)
@@ -188,6 +216,24 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     detection_generate.add_argument("--format", choices=FORMATS)
     detection_generate.add_argument("--output-dir")
     detection_generate.add_argument("--ability-pack", action="append", default=[], metavar="PATH")
+    detection_ci = detection_commands.add_parser(
+        "ci", help="Gate a candidate agent recording against a reviewed baseline."
+    )
+    detection_ci.add_argument("baseline", metavar="BASELINE_FLIGHT_JSON")
+    detection_ci.add_argument("candidate", metavar="CANDIDATE_FLIGHT_JSON")
+    detection_ci.add_argument("--pack")
+    detection_ci.add_argument(
+        "--classification", choices=("malicious", "benign", "unknown")
+    )
+    detection_ci.add_argument("--max-assurance-drop", type=int, default=5)
+    detection_ci.add_argument("--min-event-retention", type=float, default=0.8)
+    detection_ci.add_argument("--output", required=True)
+    detection_ci.add_argument("--markdown-output")
+    detection_ci.add_argument("--junit-output")
+    detection_ci.add_argument("--sarif-output")
+    detection_ci.add_argument(
+        "--fail-on", choices=("never", "review", "block"), default="block"
+    )
 
     defense = commands.add_parser(
         "defense", help="Analyze visibility, feedback, drift, and detection regression."
@@ -435,6 +481,42 @@ def _run_v1(args: argparse.Namespace) -> int | None:
                 metadata={"connector": args.connector, "query_id": query_id},
             )
         return 0 if all(outcome.status == "detected" for outcome in outcomes) else 1
+    if args.command == "telemetry" and args.telemetry_command == "record":
+        recorder = FlightRecorder(
+            source_runtime=args.runtime,
+            classification=args.classification,
+        )
+        if args.format == "otlp":
+            recorder.ingest_otlp_export(_load_json_object(args.path, "OTLP trace export"))
+        else:
+            recorder.ingest_records(read_json_records(args.path), collector=args.format)
+        bundle = recorder.snapshot()
+        bundle.write(args.output)
+        if args.twin_output:
+            bundle.write_synthetic_twin(args.twin_output)
+        _emit_json(
+            {
+                "schema_version": "1.0",
+                "kind": "flight-recorder-result",
+                "bundle": args.output,
+                "synthetic_twin": args.twin_output,
+                "summary": bundle.to_dict()["summary"],
+                "content_values_recorded": False,
+            }
+        )
+        return 0
+    if args.command == "telemetry" and args.telemetry_command == "serve-otlp":
+        serve_flight_recorder(
+            FlightRecorder(
+                source_runtime=args.runtime,
+                classification=args.classification,
+            ),
+            host=args.host,
+            port=args.port,
+            allow_loopback=args.allow_loopback,
+            output_path=args.output,
+        )
+        return 0
     if args.command == "detection" and args.detection_command == "evaluate":
         result = evaluate_rule(
             load_rule(args.rule), collector_for(args.collector).collect(args.telemetry)
@@ -463,6 +545,27 @@ def _run_v1(args: argparse.Namespace) -> int | None:
         else:
             _emit_json(candidate.to_dict())
         return 0
+    if args.command == "detection" and args.detection_command == "ci":
+        report = compare_flight_bundles(
+            load_flight_bundle(args.baseline),
+            load_flight_bundle(args.candidate),
+            pack=load_detection_pack(args.pack),
+            expected_classification=args.classification,
+            max_assurance_drop=args.max_assurance_drop,
+            min_event_retention=args.min_event_retention,
+        )
+        report.write_artifacts(
+            json_path=args.output,
+            markdown_path=args.markdown_output,
+            junit_path=args.junit_output,
+            sarif_path=args.sarif_output,
+        )
+        print(args.output)
+        if args.fail_on == "never":
+            return 0
+        if args.fail_on == "review":
+            return 0 if report.status == "pass" else 1
+        return 1 if report.status == "block" else 0
     if args.command == "defense" and args.defense_command == "analyze":
         abilities = load_ability_registry(args.ability_pack)
         if args.ability_id not in abilities:

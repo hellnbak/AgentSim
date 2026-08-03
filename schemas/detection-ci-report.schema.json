@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/detection-ci-report.schema.json",
+  "title": "AgentSim agent detection CI report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "report_id", "expected_classification", "pack_id",
+    "pack_version", "status", "score", "summary", "baseline", "candidate",
+    "transitions", "findings", "ground_truth_source", "content_values_recorded"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "agent-detection-ci-report"},
+    "report_id": {"$ref": "#/$defs/identifier"},
+    "expected_classification": {"enum": ["malicious", "benign", "unknown"]},
+    "pack_id": {"$ref": "#/$defs/identifier"},
+    "pack_version": {"$ref": "#/$defs/identifier"},
+    "status": {"enum": ["pass", "review", "block"]},
+    "score": {"type": "integer", "minimum": 0, "maximum": 100},
+    "summary": {"$ref": "#/$defs/report-summary"},
+    "baseline": {"$ref": "#/$defs/recording-summary"},
+    "candidate": {"$ref": "#/$defs/recording-summary"},
+    "transitions": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {"$ref": "#/$defs/transition"}
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {"$ref": "#/$defs/finding"}
+    },
+    "ground_truth_source": {"const": "explicit_expected_classification"},
+    "content_values_recorded": {"const": false}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "minLength": 1, "maxLength": 512},
+    "nonnegative": {"type": "integer", "minimum": 0},
+    "report-summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "regressions", "improvements", "changed", "unchanged", "findings",
+        "blocking_findings"
+      ],
+      "properties": {
+        "regressions": {"$ref": "#/$defs/nonnegative"},
+        "improvements": {"$ref": "#/$defs/nonnegative"},
+        "changed": {"$ref": "#/$defs/nonnegative"},
+        "unchanged": {"$ref": "#/$defs/nonnegative"},
+        "findings": {"$ref": "#/$defs/nonnegative"},
+        "blocking_findings": {"$ref": "#/$defs/nonnegative"}
+      }
+    },
+    "detection-counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["detected", "not_detected", "visibility_gap"],
+      "properties": {
+        "detected": {"$ref": "#/$defs/nonnegative"},
+        "not_detected": {"$ref": "#/$defs/nonnegative"},
+        "visibility_gap": {"$ref": "#/$defs/nonnegative"}
+      }
+    },
+    "recording-summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recording_id", "events", "traces", "agents", "assurance_status",
+        "assurance_score", "investigation_status", "investigation_score",
+        "detections", "content_values_recorded"
+      ],
+      "properties": {
+        "recording_id": {"$ref": "#/$defs/identifier"},
+        "events": {"$ref": "#/$defs/nonnegative"},
+        "traces": {"$ref": "#/$defs/nonnegative"},
+        "agents": {"$ref": "#/$defs/nonnegative"},
+        "assurance_status": {"enum": ["healthy", "degraded", "unusable"]},
+        "assurance_score": {"type": "integer", "minimum": 0, "maximum": 100},
+        "investigation_status": {"enum": ["clean", "review", "elevated", "critical"]},
+        "investigation_score": {"type": "integer", "minimum": 0, "maximum": 100},
+        "detections": {"$ref": "#/$defs/detection-counts"},
+        "content_values_recorded": {"const": false}
+      }
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_id", "severity", "baseline_status", "candidate_status", "change",
+        "baseline_field_coverage_percent", "candidate_field_coverage_percent",
+        "missing_fields"
+      ],
+      "properties": {
+        "rule_id": {"$ref": "#/$defs/identifier"},
+        "severity": {"enum": ["low", "medium", "high", "critical"]},
+        "baseline_status": {"enum": ["detected", "not_detected", "visibility_gap"]},
+        "candidate_status": {"enum": ["detected", "not_detected", "visibility_gap"]},
+        "change": {"enum": ["unchanged", "changed", "improved", "regressed"]},
+        "baseline_field_coverage_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "candidate_field_coverage_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "missing_fields": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finding_id", "code", "severity", "title", "rule_id", "baseline",
+        "candidate", "remediation"
+      ],
+      "properties": {
+        "finding_id": {"$ref": "#/$defs/identifier"},
+        "code": {"$ref": "#/$defs/identifier"},
+        "severity": {"enum": ["low", "medium", "high", "critical"]},
+        "title": {"$ref": "#/$defs/identifier"},
+        "rule_id": {"type": ["string", "null"], "maxLength": 512},
+        "baseline": {"type": ["string", "number", "integer", "boolean", "null"]},
+        "candidate": {"type": ["string", "number", "integer", "boolean", "null"]},
+        "remediation": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {"type": "string", "minLength": 1, "maxLength": 512}
+        }
+      }
+    }
+  }
+}

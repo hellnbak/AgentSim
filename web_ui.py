@@ -33,6 +33,7 @@ from agentsim.defense import (
     DetectionSnapshot,
     OperatorAnnotation,
     analyze_gaps,
+    compare_flight_bundles,
     compare_detection_snapshots,
     generate_runbook,
     reconcile_detection_feedback,
@@ -60,6 +61,7 @@ from agentsim.storage import RunStore
 from agentsim.telemetry.normalization import normalize_records
 from agentsim.telemetry.assurance import assess_telemetry
 from agentsim.telemetry.investigation import investigate_telemetry
+from agentsim.telemetry import FlightRecorderBundle, flight_bundle_from_mapping
 from scenarios import (
     DEFAULT_BUNDLE_PATH,
     DEFAULT_COVERAGE_PATH,
@@ -74,6 +76,7 @@ from scenarios import (
 
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
 state_lock = threading.RLock()
 state_changed = threading.Condition(state_lock)
 log_queue: list[dict[str, Any]] = []
@@ -723,6 +726,48 @@ HTML_TEMPLATE = """
         .history-run > div > span { display: block; min-width: 0; overflow-wrap: anywhere; }
         .history-run span { color: var(--subtle); }
 
+        .flight-card { min-width: 0; overflow: hidden; }
+        .flight-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 18px; border-bottom: 1px solid var(--line); }
+        .flight-header h2 { margin: 5px 0 4px; font-size: 15px; }
+        .flight-header p { max-width: 760px; margin: 0; color: var(--subtle); font-size: 10px; line-height: 1.55; }
+        .flight-safety { flex: 0 0 auto; padding: 6px 8px; border: 1px solid rgba(66, 212, 181, 0.3); border-radius: 999px; color: var(--accent); background: var(--accent-soft); font-size: 8px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+        .flight-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+        .flight-pane { min-width: 0; padding: 15px 16px; }
+        .flight-pane + .flight-pane { border-left: 1px solid var(--line); }
+        .flight-pane h3 { margin: 0 0 5px; font-size: 12px; }
+        .flight-pane > p { margin: 0 0 12px; color: var(--subtle); font-size: 9px; line-height: 1.5; }
+        .flight-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
+        .file-button { min-height: 34px; display: inline-flex; align-items: center; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: var(--panel-soft); cursor: pointer; font-size: 9px; font-weight: 750; }
+        .file-button:hover { color: var(--text); border-color: var(--line-strong); }
+        .file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .flight-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
+        .flight-stat { min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: rgba(7, 16, 23, 0.38); }
+        .flight-stat strong { display: block; color: var(--blue); font: 700 14px/1 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; }
+        .flight-stat span { display: block; margin-top: 5px; color: var(--subtle); font-size: 7.5px; letter-spacing: 0.06em; text-transform: uppercase; }
+        .flight-result { max-height: 290px; min-height: 150px; overflow: auto; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: rgba(7, 16, 23, 0.32); }
+        .flight-result .debug-placeholder { min-height: 132px; }
+        .flight-row { display: grid; grid-template-columns: 118px minmax(0, 1fr) auto; gap: 8px; padding: 7px 8px; border-bottom: 1px solid rgba(32, 57, 71, 0.62); }
+        .flight-row:last-child { border-bottom: 0; }
+        .flight-row time { color: var(--subtle); font: 8px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .flight-row strong { color: var(--text); font-size: 8.5px; overflow-wrap: anywhere; }
+        .flight-row span { color: var(--blue); font: 8px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+        .ci-files { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 8px; }
+        .ci-file { min-width: 0; padding: 9px; border: 1px dashed var(--line-strong); border-radius: 9px; background: rgba(7, 16, 23, 0.28); }
+        .ci-file.file-button { display: block; }
+        .ci-file strong { display: block; margin-bottom: 5px; color: var(--muted); font-size: 8px; text-transform: uppercase; }
+        .ci-file span { display: block; color: var(--subtle); font: 8px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ci-toolbar { display: grid; grid-template-columns: minmax(120px, 1fr) auto; gap: 7px; margin-bottom: 10px; }
+        .ci-toolbar select { min-width: 0; height: 34px; border: 1px solid var(--line); border-radius: 8px; padding: 0 9px; color: var(--text); background: rgba(7, 16, 23, 0.62); font-size: 9px; }
+        .ci-gate { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: center; margin-bottom: 8px; padding: 9px; border: 1px solid var(--line); border-radius: 9px; background: rgba(7, 16, 23, 0.38); }
+        .ci-gate strong { color: var(--accent); font: 800 16px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+        .ci-gate.block strong { color: var(--red); }
+        .ci-gate.review strong { color: var(--amber); }
+        .ci-gate span { color: var(--muted); font-size: 8.5px; line-height: 1.45; }
+        .ci-finding { margin-bottom: 6px; padding: 8px 9px; border-left: 2px solid var(--amber); border-radius: 7px; background: var(--amber-soft); }
+        .ci-finding.critical, .ci-finding.high { border-left-color: var(--red); background: var(--red-soft); }
+        .ci-finding strong { display: block; color: var(--text); font-size: 8.5px; line-height: 1.4; }
+        .ci-finding span { display: block; margin-top: 4px; color: var(--subtle); font: 7.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
         .debugger-card { min-width: 0; overflow: hidden; }
         .debugger-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 17px 18px 14px; border-bottom: 1px solid var(--line); }
         .debugger-header h2 { margin: 5px 0 4px; font-size: 15px; }
@@ -938,6 +983,10 @@ HTML_TEMPLATE = """
         @media (max-width: 860px) {
             .topbar { padding: 0 18px; }
             .app-shell { padding: 16px 18px 26px; grid-template-columns: 1fr; }
+            .flight-grid { grid-template-columns: 1fr; }
+            .flight-pane + .flight-pane { border-left: 0; border-top: 1px solid var(--line); }
+            .flight-header { flex-direction: column; }
+            .flight-safety { align-self: flex-start; }
             .config-panel { position: static; }
             .config-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
             .run-mode-control, .scenario-controls, .profile-section, .control.iterations, details.advanced, .form-error, .action-row, .safety-note { grid-column: 1 / -1; }
@@ -971,6 +1020,8 @@ HTML_TEMPLATE = """
             .debugger-toolbar { grid-template-columns: 1fr; }
             .debug-outcome { margin-top: 10px; grid-template-columns: repeat(3, 1fr); }
             .debug-event { grid-template-columns: 28px 70px minmax(0, 1fr); gap: 5px; }
+            .flight-row { grid-template-columns: 1fr; gap: 3px; }
+            .ci-files, .ci-toolbar { grid-template-columns: 1fr; }
             .campaign-header { display: block; }
             .campaign-version { display: block; margin-top: 10px; }
             .campaign-controls { grid-template-columns: 1fr; }
@@ -1237,7 +1288,7 @@ HTML_TEMPLATE = """
                         <h2>Authorized campaign foundation</h2>
                         <p>Run a directed campaign through authorization, provider preparation, lifecycle-v3 ground truth, cleanup verification, defense recommendations, and persistent history. The dashboard exposes simulation only.</p>
                     </div>
-                    <span class="campaign-version">v1.5.0</span>
+                    <span class="campaign-version">v1.6.0</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="campaign-select" aria-label="Campaign">
@@ -1261,6 +1312,61 @@ HTML_TEMPLATE = """
                 </div>
             </section>
 
+            <section class="card flight-card" id="flight-recorder" aria-label="Agent security flight recorder and detection CI">
+                <div class="flight-header">
+                    <div>
+                        <div class="eyebrow">Record → inspect → twin → gate</div>
+                        <h2>Agent security flight recorder</h2>
+                        <p>Open a strict flight bundle, inspect agent and tool topology, measure telemetry assurance, export a pseudonymous synthetic twin, then compare a candidate recording against its baseline before merge.</p>
+                    </div>
+                    <span class="flight-safety">content values never recorded</span>
+                </div>
+                <div class="flight-grid">
+                    <div class="flight-pane">
+                        <h3>Human flight viewer</h3>
+                        <p>Structural metadata only: trace, agent, tool, causal links, policy outcomes, and timestamps. The server does not retain uploaded bundles.</p>
+                        <div class="flight-actions">
+                            <button class="primary-button campaign-run" id="flight-demo" type="button">Load safe demo</button>
+                            <label class="file-button">Open flight JSON<input id="flight-file" type="file" accept="application/json,.json"></label>
+                            <button class="tool-button" id="flight-twin-download" type="button" disabled>Download twin</button>
+                        </div>
+                        <div class="flight-stats" id="flight-stats">
+                            <div class="flight-stat"><strong>—</strong><span>events</span></div>
+                            <div class="flight-stat"><strong>—</strong><span>traces</span></div>
+                            <div class="flight-stat"><strong>—</strong><span>assurance</span></div>
+                            <div class="flight-stat"><strong>—</strong><span>findings</span></div>
+                        </div>
+                        <div class="flight-result" id="flight-result">
+                            <div class="debug-placeholder">Load the bundled demo or open a content-safe flight recorder JSON file.</div>
+                        </div>
+                    </div>
+                    <div class="flight-pane">
+                        <h3>Detection CI merge gate</h3>
+                        <p>Compare known malicious, benign, or unclassified baseline and candidate flights. Lost signals, new visibility gaps, false-positive drift, and telemetry regressions become actionable findings.</p>
+                        <div class="ci-files">
+                            <label class="ci-file file-button"><input id="ci-baseline-file" type="file" aria-label="Baseline flight JSON" accept="application/json,.json"><strong>Baseline flight</strong><span id="ci-baseline-name">Choose a flight</span></label>
+                            <label class="ci-file file-button"><input id="ci-candidate-file" type="file" aria-label="Candidate flight JSON" accept="application/json,.json"><strong>Candidate flight</strong><span id="ci-candidate-name">Choose a flight</span></label>
+                        </div>
+                        <div class="ci-toolbar">
+                            <select id="ci-classification" aria-label="Expected flight classification">
+                                <option value="malicious">Expected malicious</option>
+                                <option value="benign">Expected benign</option>
+                                <option value="unknown">Unclassified / review changes</option>
+                            </select>
+                            <button class="primary-button campaign-run" id="ci-run" type="button" disabled>Compare flights</button>
+                        </div>
+                        <div class="flight-actions">
+                            <button class="tool-button" id="ci-json-download" type="button" disabled>Report JSON</button>
+                            <button class="tool-button" id="ci-md-download" type="button" disabled>Markdown</button>
+                            <button class="tool-button" id="ci-sarif-download" type="button" disabled>SARIF</button>
+                        </div>
+                        <div class="flight-result" id="ci-result">
+                            <div class="debug-placeholder">Choose baseline and candidate flight bundles to evaluate the merge gate.</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section class="card campaign-card" id="defense-validation" aria-label="Detection and agentic validation">
                 <div class="campaign-header">
                     <div>
@@ -1268,7 +1374,7 @@ HTML_TEMPLATE = """
                         <h2>Validate visibility and agent safeguards</h2>
                         <p>Exercise a generated candidate against redacted synthetic telemetry, inspect field coverage and gaps, or run twenty-two instrumented malicious/benign agentic control pairs. Nothing here starts a host process or opens an external network connection.</p>
                     </div>
-                    <span class="campaign-version">v1.5 feedback-aware</span>
+                    <span class="campaign-version">v1.6 flight-aware</span>
                 </div>
                 <div class="campaign-controls">
                     <select id="v1-ability-select" aria-label="Detection validation ability">
@@ -1292,7 +1398,7 @@ HTML_TEMPLATE = """
                         <h2>Detection feedback and tuning drift</h2>
                         <p>Reconcile alerts to causal traces, verify structured operator annotations, and compare offline tuning candidates against malicious and benign baselines before any suppression is accepted.</p>
                     </div>
-                    <span class="campaign-version">v1.5 feedback-aware</span>
+                    <span class="campaign-version">v1.6 flight-aware</span>
                 </div>
                 <div class="feedback-toolbar">
                     <p>Fixed synthetic corpus · no prompts, free-form notes, processes, network, or configuration deployment.</p>
@@ -1551,6 +1657,21 @@ HTML_TEMPLATE = """
             campaignRun: document.getElementById("campaign-run"),
             campaignResult: document.getElementById("campaign-result"),
             campaignHistory: document.getElementById("campaign-history"),
+            flightDemo: document.getElementById("flight-demo"),
+            flightFile: document.getElementById("flight-file"),
+            flightTwinDownload: document.getElementById("flight-twin-download"),
+            flightStats: document.getElementById("flight-stats"),
+            flightResult: document.getElementById("flight-result"),
+            ciBaselineFile: document.getElementById("ci-baseline-file"),
+            ciCandidateFile: document.getElementById("ci-candidate-file"),
+            ciBaselineName: document.getElementById("ci-baseline-name"),
+            ciCandidateName: document.getElementById("ci-candidate-name"),
+            ciClassification: document.getElementById("ci-classification"),
+            ciRun: document.getElementById("ci-run"),
+            ciJsonDownload: document.getElementById("ci-json-download"),
+            ciMdDownload: document.getElementById("ci-md-download"),
+            ciSarifDownload: document.getElementById("ci-sarif-download"),
+            ciResult: document.getElementById("ci-result"),
             v1Ability: document.getElementById("v1-ability-select"),
             v1DetectionRun: document.getElementById("v1-detection-run"),
             v1AssuranceRun: document.getElementById("v1-assurance-run"),
@@ -1597,6 +1718,13 @@ HTML_TEMPLATE = """
             selectedDebugTrace: null,
             debugLoading: false,
             campaignLoading: false,
+            flightBundle: null,
+            flightTwin: null,
+            flightLoading: false,
+            ciBaseline: null,
+            ciCandidate: null,
+            ciArtifacts: null,
+            ciLoading: false,
             feedbackLoading: false,
             investigationData: null,
             selectedInvestigationTrace: null,
@@ -1732,6 +1860,200 @@ HTML_TEMPLATE = """
                 state.campaignLoading = false;
                 elements.campaignRun.disabled = false;
                 elements.campaignRun.textContent = "Run safe campaign";
+            }
+        }
+
+        function downloadValue(filename, content, type) {
+            const blob = new Blob([content], {type: type || "application/octet-stream"});
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+        }
+
+        async function readFlightFile(file) {
+            if (!file) throw new Error("Choose a flight recorder JSON file.");
+            if (file.size > 32 * 1024 * 1024) throw new Error("Flight files are limited to 32 MiB in the dashboard.");
+            const parsed = JSON.parse(await file.text());
+            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                throw new Error("Flight bundle must be a JSON object.");
+            }
+            return parsed;
+        }
+
+        function renderFlight(payload) {
+            const analysis = payload.analysis || {};
+            const recording = analysis.recording || {};
+            const assurance = analysis.assurance || {};
+            const investigation = analysis.investigation || {};
+            const investigationSummary = investigation.summary || {};
+            const findings = Array.isArray(investigation.findings) ? investigation.findings : [];
+            const values = [
+                [recording.events || 0, "events"],
+                [recording.traces || 0, "traces"],
+                [assurance.score == null ? "—" : assurance.score, "assurance"],
+                [investigationSummary.findings == null ? findings.length : investigationSummary.findings, "findings"]
+            ];
+            const stats = document.createDocumentFragment();
+            values.forEach(function (item) {
+                const stat = document.createElement("div");
+                stat.className = "flight-stat";
+                stat.appendChild(textNode("strong", "", item[0]));
+                stat.appendChild(textNode("span", "", item[1]));
+                stats.appendChild(stat);
+            });
+            elements.flightStats.replaceChildren(stats);
+            const timeline = Array.isArray(analysis.timeline) ? analysis.timeline : [];
+            if (!timeline.length) {
+                setCampaignPlaceholder(elements.flightResult, "The recording is valid but contains no events.");
+                return;
+            }
+            const fragment = document.createDocumentFragment();
+            timeline.forEach(function (event) {
+                const row = document.createElement("div");
+                row.className = "flight-row";
+                row.appendChild(textNode("time", "", event.timestamp));
+                row.appendChild(textNode("strong", "", event.event_type + " · " + event.agent_id));
+                row.appendChild(textNode("span", "", event.tool_name || event.outcome || "observed"));
+                fragment.appendChild(row);
+            });
+            if (analysis.timeline_truncated) {
+                fragment.appendChild(textNode("div", "debug-placeholder", "Timeline preview limited to 2,000 events; exported twins retain the complete recording."));
+            }
+            elements.flightResult.replaceChildren(fragment);
+        }
+
+        async function analyzeFlight(bundle) {
+            const response = await fetch("/api/v1/flight/analyze", {
+                method: "POST",
+                headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                body: JSON.stringify({bundle: bundle})
+            });
+            if (!response.ok) throw new Error("The server rejected this flight bundle. Verify its digest and content-safe schema.");
+            const payload = await response.json();
+            state.flightBundle = bundle;
+            state.flightTwin = payload.synthetic_twin || [];
+            elements.flightTwinDownload.disabled = !state.flightTwin.length;
+            renderFlight(payload);
+        }
+
+        async function loadFlightDemo() {
+            if (state.flightLoading) return;
+            state.flightLoading = true;
+            elements.flightDemo.disabled = true;
+            setCampaignPlaceholder(elements.flightResult, "Building a content-safe reference flight…");
+            try {
+                const response = await fetch("/api/v1/flight/demo", {
+                    method: "POST",
+                    headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                    body: JSON.stringify({fixture_id: "indirect-prompt-injection"})
+                });
+                if (!response.ok) throw new Error();
+                const payload = await response.json();
+                state.flightBundle = payload.bundle;
+                state.flightTwin = payload.synthetic_twin || [];
+                state.ciBaseline = payload.bundle;
+                state.ciCandidate = payload.bundle;
+                elements.ciBaselineName.textContent = "safe-demo-baseline.json";
+                elements.ciCandidateName.textContent = "safe-demo-candidate.json";
+                elements.ciClassification.value = "malicious";
+                elements.ciRun.disabled = false;
+                elements.flightTwinDownload.disabled = !state.flightTwin.length;
+                renderFlight(payload);
+                showToast("Safe flight loaded; Detection CI is ready to try");
+            } catch (_error) {
+                setCampaignPlaceholder(elements.flightResult, "Unable to build the safe reference flight.");
+            } finally {
+                state.flightLoading = false;
+                elements.flightDemo.disabled = false;
+            }
+        }
+
+        async function loadViewerFlight() {
+            try {
+                setCampaignPlaceholder(elements.flightResult, "Validating and analyzing the flight bundle…");
+                await analyzeFlight(await readFlightFile(elements.flightFile.files[0]));
+                showToast("Flight bundle validated");
+            } catch (error) {
+                setCampaignPlaceholder(elements.flightResult, error.message || "Unable to read the flight bundle.");
+            } finally {
+                elements.flightFile.value = "";
+            }
+        }
+
+        async function loadCiFile(kind, file) {
+            try {
+                const bundle = await readFlightFile(file);
+                if (kind === "baseline") {
+                    state.ciBaseline = bundle;
+                    elements.ciBaselineName.textContent = file.name;
+                    if (["malicious", "benign", "unknown"].includes(bundle.classification)) {
+                        elements.ciClassification.value = bundle.classification;
+                    }
+                } else {
+                    state.ciCandidate = bundle;
+                    elements.ciCandidateName.textContent = file.name;
+                }
+                elements.ciRun.disabled = !(state.ciBaseline && state.ciCandidate);
+                showToast((kind === "baseline" ? "Baseline" : "Candidate") + " flight selected");
+            } catch (error) {
+                showToast(error.message || "Unable to read flight JSON");
+            }
+        }
+
+        function renderDetectionCi(payload) {
+            const report = payload.report || {};
+            const summary = report.summary || {};
+            const fragment = document.createDocumentFragment();
+            const gate = document.createElement("div");
+            gate.className = "ci-gate " + (report.status || "review");
+            gate.appendChild(textNode("strong", "", report.status || "review"));
+            gate.appendChild(textNode("span", "", "Score " + (report.score == null ? "—" : report.score) + "/100 · " + (summary.regressions || 0) + " regressions · " + (summary.blocking_findings || 0) + " blocking findings"));
+            fragment.appendChild(gate);
+            const findings = Array.isArray(report.findings) ? report.findings : [];
+            if (!findings.length) {
+                fragment.appendChild(textNode("div", "debug-placeholder", "No detection or telemetry regressions were found."));
+            } else {
+                findings.forEach(function (finding) {
+                    const row = document.createElement("div");
+                    row.className = "ci-finding " + finding.severity;
+                    row.appendChild(textNode("strong", "", finding.severity.toUpperCase() + " · " + finding.title));
+                    row.appendChild(textNode("span", "", finding.rule_id || finding.code));
+                    fragment.appendChild(row);
+                });
+            }
+            elements.ciResult.replaceChildren(fragment);
+        }
+
+        async function runDetectionCi() {
+            if (state.ciLoading || !state.ciBaseline || !state.ciCandidate) return;
+            state.ciLoading = true;
+            elements.ciRun.disabled = true;
+            setCampaignPlaceholder(elements.ciResult, "Comparing detection behavior and telemetry assurance…");
+            try {
+                const response = await fetch("/api/v1/detection/ci", {
+                    method: "POST",
+                    headers: {"Accept": "application/json", "Content-Type": "application/json", "X-AgentSim-Form-Token": FORM_TOKEN},
+                    body: JSON.stringify({
+                        baseline: state.ciBaseline,
+                        candidate: state.ciCandidate,
+                        expected_classification: elements.ciClassification.value
+                    })
+                });
+                if (!response.ok) throw new Error("The comparison was rejected. Confirm both files are valid flights with compatible classifications.");
+                state.ciArtifacts = await response.json();
+                [elements.ciJsonDownload, elements.ciMdDownload, elements.ciSarifDownload].forEach(function (button) { button.disabled = false; });
+                renderDetectionCi(state.ciArtifacts);
+                showToast("Detection CI finished: " + state.ciArtifacts.report.status.toUpperCase());
+            } catch (error) {
+                setCampaignPlaceholder(elements.ciResult, error.message || "Detection CI failed.");
+            } finally {
+                state.ciLoading = false;
+                elements.ciRun.disabled = !(state.ciBaseline && state.ciCandidate);
             }
         }
 
@@ -2819,6 +3141,32 @@ HTML_TEMPLATE = """
             loadDebugSummary(true);
         });
         elements.campaignRun.addEventListener("click", runSafeCampaign);
+        elements.flightDemo.addEventListener("click", loadFlightDemo);
+        elements.flightFile.addEventListener("change", loadViewerFlight);
+        elements.flightTwinDownload.addEventListener("click", function () {
+            if (!state.flightTwin) return;
+            downloadValue(
+                "agentsim-synthetic-twin.jsonl",
+                state.flightTwin.map(function (event) { return JSON.stringify(event); }).join("\\n") + "\\n",
+                "application/x-ndjson"
+            );
+        });
+        elements.ciBaselineFile.addEventListener("change", function () {
+            loadCiFile("baseline", elements.ciBaselineFile.files[0]);
+        });
+        elements.ciCandidateFile.addEventListener("change", function () {
+            loadCiFile("candidate", elements.ciCandidateFile.files[0]);
+        });
+        elements.ciRun.addEventListener("click", runDetectionCi);
+        elements.ciJsonDownload.addEventListener("click", function () {
+            if (state.ciArtifacts) downloadValue("agentsim-detection-ci.json", JSON.stringify(state.ciArtifacts.report, null, 2) + "\\n", "application/json");
+        });
+        elements.ciMdDownload.addEventListener("click", function () {
+            if (state.ciArtifacts) downloadValue("agentsim-detection-ci.md", state.ciArtifacts.markdown, "text/markdown");
+        });
+        elements.ciSarifDownload.addEventListener("click", function () {
+            if (state.ciArtifacts) downloadValue("agentsim-detection-ci.sarif", JSON.stringify(state.ciArtifacts.sarif, null, 2) + "\\n", "application/sarif+json");
+        });
         elements.v1DetectionRun.addEventListener("click", runV1Detection);
         elements.v1AssuranceRun.addEventListener("click", runV1Assurance);
         elements.v1LabRun.addEventListener("click", runV1Lab);
@@ -2953,7 +3301,7 @@ def api_foundation_catalog() -> Response:
     history = RunStore(CAMPAIGN_DATABASE_PATH).history(25) if CAMPAIGN_DATABASE_PATH.exists() else []
     return jsonify(
         {
-            "version": "1.5.0",
+            "version": "1.6.0",
             "workflow": ["emulate", "observe", "detect", "defend", "retest"],
             "capabilities": {
                 "offline_collectors": ["jsonl", "otel", "otel_genai", "sysmon", "auditd", "cloudtrail", "crowdstrike", "splunk", "elastic", "sentinel", "logscale", "panther", "graylog", "agent_runtime", "mcp_audit"],
@@ -2963,7 +3311,8 @@ def api_foundation_catalog() -> Response:
                 "agentic_fixtures": len(list_fixtures()),
                 "external_adapters": list(adapter_names()),
                 "external_execution_supported_by_core": False,
-                "signed_builtin_content": True,
+                "release_signed_foundation_content": True,
+                "checksum_review_preview_content": True,
                 "plugin_api_version": "1.0",
                 "reference_agent_lab": True,
                 "telemetry_assurance": True,
@@ -2972,6 +3321,8 @@ def api_foundation_catalog() -> Response:
                 "detection_pack_rules": len(load_detection_pack().rules),
                 "detection_feedback_reconciliation": True,
                 "detection_tuning_drift": True,
+                "agent_security_flight_recorder": True,
+                "agent_detection_ci": True,
             },
             "abilities": [
                 {
@@ -2982,6 +3333,8 @@ def api_foundation_catalog() -> Response:
                     "production_allowed": ability.production_allowed,
                     "detection_objectives": list(ability.detection_objectives),
                     "defenses": list(ability.defenses),
+                    "trust": ability.metadata.get("trust", "release-signed"),
+                    "simulation_only": ability.execution.supported_providers == ("simulate",),
                 }
                 for ability in ABILITIES.values()
             ],
@@ -2992,10 +3345,139 @@ def api_foundation_catalog() -> Response:
                     "objective": campaign.objective,
                     "ability_count": len(campaign.steps),
                     "authorization_required": campaign.authorization_required,
+                    "trust": campaign.metadata.get("trust", "release-signed"),
+                    "simulation_only": campaign.metadata.get("simulation_only") is True,
+                    "directed": campaign.metadata.get("directed") is True,
                 }
                 for campaign in CAMPAIGNS.values()
             ],
             "history": history,
+        }
+    )
+
+
+def _flight_analysis(bundle: FlightRecorderBundle) -> dict[str, object]:
+    events = bundle.normalized_events
+    assurance = assess_telemetry(events)
+    investigation = investigate_telemetry(events)
+    sweep = sweep_detection_pack(load_detection_pack(), events)
+    return {
+        "recording": bundle.to_dict()["summary"],
+        "assurance": assurance.to_dict(),
+        "investigation": investigation.to_dict(),
+        "sweep": sweep.to_dict(),
+        "timeline": [
+            {
+                "timestamp": event.timestamp,
+                "event_id": event.event_id,
+                "event_type": event.event_type,
+                "trace_id": event.trace_id,
+                "agent_id": event.agent_id,
+                "tool_name": event.tool_name,
+                "outcome": event.outcome,
+                "parent_event_id": event.parent_event_id,
+            }
+            for event in bundle.events[:2000]
+        ],
+        "timeline_truncated": len(bundle.events) > 2000,
+        "content_values_recorded": False,
+    }
+
+
+@app.route("/api/v1/flight/demo", methods=["POST"])
+def api_flight_demo() -> Response:
+    """Return a content-safe malicious reference flight for UI exploration."""
+
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400, description="JSON request body is required")
+    fixture_id = payload.get("fixture_id", "indirect-prompt-injection")
+    if not isinstance(fixture_id, str):
+        abort(400, description="fixture_id must be a string")
+    try:
+        run = run_reference_fixture(fixture_id)
+    except ValueError as exc:
+        abort(400, description=str(exc))
+    selected = tuple(
+        event
+        for event in run.events
+        if event.attributes.get("variant", "malicious") == "malicious"
+    ) or tuple(run.events)
+    bundle = FlightRecorderBundle(
+        recorder_id=f"demo-{run.run_id}",
+        source_runtime="agentsim-reference-agent",
+        classification="malicious",
+        started_at=selected[0].timestamp,
+        ended_at=selected[-1].timestamp,
+        events=selected,
+        metadata={"fixture_id": fixture_id, "synthetic": True},
+    )
+    return jsonify(
+        {
+            "execution_mode": "synthetic_flight_demo",
+            "process_started": False,
+            "network_opened": False,
+            "bundle": bundle.to_dict(),
+            "analysis": _flight_analysis(bundle),
+            "synthetic_twin": [event.to_dict() for event in bundle.synthetic_twin()],
+        }
+    )
+
+
+@app.route("/api/v1/flight/analyze", methods=["POST"])
+def api_flight_analyze() -> Response:
+    """Analyze an uploaded strict flight bundle without retaining it server-side."""
+
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or not isinstance(payload.get("bundle"), dict):
+        abort(400, description="bundle must be a JSON object")
+    try:
+        bundle = flight_bundle_from_mapping(payload["bundle"])
+    except (TypeError, ValueError) as exc:
+        abort(400, description=str(exc))
+    return jsonify(
+        {
+            "analysis": _flight_analysis(bundle),
+            "synthetic_twin": [event.to_dict() for event in bundle.synthetic_twin()],
+            "content_values_recorded": False,
+        }
+    )
+
+
+@app.route("/api/v1/detection/ci", methods=["POST"])
+def api_detection_ci() -> Response:
+    """Compare two strict flight bundles and return a merge-gate report."""
+
+    _validate_api_token()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        abort(400, description="JSON request body is required")
+    if not isinstance(payload.get("baseline"), dict) or not isinstance(
+        payload.get("candidate"), dict
+    ):
+        abort(400, description="baseline and candidate must be flight bundle objects")
+    classification = payload.get("expected_classification")
+    if classification is not None and classification not in {"malicious", "benign", "unknown"}:
+        abort(400, description="expected_classification is invalid")
+    try:
+        baseline = flight_bundle_from_mapping(payload["baseline"])
+        candidate = flight_bundle_from_mapping(payload["candidate"])
+        report = compare_flight_bundles(
+            baseline,
+            candidate,
+            pack=load_detection_pack(),
+            expected_classification=classification,
+        )
+    except (TypeError, ValueError) as exc:
+        abort(400, description=str(exc))
+    return jsonify(
+        {
+            "report": report.to_dict(),
+            "markdown": report.to_markdown(),
+            "sarif": report.to_sarif(),
+            "content_values_recorded": False,
         }
     )
 
@@ -3260,7 +3742,7 @@ def api_v1_reference_lab_run() -> Response:
         abort(400, description=str(exc))
     return jsonify(
         {
-            "version": "1.5.0",
+            "version": "1.6.0",
             "passed": all(result.passed for result in results),
             "results": [result.to_dict() for result in results],
         }

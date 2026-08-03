@@ -35,11 +35,40 @@ third-party content file from bypassing command review.
 
 All built-in abilities are `production_allowed: false`.
 
+## Endpoint and cloud control-validation preview
+
+Version 1.6 also ships eleven checksum-protected preview abilities. They are
+restricted to `simulate`, deny network access, cannot change state, and carry
+`metadata.trust: checksum-review-preview`. Their `catalog://preview/...`
+references are intent identifiers for lifecycle evidence and cannot be
+resolved by the local or Docker providers.
+
+| Ability | ATT&CK / ATLAS | Defensive focus |
+| --- | --- | --- |
+| `endpoint.execution.interpreter-chain` | T1059 / AML.T0051 | Agent-to-process ancestry |
+| `endpoint.persistence.autostart-proposal` | T1547 | Approval and autostart policy |
+| `endpoint.credential.decoy-access` | T1555, T1552 | Decoy access correlation |
+| `endpoint.collection.archive-staging` | T1560 | Sensitive sequence and file intent |
+| `endpoint.defense.monitoring-tamper-proposal` | T1562.001 | Sensor-change denial |
+| `cloud.identity.role-enumeration` | T1087.004 | Cloud principal inventory burst |
+| `cloud.secrets.decoy-access` | T1555 / AML.T0057 | Non-secret cloud decoy access |
+| `cloud.identity.policy-change-proposal` | T1098 | Privilege-expansion intent |
+| `cloud.storage.public-access-proposal` | T1530 | Public-access policy intent |
+| `cloud.audit.logging-disable-proposal` | T1562.008 | Cloud audit protection |
+| `cloud.compute.metadata-access` | T1552.005 / AML.T0048 | Metadata-destination policy |
+
+Names ending in `-proposal` describe a policy-boundary event. They do not
+perform the proposed change. Decoy abilities contain no credential or secret
+value, archive staging reads and creates no file, and metadata access opens no
+socket.
+
 ## Integrity
 
 Every ability pack must include a SHA-256 digest of the canonical abilities
-array. Built-in packs and the reviewed command catalog also include an RSA
-PKCS#1 v1.5 SHA-256 signature tied to the content kind, ID, key, and digest.
+array. Release-foundation packs and the reviewed command catalog also include
+an RSA PKCS#1 v1.5 SHA-256 signature tied to the content kind, ID, key, and
+digest. Checksum-only preview content is visibly labeled and simulation-only;
+it is not represented as trusted executable content.
 The reviewed command catalog remains an independent executable trust boundary.
 Its machine-readable contract is
 [`schemas/command-catalog.schema.json`](schemas/command-catalog.schema.json).

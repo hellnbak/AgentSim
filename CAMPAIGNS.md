@@ -23,6 +23,26 @@ is simulation-only and does not contact a cloud service. Higher-risk cloud
 emulation can be represented by a version-pinned Stratus plan and executed only
 through a separately reviewed plugin in a named sandbox.
 
+## Directed control-validation preview
+
+Four v1.6 campaigns add explicit dependency graphs while remaining
+simulation-only:
+
+- `endpoint-agent-execution-chain` links interpreter ancestry, credential
+  decoy access, synthetic archive staging, and monitoring-tamper intent.
+- `endpoint-persistence-control-validation` joins identity and interpreter
+  context before autostart and monitoring policy proposals.
+- `cloud-identity-to-impact` branches from cloud role discovery into decoy
+  secret access and privilege intent, joins at public-access intent, and ends
+  at an audit-logging control.
+- `hybrid-agent-control-chain` correlates endpoint interpreter behavior,
+  instance-metadata intent, cloud identity discovery, decoy access, and blocked
+  cloud impact across trace identity.
+
+These campaigns are checksum-protected review previews, not release-signed
+executable content. Every preview ability is restricted to the simulation
+provider, network denied, production locked, and state-change free.
+
 ## Workflow
 
 ```bash

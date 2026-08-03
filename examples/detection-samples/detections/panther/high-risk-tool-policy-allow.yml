@@ -1,0 +1,14 @@
+AnalysisType: rule
+DisplayName: "High-risk agent tool request received an allow decision"
+Enabled: false
+Filename: high-risk-tool-policy-allow.py
+RuleID: agentsim.sample.high-risk-tool-policy-allow
+Severity: High
+LogTypes:
+  - AgentSim.AgentEvent
+Tags:
+  - AgentSim
+  - Sample
+Description: "[TUNING REQUIRED] Detects an allow policy decision attached to a high-risk agent tool request for environment-specific review."
+Runbook: Validate the trace, policy decision, identity binding, and synthetic status before response.
+Threshold: 1

@@ -1,0 +1,2 @@
+// AGENTSIM STATUS: SAMPLE - TUNING AND HUMAN REVIEW REQUIRED
+streams:<agent-runtime-stream-id> AND event_type:"agent.goal.integrity" AND goal_integrity_valid:false

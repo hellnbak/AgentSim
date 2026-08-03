@@ -1,0 +1,2 @@
+// AGENTSIM STATUS: SAMPLE - TUNING AND HUMAN REVIEW REQUIRED
+any where event_type == "agent.goal.integrity" and goal_integrity_valid == false

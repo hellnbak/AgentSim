@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import io
 import json
 import os
 import platform
@@ -10,6 +11,8 @@ import re
 import secrets
 import threading
 import time
+import tempfile
+import zipfile
 from datetime import datetime, timedelta, timezone
 from importlib import resources
 from pathlib import Path
@@ -46,7 +49,9 @@ from agentsim.defense import (
 )
 from agentsim.detection import (
     analyze_coverage,
+    detection_sample_catalog,
     evaluate_rule,
+    export_detection_sample_library,
     generate_candidate,
     load_detection_pack,
     sweep_detection_pack,
@@ -757,6 +762,8 @@ HTML_TEMPLATE = """
         .flight-stat { min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: rgba(7, 16, 23, 0.38); }
         .flight-stat strong { display: block; color: var(--blue); font: 700 14px/1 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; }
         .flight-stat span { display: block; margin-top: 5px; color: var(--subtle); font-size: 7.5px; letter-spacing: 0.06em; text-transform: uppercase; }
+        .sample-library { margin: 14px 18px 0; }
+        .sample-library .flight-stats { margin-top: 10px; }
         .flight-result { max-height: 290px; min-height: 150px; overflow: auto; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: rgba(7, 16, 23, 0.32); }
         .flight-result .debug-placeholder { min-height: 132px; }
         .flight-row { display: grid; grid-template-columns: 118px minmax(0, 1fr) auto; gap: 8px; padding: 7px 8px; border-bottom: 1px solid rgba(32, 57, 71, 0.62); }
@@ -1053,6 +1060,7 @@ HTML_TEMPLATE = """
             .investigation-node-flags { grid-column: 1 / -1; justify-content: flex-start; }
             .feedback-toolbar { align-items: stretch; flex-direction: column; }
             .feedback-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .sample-library .flight-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .feedback-row { grid-template-columns: 1fr; }
             .metric { min-height: 75px; }
             .event-row { grid-template-columns: 48px 70px minmax(0, 1fr); gap: 6px; padding: 8px 10px; }
@@ -1453,6 +1461,17 @@ HTML_TEMPLATE = """
                     <button class="primary-button campaign-run" id="v1-detection-run" type="button">Validate detection</button>
                     <button class="tool-button" id="v1-assurance-run" type="button">Check telemetry assurance</button>
                     <button class="tool-button" id="v1-lab-run" type="button">Run reference lab</button>
+                </div>
+                <div class="layer-box sample-library" id="detection-sample-library">
+                    <strong>Cross-SIEM detection and alert samples</strong>
+                    <p>Six agent-attack families with malicious/benign controls, examples for every supported detection format, and synthetic trace-linked alerts for every live connector. Native rules require field mapping, tuning, and human review.</p>
+                    <div class="flight-stats">
+                        <div class="flight-stat"><strong>{{ detection_samples.sample_count }}</strong><span>attack families</span></div>
+                        <div class="flight-stat"><strong>{{ detection_samples.detection_file_count }}</strong><span>detection files</span></div>
+                        <div class="flight-stat"><strong>{{ detection_samples.alert_record_count }}</strong><span>alert records</span></div>
+                        <div class="flight-stat"><strong>{{ detection_samples.alert_profile_count }}</strong><span>alert profiles</span></div>
+                    </div>
+                    <a class="download-button" id="download-detection-samples" href="/download-detection-samples">Download sample library ZIP</a>
                 </div>
                 <div class="campaign-result" id="v1-validation-result">
                     <div class="debug-placeholder">Choose an ability to inspect a candidate rule, evidence, field coverage, and defensive guidance.</div>
@@ -3570,6 +3589,7 @@ def index() -> str:
         abilities=[ABILITIES[ability_id] for ability_id in sorted(ABILITIES)],
         scenario_counts=scenario_counts,
         scenario_total=len(SCENARIOS),
+        detection_samples=detection_sample_catalog(),
     )
 
 
@@ -3611,6 +3631,7 @@ def api_foundation_catalog() -> Response:
                 "signed_community_pack_review": True,
                 "pack_provenance": True,
                 "reviewed_lab_artifact_references": True,
+                "detection_sample_library": detection_sample_catalog()["sample_count"],
             },
             "abilities": [
                 {
@@ -3649,6 +3670,13 @@ def api_portable_mapping_catalog() -> Response:
     """Expose the version-pinned field catalog without any event content."""
 
     return jsonify(mapping_catalog())
+
+
+@app.route("/api/v1/detection/samples")
+def api_detection_sample_catalog() -> Response:
+    """Expose the synthetic sample coverage matrix without writing files."""
+
+    return jsonify(detection_sample_catalog())
 
 
 @app.route("/api/v1/telemetry/mapping-demo", methods=["POST"])
@@ -4389,6 +4417,33 @@ def download_layer() -> Response:
         mimetype="application/json",
         as_attachment=True,
         download_name="agent_sim_layer.json",
+        max_age=0,
+    )
+
+
+@app.route("/download-detection-samples")
+def download_detection_samples() -> Response:
+    """Build a deterministic sample ZIP in memory without contacting a SIEM."""
+
+    buffer = io.BytesIO()
+    with tempfile.TemporaryDirectory() as directory:
+        root = export_detection_sample_library(Path(directory) / "samples")
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for path in sorted(root.rglob("*")):
+                if path.is_file():
+                    entry = zipfile.ZipInfo(
+                        f"agentsim-detection-samples/{path.relative_to(root).as_posix()}",
+                        date_time=(2026, 8, 2, 20, 0, 0),
+                    )
+                    entry.compress_type = zipfile.ZIP_DEFLATED
+                    entry.external_attr = 0o644 << 16
+                    archive.writestr(entry, path.read_bytes())
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="agentsim-detection-samples.zip",
         max_age=0,
     )
 

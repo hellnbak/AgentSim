@@ -1,0 +1,4 @@
+// AGENTSIM STATUS: SAMPLE - TUNING AND HUMAN REVIEW REQUIRED
+AgentSimEvents
+| where event_type == "agent.authorization.validated" and auth_audience_valid == false
+| project timestamp, trace_id, agent_id, event_id, event_type, policy_decision, tool_name, tool_risk

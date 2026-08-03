@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0",
+  "kind": "detection-sample-catalog",
+  "catalog_id": "agentsim.detection-samples",
+  "version": "1.0.0",
+  "description": "Content-safe detection and alert examples for agent security telemetry.",
+  "deployment_status": "tuning_required",
+  "synthetic": true,
+  "content_values_recorded": false,
+  "samples": [
+    {
+      "sample_id": "untrusted-high-risk-tool",
+      "rule_id": "agentsim.sample.untrusted-high-risk-tool",
+      "scenario_id": "indirect-prompt-injection",
+      "title": "Untrusted input reached a high-risk tool request",
+      "description": "Detects a high-risk tool request whose causal input was explicitly classified as untrusted.",
+      "severity": "high",
+      "mappings": ["OWASP LLM01 Prompt Injection", "OWASP LLM06 Excessive Agency"],
+      "conditions": [
+        {"field": "event_type", "value": "agent.tool.requested"},
+        {"field": "input_trust", "value": "untrusted"},
+        {"field": "tool_risk", "value": "high"}
+      ],
+      "benign_overrides": {"input_trust": "trusted"}
+    },
+    {
+      "sample_id": "invalid-authorization-audience",
+      "rule_id": "agentsim.sample.invalid-authorization-audience",
+      "scenario_id": "mcp-identity-abuse",
+      "title": "Agent or MCP authorization audience validation failed",
+      "description": "Detects an explicit authorization audience mismatch before a delegated or MCP action.",
+      "severity": "critical",
+      "mappings": ["OWASP ASI03 Identity and Privilege Abuse", "MCP authorization"],
+      "conditions": [
+        {"field": "event_type", "value": "agent.authorization.validated"},
+        {"field": "auth_audience_valid", "value": false}
+      ],
+      "benign_overrides": {"auth_audience_valid": true}
+    },
+    {
+      "sample_id": "memory-provenance-failure",
+      "rule_id": "agentsim.sample.memory-provenance-failure",
+      "scenario_id": "memory-context-poisoning",
+      "title": "Agent memory write failed provenance validation",
+      "description": "Detects a memory write whose source provenance could not be validated.",
+      "severity": "high",
+      "mappings": ["OWASP ASI06 Memory and Context Poisoning"],
+      "conditions": [
+        {"field": "event_type", "value": "agent.memory.written"},
+        {"field": "memory_provenance_valid", "value": false}
+      ],
+      "benign_overrides": {"memory_provenance_valid": true}
+    },
+    {
+      "sample_id": "goal-integrity-failure",
+      "rule_id": "agentsim.sample.goal-integrity-failure",
+      "scenario_id": "cross-agent-goal-fingerprint-drift",
+      "title": "Agent goal integrity validation failed",
+      "description": "Detects a goal checkpoint whose immutable fingerprint or authorized intent did not validate.",
+      "severity": "critical",
+      "mappings": ["OWASP ASI01 Agent Goal Hijack"],
+      "conditions": [
+        {"field": "event_type", "value": "agent.goal.integrity"},
+        {"field": "goal_integrity_valid", "value": false}
+      ],
+      "benign_overrides": {"goal_integrity_valid": true}
+    },
+    {
+      "sample_id": "delegation-identity-failure",
+      "rule_id": "agentsim.sample.delegation-identity-failure",
+      "scenario_id": "delegation-identity-drift",
+      "title": "Delegated agent identity binding failed",
+      "description": "Detects an inter-agent delegation checkpoint with an invalid identity binding.",
+      "severity": "critical",
+      "mappings": ["OWASP ASI03 Identity and Privilege Abuse", "OWASP ASI07 Insecure Inter-Agent Communication"],
+      "conditions": [
+        {"field": "event_type", "value": "agent.delegation.accepted"},
+        {"field": "identity_binding_valid", "value": false}
+      ],
+      "benign_overrides": {"identity_binding_valid": true}
+    },
+    {
+      "sample_id": "high-risk-tool-policy-allow",
+      "rule_id": "agentsim.sample.high-risk-tool-policy-allow",
+      "scenario_id": "planner-executor-policy-gap",
+      "title": "High-risk agent tool request received an allow decision",
+      "description": "Detects an allow policy decision attached to a high-risk agent tool request for environment-specific review.",
+      "severity": "high",
+      "mappings": ["OWASP ASI02 Tool Misuse", "OWASP LLM06 Excessive Agency"],
+      "conditions": [
+        {"field": "event_type", "value": "agent.policy.decision"},
+        {"field": "tool_risk", "value": "high"},
+        {"field": "policy_decision", "value": "allow"}
+      ],
+      "benign_overrides": {"policy_decision": "deny"}
+    }
+  ]
+}

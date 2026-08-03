@@ -1,0 +1,3 @@
+# AGENTSIM STATUS: SAMPLE - TUNING AND HUMAN REVIEW REQUIRED
+index=<agent_runtime_index> sourcetype=agentsim:agent_event event_type="agent.memory.written" AND memory_provenance_valid="false"
+| table _time trace_id agent_id event_id event_type policy_decision tool_name tool_risk

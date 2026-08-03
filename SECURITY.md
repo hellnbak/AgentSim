@@ -77,6 +77,15 @@ assurance must not retain raw invalid timestamps or content-bearing values, and
 must report—rather than hide—generated identities, broken causal links, and
 redaction-boundary violations.
 
+Detection and alert samples are synthetic test data, not production content.
+Generated vendor detections must stay visibly review/tuning required and may
+not be deployed by AgentSim. Sample alerts must retain synthetic and
+content-free facts, stable trace/source-event correlation, bounded scalar
+values, and placeholder targets. Treat the inclusion of a credential, prompt,
+message, tool argument/result, response, token, secret, payload, production
+destination, automatic vendor mutation, or silent overwrite of an existing
+export as a security issue.
+
 Portable OTel/ECS/OCSF records are untrusted input. Profile pins, record-size
 limits, content redaction, native-versus-extension separation, and
 cross-runtime invariant checks must fail closed. Mapping an AgentSim-only field

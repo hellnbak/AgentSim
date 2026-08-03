@@ -1,0 +1,34 @@
+{
+  "description": "Detects a goal checkpoint whose immutable fingerprint or authorized intent did not validate.",
+  "expression": {
+    "predicates": [
+      {
+        "field": "event_type",
+        "operator": "eq",
+        "value": "agent.goal.integrity"
+      },
+      {
+        "field": "goal_integrity_valid",
+        "operator": "eq",
+        "value": false
+      }
+    ],
+    "type": "match"
+  },
+  "group_by": [
+    "trace_id"
+  ],
+  "mappings": [
+    "OWASP ASI01 Agent Goal Hijack"
+  ],
+  "metadata": {
+    "content_values_required": false,
+    "deployment_status": "tuning_required",
+    "sample_id": "goal-integrity-failure",
+    "scenario_id": "cross-agent-goal-fingerprint-drift"
+  },
+  "name": "Agent goal integrity validation failed",
+  "rule_id": "agentsim.sample.goal-integrity-failure",
+  "schema_version": "1.0",
+  "severity": "critical"
+}

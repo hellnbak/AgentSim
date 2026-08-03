@@ -1,0 +1,34 @@
+{
+  "description": "Detects a memory write whose source provenance could not be validated.",
+  "expression": {
+    "predicates": [
+      {
+        "field": "event_type",
+        "operator": "eq",
+        "value": "agent.memory.written"
+      },
+      {
+        "field": "memory_provenance_valid",
+        "operator": "eq",
+        "value": false
+      }
+    ],
+    "type": "match"
+  },
+  "group_by": [
+    "trace_id"
+  ],
+  "mappings": [
+    "OWASP ASI06 Memory and Context Poisoning"
+  ],
+  "metadata": {
+    "content_values_required": false,
+    "deployment_status": "tuning_required",
+    "sample_id": "memory-provenance-failure",
+    "scenario_id": "memory-context-poisoning"
+  },
+  "name": "Agent memory write failed provenance validation",
+  "rule_id": "agentsim.sample.memory-provenance-failure",
+  "schema_version": "1.0",
+  "severity": "high"
+}

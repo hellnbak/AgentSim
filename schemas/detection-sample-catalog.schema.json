@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/detection-sample-catalog.schema.json",
+  "title": "AgentSim detection sample catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "catalog_id", "version", "description",
+    "deployment_status", "synthetic", "content_values_recorded",
+    "execution_performed", "sample_count", "detection_format_count",
+    "alert_profile_count", "detection_rule_variant_count",
+    "detection_file_count", "alert_record_count", "detection_formats",
+    "alert_profiles", "samples"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "detection-sample-catalog"},
+    "catalog_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "deployment_status": {"const": "tuning_required"},
+    "synthetic": {"const": true},
+    "content_values_recorded": {"const": false},
+    "execution_performed": {"const": false},
+    "sample_count": {"type": "integer", "minimum": 1, "maximum": 100},
+    "detection_format_count": {"type": "integer", "minimum": 1},
+    "alert_profile_count": {"type": "integer", "minimum": 1},
+    "detection_rule_variant_count": {"type": "integer", "minimum": 1},
+    "detection_file_count": {"type": "integer", "minimum": 1},
+    "alert_record_count": {"type": "integer", "minimum": 1},
+    "detection_formats": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["generic", "sigma", "kql", "splunk", "crowdstrike", "elastic", "panther", "graylog"]}
+    },
+    "alert_profiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["generic", "splunk", "elastic", "crowdstrike", "sentinel", "panther", "graylog"]}
+    },
+    "samples": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/sample"}
+    }
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"},
+    "scalar": {"type": ["string", "boolean", "integer", "number"]},
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_id", "rule_id", "scenario_id", "title", "description",
+        "severity", "mappings", "conditions", "benign_overrides"
+      ],
+      "properties": {
+        "sample_id": {"$ref": "#/$defs/identifier"},
+        "rule_id": {"$ref": "#/$defs/identifier"},
+        "scenario_id": {"$ref": "#/$defs/identifier"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 512},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "severity": {"enum": ["low", "medium", "high", "critical"]},
+        "mappings": {
+          "type": "array", "minItems": 1, "maxItems": 20,
+          "items": {"type": "string", "minLength": 1, "maxLength": 512}
+        },
+        "conditions": {
+          "type": "array", "minItems": 1, "maxItems": 12,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["field", "operator", "value"],
+            "properties": {
+              "field": {"type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_.]{0,127}$"},
+              "operator": {"const": "eq"},
+              "value": {"$ref": "#/$defs/scalar"}
+            }
+          }
+        },
+        "benign_overrides": {
+          "type": "object", "minProperties": 1,
+          "additionalProperties": {"$ref": "#/$defs/scalar"}
+        }
+      }
+    }
+  }
+}

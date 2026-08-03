@@ -1,0 +1,40 @@
+{
+  "description": "Detects an allow policy decision attached to a high-risk agent tool request for environment-specific review.",
+  "expression": {
+    "predicates": [
+      {
+        "field": "event_type",
+        "operator": "eq",
+        "value": "agent.policy.decision"
+      },
+      {
+        "field": "tool_risk",
+        "operator": "eq",
+        "value": "high"
+      },
+      {
+        "field": "policy_decision",
+        "operator": "eq",
+        "value": "allow"
+      }
+    ],
+    "type": "match"
+  },
+  "group_by": [
+    "trace_id"
+  ],
+  "mappings": [
+    "OWASP ASI02 Tool Misuse",
+    "OWASP LLM06 Excessive Agency"
+  ],
+  "metadata": {
+    "content_values_required": false,
+    "deployment_status": "tuning_required",
+    "sample_id": "high-risk-tool-policy-allow",
+    "scenario_id": "planner-executor-policy-gap"
+  },
+  "name": "High-risk agent tool request received an allow decision",
+  "rule_id": "agentsim.sample.high-risk-tool-policy-allow",
+  "schema_version": "1.0",
+  "severity": "high"
+}

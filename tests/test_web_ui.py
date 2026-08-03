@@ -1,9 +1,11 @@
+import io
 import json
 import re
 import shutil
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -97,6 +99,8 @@ class WebUiTests(unittest.TestCase):
         self.assertIn("Detection CI merge gate", page)
         self.assertIn("Portability and trust workbench", page)
         self.assertIn("Community and artifact review", page)
+        self.assertIn("Cross-SIEM detection and alert samples", page)
+        self.assertIn("Download sample library ZIP", page)
         self.assertIn("Agentic attack scenarios", page)
         self.assertIn("Indirect prompt injection", page)
         self.assertIn("message.textContent", page)
@@ -249,6 +253,35 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(artifact_value["review"]["verdict"], "approved")
         self.assertFalse(artifact_value["artifact_content_returned"])
         self.assertFalse(artifact_value["execution_performed"])
+
+    def test_detection_sample_catalog_and_zip_download(self):
+        catalog = self.client.get("/api/v1/detection/samples")
+        self.assertEqual(catalog.status_code, 200)
+        value = catalog.get_json()
+        self.assertEqual(value["sample_count"], 6)
+        self.assertEqual(value["detection_file_count"], 54)
+        self.assertEqual(value["alert_record_count"], 42)
+        self.assertFalse(value["content_values_recorded"])
+
+        response = self.client.get("/download-detection-samples")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/zip")
+        self.assertIn(
+            "agentsim-detection-samples.zip",
+            response.headers["Content-Disposition"],
+        )
+        self.assertEqual(response.data, self.client.get("/download-detection-samples").data)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            names = set(archive.namelist())
+            manifest_path = "agentsim-detection-samples/manifest.json"
+            self.assertIn(manifest_path, names)
+            manifest = json.loads(archive.read(manifest_path))
+            self.assertEqual(manifest["detection_file_count"], 54)
+            self.assertEqual(manifest["alert_record_count"], 42)
+            self.assertIn(
+                "agentsim-detection-samples/alerts/sentinel.jsonl",
+                names,
+            )
 
     def test_v1_detection_and_agentic_lab_apis_are_synthetic(self):
         headers = {"X-AgentSim-Form-Token": web_ui.form_token}

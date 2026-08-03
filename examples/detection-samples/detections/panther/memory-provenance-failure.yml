@@ -1,0 +1,14 @@
+AnalysisType: rule
+DisplayName: "Agent memory write failed provenance validation"
+Enabled: false
+Filename: memory-provenance-failure.py
+RuleID: agentsim.sample.memory-provenance-failure
+Severity: High
+LogTypes:
+  - AgentSim.AgentEvent
+Tags:
+  - AgentSim
+  - Sample
+Description: "[TUNING REQUIRED] Detects a memory write whose source provenance could not be validated."
+Runbook: Validate the trace, policy decision, identity binding, and synthetic status before response.
+Threshold: 1

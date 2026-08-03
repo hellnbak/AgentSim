@@ -1,0 +1,14 @@
+AnalysisType: rule
+DisplayName: "Agent goal integrity validation failed"
+Enabled: false
+Filename: goal-integrity-failure.py
+RuleID: agentsim.sample.goal-integrity-failure
+Severity: Critical
+LogTypes:
+  - AgentSim.AgentEvent
+Tags:
+  - AgentSim
+  - Sample
+Description: "[TUNING REQUIRED] Detects a goal checkpoint whose immutable fingerprint or authorized intent did not validate."
+Runbook: Validate the trace, policy decision, identity binding, and synthetic status before response.
+Threshold: 1

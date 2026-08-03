@@ -1,0 +1,20 @@
+title: "Agent or MCP authorization audience validation failed"
+id: 4f8045b4-3627-5245-8053-7cdbae9163ea
+status: test
+description: "[TUNING REQUIRED] Detects an explicit authorization audience mismatch before a delegated or MCP action."
+author: AgentSim contributors
+date: 2026-08-02
+tags:
+  - "OWASP ASI03 Identity and Privilege Abuse"
+  - "MCP authorization"
+logsource:
+  category: application
+  product: agentsim
+detection:
+  selection:
+    event_type: "agent.authorization.validated"
+    auth_audience_valid: false
+  condition: selection
+falsepositives:
+  - Authorized synthetic AgentSim control validation
+level: critical

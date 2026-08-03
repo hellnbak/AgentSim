@@ -1,0 +1,14 @@
+AnalysisType: rule
+DisplayName: "Agent or MCP authorization audience validation failed"
+Enabled: false
+Filename: invalid-authorization-audience.py
+RuleID: agentsim.sample.invalid-authorization-audience
+Severity: Critical
+LogTypes:
+  - AgentSim.AgentEvent
+Tags:
+  - AgentSim
+  - Sample
+Description: "[TUNING REQUIRED] Detects an explicit authorization audience mismatch before a delegated or MCP action."
+Runbook: Validate the trace, policy decision, identity binding, and synthetic status before response.
+Threshold: 1

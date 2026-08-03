@@ -1,0 +1,40 @@
+{
+  "description": "Detects a high-risk tool request whose causal input was explicitly classified as untrusted.",
+  "expression": {
+    "predicates": [
+      {
+        "field": "event_type",
+        "operator": "eq",
+        "value": "agent.tool.requested"
+      },
+      {
+        "field": "input_trust",
+        "operator": "eq",
+        "value": "untrusted"
+      },
+      {
+        "field": "tool_risk",
+        "operator": "eq",
+        "value": "high"
+      }
+    ],
+    "type": "match"
+  },
+  "group_by": [
+    "trace_id"
+  ],
+  "mappings": [
+    "OWASP LLM01 Prompt Injection",
+    "OWASP LLM06 Excessive Agency"
+  ],
+  "metadata": {
+    "content_values_required": false,
+    "deployment_status": "tuning_required",
+    "sample_id": "untrusted-high-risk-tool",
+    "scenario_id": "indirect-prompt-injection"
+  },
+  "name": "Untrusted input reached a high-risk tool request",
+  "rule_id": "agentsim.sample.untrusted-high-risk-tool",
+  "schema_version": "1.0",
+  "severity": "high"
+}

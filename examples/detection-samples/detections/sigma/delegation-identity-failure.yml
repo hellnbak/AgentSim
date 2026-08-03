@@ -1,0 +1,20 @@
+title: "Delegated agent identity binding failed"
+id: fea0b489-9d58-50b3-880e-eaafd8c8bcb4
+status: test
+description: "[TUNING REQUIRED] Detects an inter-agent delegation checkpoint with an invalid identity binding."
+author: AgentSim contributors
+date: 2026-08-02
+tags:
+  - "OWASP ASI03 Identity and Privilege Abuse"
+  - "OWASP ASI07 Insecure Inter-Agent Communication"
+logsource:
+  category: application
+  product: agentsim
+detection:
+  selection:
+    event_type: "agent.delegation.accepted"
+    identity_binding_valid: false
+  condition: selection
+falsepositives:
+  - Authorized synthetic AgentSim control validation
+level: critical

@@ -33,6 +33,8 @@ jobs:
       - name: v1.7 assurance, portability, trust, detection, and lab interfaces
         run: |
           agentsim detection generate endpoint.discovery.processes --format sigma
+          agentsim detection samples --output smoke-detection-samples.json
+          agentsim detection sample-export smoke-detection-sample-library --format sigma --format kql --alert-profile generic --alert-profile sentinel
           agentsim lab run all --output smoke-agentic-lab.json
           agentsim lab reference all --output smoke-reference-lab.json
           agentsim telemetry mappings
@@ -70,6 +72,8 @@ jobs:
             smoke-artifact-review.json
             smoke-assurance.json
             smoke-detection-sweep.json
+            smoke-detection-samples.json
+            smoke-detection-sample-library/manifest.json
             smoke-detection-drift.json
             smoke-flight.json
             smoke-flight-twin.jsonl

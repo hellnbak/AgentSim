@@ -42,6 +42,7 @@ setup(
         "agentsim.content.catalogs": ["*.json"],
         "agentsim.content": ["trusted_keys.json"],
         "agentsim.detection.pack_content": ["*.json"],
+        "agentsim.detection.sample_content": ["*.json"],
         "agentsim.lab.artifact_content": ["*.json", "*.txt"],
     },
     data_files=[
@@ -76,6 +77,9 @@ setup(
                 "schemas/community-pack-review.schema.json",
                 "schemas/lab-artifact-reference.schema.json",
                 "schemas/lab-artifact-review.schema.json",
+                "schemas/detection-sample-catalog.schema.json",
+                "schemas/detection-alert-sample.schema.json",
+                "schemas/detection-sample-export.schema.json",
             ],
         )
     ],

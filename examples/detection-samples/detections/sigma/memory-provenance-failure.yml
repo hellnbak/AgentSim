@@ -1,0 +1,19 @@
+title: "Agent memory write failed provenance validation"
+id: 14bd5c01-5dd5-5203-a1f9-8e9fb4a33d68
+status: test
+description: "[TUNING REQUIRED] Detects a memory write whose source provenance could not be validated."
+author: AgentSim contributors
+date: 2026-08-02
+tags:
+  - "OWASP ASI06 Memory and Context Poisoning"
+logsource:
+  category: application
+  product: agentsim
+detection:
+  selection:
+    event_type: "agent.memory.written"
+    memory_provenance_valid: false
+  condition: selection
+falsepositives:
+  - Authorized synthetic AgentSim control validation
+level: high

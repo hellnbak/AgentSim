@@ -21,9 +21,12 @@ from agentsim.defense import (
     reconcile_detection_feedback,
 )
 from agentsim.detection import (
+    alert_sample_records,
     analyze_coverage,
+    detection_sample_catalog,
     evaluate_live_registry,
     evaluate_rule,
+    export_detection_sample_library,
     generate_candidate,
     load_detection_pack,
     sweep_detection_pack,
@@ -181,6 +184,33 @@ def lab_artifact_review(
     """Review an artifact reference and hash its local file without executing it."""
 
     return review_lab_artifact_file(reference_path, lab_root=lab_root).to_dict()
+
+
+def detection_samples() -> dict[str, object]:
+    """Describe the packaged cross-SIEM detection and synthetic alert examples."""
+
+    return detection_sample_catalog()
+
+
+def detection_alert_samples(profile: str = "generic") -> tuple[dict[str, object], ...]:
+    """Return synthetic, content-safe alert examples for one supported profile."""
+
+    return alert_sample_records(profile)
+
+
+def export_detection_samples(
+    destination: str | Path,
+    *,
+    formats: Sequence[str] = (),
+    alert_profiles: Sequence[str] = (),
+) -> Path:
+    """Write a review-required detection and alert sample library."""
+
+    return export_detection_sample_library(
+        destination,
+        formats=formats,
+        alert_profiles=alert_profiles,
+    )
 
 
 def telemetry_assurance(events: Sequence[NormalizedEvent]) -> dict[str, object]:

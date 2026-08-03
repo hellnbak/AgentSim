@@ -3,6 +3,18 @@
 Notable changes to AgentSim are documented here. The project follows semantic
 versioning while its public interfaces mature.
 
+## Unreleased
+
+- Added a deterministic cross-SIEM detection and alert sample library covering
+  six agent-attack families across generic AST, Sigma, Sentinel KQL, Splunk,
+  CrowdStrike LogScale, Elastic EQL, Panther Python/YAML, and Graylog.
+- Added 42 synthetic, content-safe, trace-linked alert records for generic and
+  every live SIEM connector, plus malicious/benign source telemetry and a
+  SHA-256 export manifest.
+- Added strict sample parsing, offline rule evaluation, vendor rendering,
+  normalized alert adapters, stable Python APIs, CLI catalog/export commands,
+  three public schemas, packaging, CI, tests, and contributor/security docs.
+
 ## 1.7.0 - 2026-08-02
 
 - Added content-safe mappings from canonical agent trace events to pinned

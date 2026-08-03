@@ -1,0 +1,35 @@
+{
+  "description": "Detects an inter-agent delegation checkpoint with an invalid identity binding.",
+  "expression": {
+    "predicates": [
+      {
+        "field": "event_type",
+        "operator": "eq",
+        "value": "agent.delegation.accepted"
+      },
+      {
+        "field": "identity_binding_valid",
+        "operator": "eq",
+        "value": false
+      }
+    ],
+    "type": "match"
+  },
+  "group_by": [
+    "trace_id"
+  ],
+  "mappings": [
+    "OWASP ASI03 Identity and Privilege Abuse",
+    "OWASP ASI07 Insecure Inter-Agent Communication"
+  ],
+  "metadata": {
+    "content_values_required": false,
+    "deployment_status": "tuning_required",
+    "sample_id": "delegation-identity-failure",
+    "scenario_id": "delegation-identity-drift"
+  },
+  "name": "Delegated agent identity binding failed",
+  "rule_id": "agentsim.sample.delegation-identity-failure",
+  "schema_version": "1.0",
+  "severity": "critical"
+}

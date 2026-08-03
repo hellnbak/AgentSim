@@ -16,6 +16,9 @@ new malicious/benign scenarios cover portable field loss, provenance
 substitution, and artifact substitution. The Web workspace now combines
 mapping inspection, conformance, community trust review, and artifact identity
 checks with the existing flight, detection, feedback, and investigation tools.
+The current sample library also provides six malicious/benign detection
+families across every supported rule format and 42 synthetic alert records
+across generic and SIEM-specific profiles.
 
 ## Core workflow
 
@@ -92,6 +95,10 @@ defensive gaps, and emits regression-ready evidence.
   explicit thresholds. Candidates remain offline and are never deployed.
 - Candidate renderers for Sigma, Microsoft KQL, Splunk SPL, CrowdStrike
   LogScale, Elastic EQL, Panther Python, and Graylog.
+- A generated detection and alert sample library with six attack families,
+  48 rule/format combinations, 54 native/generic detection files, 42
+  trace-linked alert records, malicious/benign telemetry, and a hashed export
+  manifest. Every vendor sample is marked for tuning and human review.
 - Telemetry coverage, defensive gap analysis, investigation runbooks,
   malicious/benign regression, and readiness scorecards.
 - Forty-one declarative agentic scenarios plus twenty-three disposable control
@@ -122,6 +129,7 @@ defensive gaps, and emits regression-ready evidence.
 | Campaign pack | Directed ability graph and defensive objective | Policy-gated |
 | Community pack | Declarative content plus signed provenance | Review before loading |
 | Lab artifact reference | Local identity, provenance, type, size, and digest | Inspection only; never executed by the public core |
+| Detection sample library | Synthetic cross-SIEM rules, alerts, and malicious/benign telemetry | Offline generation and validation only; never deployed |
 
 | Mode | Provider | Boundary |
 | --- | --- | --- |
@@ -352,6 +360,18 @@ Pass `--pack reviewed-pack.json` for a custom pack and
 `not_detected` result means the rule had the declared fields and sources but did
 not match; a `visibility_gap` means the evidence cannot support that conclusion.
 
+Inspect or export the complete detection and alert sample library:
+
+```bash
+agentsim detection samples
+agentsim detection sample-export detection-samples
+```
+
+Use `--format` and `--alert-profile` repeatedly for a smaller export. The
+checked-in examples, malicious and benign validation data, supported formats,
+field-mapping notes, and Python API are documented in
+[DETECTION_SAMPLES.md](DETECTION_SAMPLES.md).
+
 Analyze expected sources and required fields, then generate a runbook:
 
 ```bash
@@ -512,8 +532,9 @@ renders a bounded content-safe timeline, exports pseudonymous twins, and runs
 baseline/candidate Detection CI with downloadable JSON, Markdown, and SARIF.
 The Portability and Trust workspace maps a fixed event into OTel, ECS, or OCSF,
 runs cross-runtime conformance, reviews a signed community pack, and verifies a
-non-executing artifact reference. All twenty-three control fixtures and the
-instrumented reference-agent run are available.
+non-executing artifact reference. The detection workspace summarizes and
+downloads the complete hashed cross-SIEM sample library. All twenty-three
+control fixtures and the instrumented reference-agent run are available.
 Local, Docker, and external execution are intentionally unavailable in the UI.
 
 ## Plugin SDK
@@ -565,7 +586,7 @@ Interfaces remain subject to review until they are documented as stable.
 
 | Release horizon | Status | Defensive focus |
 | --- | --- | --- |
-| v1.7 | Current | Portable OTel/ECS/OCSF mappings, signed community-pack review and provenance, cross-runtime fixture conformance, reviewed lab-artifact references, three new attack scenarios, and an interactive portability/trust workbench. |
+| v1.7 | Current | Portable OTel/ECS/OCSF mappings, signed community-pack review and provenance, cross-runtime fixture conformance, reviewed lab-artifact references, three new attack scenarios, a cross-SIEM detection/alert sample corpus, and an interactive portability/trust workbench. |
 | v1.8 | Next | Detection lifecycle history, signed feedback exports, organization-defined reviewer quorum policies, and optional organization-owned evidence stores. |
 | v1.9 | Planned | Mapping-profile compatibility matrices, community review attestations, fixture provenance catalogs, and organization-scale conformance reporting. |
 | v2.0 | Direction | Stable content-registry and evidence contracts, reproducible cross-runtime conformance suites, and organization-scale regression orchestration with no implicit production execution. |
@@ -590,6 +611,7 @@ python -m build
 - [Campaigns](CAMPAIGNS.md)
 - [Detection engine](DETECTION_ENGINE.md)
 - [Detection content](DETECTIONS.md)
+- [Detection and alert samples](DETECTION_SAMPLES.md)
 - [Agent telemetry contract](AGENT_TELEMETRY.md)
 - [Telemetry assurance and detection packs](TELEMETRY_ASSURANCE.md)
 - [Multi-agent investigation](MULTI_AGENT_INVESTIGATION.md)

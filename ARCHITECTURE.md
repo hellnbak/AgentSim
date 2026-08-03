@@ -199,6 +199,14 @@ Candidate generation uses reviewed ability metadata and static command names.
 It does not inspect raw command output or deploy a rule. Rendered content is
 marked experimental/candidate and includes known limitations.
 
+The detection sample library is a separate deterministic teaching and parser
+fixture surface. One strict packaged catalog generates generic AST, Sigma,
+Sentinel KQL, Splunk, CrowdStrike, Elastic, Panther, and Graylog examples plus
+connector-shaped synthetic alert JSONL. Every rule has malicious and benign
+source telemetry, every output is hashed in an export manifest, and no export
+path invokes a vendor API. Checked-in examples are reproducible generated
+artifacts rather than a second source of truth.
+
 Detection packs are strict JSON data. The loader rejects answer-key fields,
 duplicate rule IDs, undeclared rule fields, unknown pack fields, oversized
 packs, and executable expressions. A sweep reports `detected`,
@@ -255,4 +263,5 @@ reference-lab results, telemetry-assurance, multi-agent investigation,
 detection-feedback, detection-drift, flight-recorder, and detection-CI reports,
 detection packs and sweep reports, signed packs, content provenance, portable
 mappings, runtime conformance, community review, lab-artifact references and
-reviews, authorization, and lifecycle v3.
+reviews, detection sample catalogs/alerts/exports, authorization, and lifecycle
+v3.

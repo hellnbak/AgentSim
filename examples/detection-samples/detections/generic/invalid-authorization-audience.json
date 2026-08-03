@@ -1,0 +1,35 @@
+{
+  "description": "Detects an explicit authorization audience mismatch before a delegated or MCP action.",
+  "expression": {
+    "predicates": [
+      {
+        "field": "event_type",
+        "operator": "eq",
+        "value": "agent.authorization.validated"
+      },
+      {
+        "field": "auth_audience_valid",
+        "operator": "eq",
+        "value": false
+      }
+    ],
+    "type": "match"
+  },
+  "group_by": [
+    "trace_id"
+  ],
+  "mappings": [
+    "OWASP ASI03 Identity and Privilege Abuse",
+    "MCP authorization"
+  ],
+  "metadata": {
+    "content_values_required": false,
+    "deployment_status": "tuning_required",
+    "sample_id": "invalid-authorization-audience",
+    "scenario_id": "mcp-identity-abuse"
+  },
+  "name": "Agent or MCP authorization audience validation failed",
+  "rule_id": "agentsim.sample.invalid-authorization-audience",
+  "schema_version": "1.0",
+  "severity": "critical"
+}

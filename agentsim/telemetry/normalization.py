@@ -114,13 +114,30 @@ PROFILE_ALIASES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
     "crowdstrike": {
         "source": ("event_platform", "event_simpleName"),
         "timestamp": ("@timestamp", "timestamp"),
+        "record_id": ("id", "event_id"),
     },
-    "splunk": {"timestamp": ("_time",), "source": ("sourcetype", "source")},
+    "splunk": {
+        "timestamp": ("_time",),
+        "source": ("sourcetype", "source"),
+        "record_id": ("event_id", "alert_id"),
+    },
     "elastic": {"timestamp": ("@timestamp",), "source": ("event.dataset",)},
-    "sentinel": {"timestamp": ("TimeGenerated",), "source": ("Type", "SourceSystem")},
+    "sentinel": {
+        "timestamp": ("TimeGenerated",),
+        "source": ("Type", "SourceSystem"),
+        "record_id": ("SystemAlertId", "VendorOriginalId"),
+    },
     "logscale": {"timestamp": ("@timestamp", "timestamp"), "source": ("#repo", "event_platform")},
-    "panther": {"timestamp": ("p_event_time", "timestamp"), "source": ("p_log_type",)},
-    "graylog": {"timestamp": ("timestamp",), "source": ("source",)},
+    "panther": {
+        "timestamp": ("p_event_time", "timestamp"),
+        "source": ("p_log_type",),
+        "record_id": ("p_alert_id", "p_event_id", "event_id"),
+    },
+    "graylog": {
+        "timestamp": ("timestamp",),
+        "source": ("source",),
+        "record_id": ("event_id", "id"),
+    },
     "otel": {
         "timestamp": ("timeUnixNano", "observedTimeUnixNano"),
         "event_type": ("name",),

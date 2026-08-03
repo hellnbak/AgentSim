@@ -2,7 +2,7 @@ include LICENSE NOTICE *.md requirements.txt
 recursive-include agentsim *.json
 recursive-include agentsim_scenarios *.json
 recursive-include detections *
-recursive-include examples *.json
+recursive-include examples *
 recursive-include schemas *.json
 recursive-include scripts *.py
 recursive-include labs *

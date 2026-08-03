@@ -1,0 +1,19 @@
+title: "Agent goal integrity validation failed"
+id: 1ea157db-f216-5f11-9164-169f633c1564
+status: test
+description: "[TUNING REQUIRED] Detects a goal checkpoint whose immutable fingerprint or authorized intent did not validate."
+author: AgentSim contributors
+date: 2026-08-02
+tags:
+  - "OWASP ASI01 Agent Goal Hijack"
+logsource:
+  category: application
+  product: agentsim
+detection:
+  selection:
+    event_type: "agent.goal.integrity"
+    goal_integrity_valid: false
+  condition: selection
+falsepositives:
+  - Authorized synthetic AgentSim control validation
+level: critical

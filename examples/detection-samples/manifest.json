@@ -1,0 +1,483 @@
+{
+  "alert_profiles": [
+    "generic",
+    "splunk",
+    "elastic",
+    "crowdstrike",
+    "sentinel",
+    "panther",
+    "graylog"
+  ],
+  "alert_record_count": 42,
+  "catalog_id": "agentsim.detection-samples",
+  "catalog_version": "1.0.0",
+  "content_values_recorded": false,
+  "deployment_status": "tuning_required",
+  "detection_file_count": 54,
+  "detection_formats": [
+    "generic",
+    "sigma",
+    "kql",
+    "splunk",
+    "crowdstrike",
+    "elastic",
+    "panther",
+    "graylog"
+  ],
+  "execution_performed": false,
+  "file_count": 64,
+  "files": [
+    {
+      "kind": "documentation",
+      "path": "README.md",
+      "profile": "generic",
+      "sha256": "54803ea94aee579680d8fffa5003ef747158e2f433b64421e4f4fa34decbc16b",
+      "size": 550
+    },
+    {
+      "kind": "alert",
+      "path": "alerts/crowdstrike.jsonl",
+      "profile": "crowdstrike",
+      "sha256": "c9f10c415829e46ac9912c6558205d5e47c1126afa0dee172704cb1d172f8d4b",
+      "size": 3042
+    },
+    {
+      "kind": "alert",
+      "path": "alerts/elastic.jsonl",
+      "profile": "elastic",
+      "sha256": "15c5735383337a6d7aefe795a4e74b7270226d67be1973cd255b22c67988d05c",
+      "size": 3432
+    },
+    {
+      "kind": "alert",
+      "path": "alerts/generic.jsonl",
+      "profile": "generic",
+      "sha256": "2165ea8ef89b11d0ad35a146d3151f26803497c965c3124d2c7abbf30e4a6058",
+      "size": 1805
+    },
+    {
+      "kind": "alert",
+      "path": "alerts/graylog.jsonl",
+      "profile": "graylog",
+      "sha256": "06ffddfadead318b9c6274f663f4a631d48ce5ce0abdbd441b8c676f2248a9ed",
+      "size": 3072
+    },
+    {
+      "kind": "alert",
+      "path": "alerts/panther.jsonl",
+      "profile": "panther",
+      "sha256": "e130857e9b5b1ce6b2c112ef6e7bb5ce5254b6bf00f3b305b43b23f679976acf",
+      "size": 2838
+    },
+    {
+      "kind": "alert",
+      "path": "alerts/sentinel.jsonl",
+      "profile": "sentinel",
+      "sha256": "5a9a39334232d18d55359cdabe9da50271d00f1a34ca24dbf6d447b129f587d2",
+      "size": 3000
+    },
+    {
+      "kind": "alert",
+      "path": "alerts/splunk.jsonl",
+      "profile": "splunk",
+      "sha256": "9929990cae58f26f30ded7bdc254a302826de643bdf7307cc0df2097d51bcd21",
+      "size": 2874
+    },
+    {
+      "kind": "detection",
+      "path": "detections/crowdstrike/delegation-identity-failure.cql",
+      "profile": "crowdstrike",
+      "sha256": "111ba9c563aadc39c17393cdc36505a9cf385b081c0f559af374f2b303928905",
+      "size": 255
+    },
+    {
+      "kind": "detection",
+      "path": "detections/crowdstrike/goal-integrity-failure.cql",
+      "profile": "crowdstrike",
+      "sha256": "5883c98a6846f8d10c4e59658c8927a2e9eb20aeec19d7b1ca513d01f6be824a",
+      "size": 248
+    },
+    {
+      "kind": "detection",
+      "path": "detections/crowdstrike/high-risk-tool-policy-allow.cql",
+      "profile": "crowdstrike",
+      "sha256": "51dd8f78253507cd7e7f05b27bfbcfef825f04ec6a9276de1cf2e0748d186bf1",
+      "size": 267
+    },
+    {
+      "kind": "detection",
+      "path": "detections/crowdstrike/invalid-authorization-audience.cql",
+      "profile": "crowdstrike",
+      "sha256": "a753747ac30fbc03721245b69fc4dc5bd8a8a41978135a6ed0d1b55930dc8482",
+      "size": 256
+    },
+    {
+      "kind": "detection",
+      "path": "detections/crowdstrike/memory-provenance-failure.cql",
+      "profile": "crowdstrike",
+      "sha256": "2d98d5d58a45547596fa3add92f317d8906e59f1bee9e1cee9197f40e47a3f1a",
+      "size": 251
+    },
+    {
+      "kind": "detection",
+      "path": "detections/crowdstrike/untrusted-high-risk-tool.cql",
+      "profile": "crowdstrike",
+      "sha256": "77c60138439b258998b5cb3e26df6992ace60b04e4c283fbc0f0f31d8375493f",
+      "size": 266
+    },
+    {
+      "kind": "detection",
+      "path": "detections/elastic/delegation-identity-failure.eql",
+      "profile": "elastic",
+      "sha256": "4acad175c564adc2d621ace3afafc61813cea4f48d5d127b3954a761f59cb39a",
+      "size": 150
+    },
+    {
+      "kind": "detection",
+      "path": "detections/elastic/goal-integrity-failure.eql",
+      "profile": "elastic",
+      "sha256": "70fc752f52f08217e872877d83ed7bfe16e8017386994da773c7e113130ab99c",
+      "size": 143
+    },
+    {
+      "kind": "detection",
+      "path": "detections/elastic/high-risk-tool-policy-allow.eql",
+      "profile": "elastic",
+      "sha256": "789cbb87746dcf436686e70706a9802712b9e36ae3857f4a98b91d2c1ba60cd9",
+      "size": 165
+    },
+    {
+      "kind": "detection",
+      "path": "detections/elastic/invalid-authorization-audience.eql",
+      "profile": "elastic",
+      "sha256": "e35ee5961b9f1f050550642cea3d070bd667e1a77c78981714ba11d8f65b61c3",
+      "size": 151
+    },
+    {
+      "kind": "detection",
+      "path": "detections/elastic/memory-provenance-failure.eql",
+      "profile": "elastic",
+      "sha256": "8c15f3a5c997d3a9e44dfcea4823bd887a2a5fab1a2e4afe3f5b9baa7e79f6f2",
+      "size": 146
+    },
+    {
+      "kind": "detection",
+      "path": "detections/elastic/untrusted-high-risk-tool.eql",
+      "profile": "elastic",
+      "sha256": "ca50431f873b24f5126abb0c3b6b8e620fd187e2906b3dc97fe4b03c09569828",
+      "size": 164
+    },
+    {
+      "kind": "detection",
+      "path": "detections/generic/delegation-identity-failure.json",
+      "profile": "generic",
+      "sha256": "e60a82384819fc85b2cfc6e2d856cb470c6dbb21e099a655e00f0b0dcc9d2037",
+      "size": 921
+    },
+    {
+      "kind": "detection",
+      "path": "detections/generic/goal-integrity-failure.json",
+      "profile": "generic",
+      "sha256": "6dd0ebaf98f3e936ef469751139edaa70e960bc55ba4a5ff38f21b8f5dec5d45",
+      "size": 861
+    },
+    {
+      "kind": "detection",
+      "path": "detections/generic/high-risk-tool-policy-allow.json",
+      "profile": "generic",
+      "sha256": "c5ae4bfb9b6270a8c5177a0f455f2d7a9b62b020cf42e4b85db17f9df9454763",
+      "size": 1018
+    },
+    {
+      "kind": "detection",
+      "path": "detections/generic/invalid-authorization-audience.json",
+      "profile": "generic",
+      "sha256": "4ebb0544111067bfb885eb9b2c1bdf65a2ae466a05006bdd398a8b711742b835",
+      "size": 913
+    },
+    {
+      "kind": "detection",
+      "path": "detections/generic/memory-provenance-failure.json",
+      "profile": "generic",
+      "sha256": "c4fab5c35130cf33b6acea693ae87c6c7232dbfd5c710658d7afcf788b1e832c",
+      "size": 854
+    },
+    {
+      "kind": "detection",
+      "path": "detections/generic/untrusted-high-risk-tool.json",
+      "profile": "generic",
+      "sha256": "e7da86cef45ad8ef562ec9b240606fdada23711716692d4506b0b06e3231c687",
+      "size": 990
+    },
+    {
+      "kind": "detection",
+      "path": "detections/graylog/delegation-identity-failure.query",
+      "profile": "graylog",
+      "sha256": "cc5ca774884477ca61f39e414e484bfc53597e2f23c707862bb375b3f8114d67",
+      "size": 172
+    },
+    {
+      "kind": "detection",
+      "path": "detections/graylog/goal-integrity-failure.query",
+      "profile": "graylog",
+      "sha256": "b8d45ea239613acb37923f0476a659de58406ce3dbe2343d36f717da97611742",
+      "size": 165
+    },
+    {
+      "kind": "detection",
+      "path": "detections/graylog/high-risk-tool-policy-allow.query",
+      "profile": "graylog",
+      "sha256": "081df5415e67ae7baf3bca28def7953ac046336f3c4abb2aec95144b428aa4a1",
+      "size": 184
+    },
+    {
+      "kind": "detection",
+      "path": "detections/graylog/invalid-authorization-audience.query",
+      "profile": "graylog",
+      "sha256": "88ff4baa54ac7c9b408a220f8f1e53670bd7d0bc1a98e33488b428a56bf94464",
+      "size": 173
+    },
+    {
+      "kind": "detection",
+      "path": "detections/graylog/memory-provenance-failure.query",
+      "profile": "graylog",
+      "sha256": "d2168849086f21bfb76779a9b8df69441a08a03661abbd65b41714423f80f876",
+      "size": 168
+    },
+    {
+      "kind": "detection",
+      "path": "detections/graylog/untrusted-high-risk-tool.query",
+      "profile": "graylog",
+      "sha256": "59c4af0085c495d68f1b11abeef2889c6d475804d2660f7cdcc1a1ab69f3641f",
+      "size": 183
+    },
+    {
+      "kind": "detection",
+      "path": "detections/kql/delegation-identity-failure.kql",
+      "profile": "kql",
+      "sha256": "e01dbbe28d8e338dfaec3fea439e9d783c23c54c35bd169e668020c388e14212",
+      "size": 264
+    },
+    {
+      "kind": "detection",
+      "path": "detections/kql/goal-integrity-failure.kql",
+      "profile": "kql",
+      "sha256": "735823e7136a0a4713c1cf77a95329ac0e3fbd8b2c9aef5b2a2d59f20787c992",
+      "size": 257
+    },
+    {
+      "kind": "detection",
+      "path": "detections/kql/high-risk-tool-policy-allow.kql",
+      "profile": "kql",
+      "sha256": "39f527022ace8aede729e4999bb42b569ccc15cd8008c9f07c34a13537aec1fd",
+      "size": 279
+    },
+    {
+      "kind": "detection",
+      "path": "detections/kql/invalid-authorization-audience.kql",
+      "profile": "kql",
+      "sha256": "d0f78e8b6ec2bc6c9b19472ab852b6539713e39fefdf0f229de8ca4b003437ff",
+      "size": 265
+    },
+    {
+      "kind": "detection",
+      "path": "detections/kql/memory-provenance-failure.kql",
+      "profile": "kql",
+      "sha256": "52af85c88033596f186d954165faadbf3f5cdf8881d1782b7d8fe5f234bba04e",
+      "size": 260
+    },
+    {
+      "kind": "detection",
+      "path": "detections/kql/untrusted-high-risk-tool.kql",
+      "profile": "kql",
+      "sha256": "f4224c59dcd49b71e9d49e21e442f480ad1bb83bf15b697f48f8e6530db2f662",
+      "size": 278
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/delegation-identity-failure.py",
+      "profile": "panther",
+      "sha256": "d577c9d186f5379555a00768abd8fb116198fb7c66f688b7c5e67fbf005dc16b",
+      "size": 569
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/delegation-identity-failure.yml",
+      "profile": "panther",
+      "sha256": "d728e930c9b73c510e1a140b13387994cd21053f23a75eff4d0159ff3c8b52af",
+      "size": 492
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/goal-integrity-failure.py",
+      "profile": "panther",
+      "sha256": "b4d68036f81fd374d1e6bdf10edc64900465360911aafefcfb59d045fd4bbe63",
+      "size": 561
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/goal-integrity-failure.yml",
+      "profile": "panther",
+      "sha256": "b8f04e776dd7304b3c585f8291cf1ff4ed7a948e916ca4ea293cbfdf028acf29",
+      "size": 495
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/high-risk-tool-policy-allow.py",
+      "profile": "panther",
+      "sha256": "8f340f9b0347fd87cd8a7edf2492f4a84a50dcaa0777caa0b371322f9f5c4001",
+      "size": 622
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/high-risk-tool-policy-allow.yml",
+      "profile": "panther",
+      "sha256": "7424b9cca444e7ad11d53659fbac675b0682b9ca2b04ad76044bdecbe9f39787",
+      "size": 534
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/invalid-authorization-audience.py",
+      "profile": "panther",
+      "sha256": "88eb454a01cd812e6dcf3e15c7dab82b0258162b04823608b11a4f69d999b3e7",
+      "size": 584
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/invalid-authorization-audience.yml",
+      "profile": "panther",
+      "sha256": "b9948cdd64ad12fc39d0ff2fa97ea076782c101a4f9f306ee8ff5e8aac490c8b",
+      "size": 519
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/memory-provenance-failure.py",
+      "profile": "panther",
+      "sha256": "0712c7930a85cb13c8f9f607f8b1722d8a5eb30d707639f1eca253a637e194a8",
+      "size": 573
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/memory-provenance-failure.yml",
+      "profile": "panther",
+      "sha256": "3a5e8e46bed2808df9eea841d2687d45c56a48d08cdda7fd1b56750112c2600e",
+      "size": 484
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/untrusted-high-risk-tool.py",
+      "profile": "panther",
+      "sha256": "90c4b2c7986f2391c27f9431f9621a7769329ad0e77c05818ea3757e8b53edb9",
+      "size": 614
+    },
+    {
+      "kind": "detection",
+      "path": "detections/panther/untrusted-high-risk-tool.yml",
+      "profile": "panther",
+      "sha256": "943f0eafaa90da67b11846c0d69cbef7e65a21892788c5615ac02d089d45dcbe",
+      "size": 504
+    },
+    {
+      "kind": "detection",
+      "path": "detections/sigma/delegation-identity-failure.yml",
+      "profile": "sigma",
+      "sha256": "5ff0491d60dbcd46422f5cd3deaa9a21812d8b15e05b79f1a6a9160db249c4a6",
+      "size": 633
+    },
+    {
+      "kind": "detection",
+      "path": "detections/sigma/goal-integrity-failure.yml",
+      "profile": "sigma",
+      "sha256": "c6046dd5488a08b5d4633cd4bfd84d3c324c2aa4aac017970786887e7abd34d6",
+      "size": 575
+    },
+    {
+      "kind": "detection",
+      "path": "detections/sigma/high-risk-tool-policy-allow.yml",
+      "profile": "sigma",
+      "sha256": "1cb8cfb0c1f9acad18e3cfaac2193e33ccc8d27988f6d3c146a2c815bb78dbab",
+      "size": 653
+    },
+    {
+      "kind": "detection",
+      "path": "detections/sigma/invalid-authorization-audience.yml",
+      "profile": "sigma",
+      "sha256": "5c177e1ff04061b07743ac67eaf3b53c58c2fabb6f6a36d2c0621be216c657e3",
+      "size": 626
+    },
+    {
+      "kind": "detection",
+      "path": "detections/sigma/memory-provenance-failure.yml",
+      "profile": "sigma",
+      "sha256": "decaec93057c92558d7ebb0458b18f02f1b1b7c7b6275d4a4e5fd91bbd790147",
+      "size": 572
+    },
+    {
+      "kind": "detection",
+      "path": "detections/sigma/untrusted-high-risk-tool.yml",
+      "profile": "sigma",
+      "sha256": "cfc14cbccf17ca18f64943ec093acb71521a3b73378ddb1f228f92238816137f",
+      "size": 633
+    },
+    {
+      "kind": "detection",
+      "path": "detections/splunk/delegation-identity-failure.spl",
+      "profile": "splunk",
+      "sha256": "24e17e54ba5b348adc71d53912c73eee8d8bbe414f0c255d9978bdd87c0686ef",
+      "size": 283
+    },
+    {
+      "kind": "detection",
+      "path": "detections/splunk/goal-integrity-failure.spl",
+      "profile": "splunk",
+      "sha256": "e80ce291df63418098d9e0482a4afb4f99c2534934b04f63774bedf43964bd3e",
+      "size": 276
+    },
+    {
+      "kind": "detection",
+      "path": "detections/splunk/high-risk-tool-policy-allow.spl",
+      "profile": "splunk",
+      "sha256": "3aaabcef64dd5e8f46cf15c7fc36e76bd23fbaa45a86c3424ca5e70327c7e1e7",
+      "size": 293
+    },
+    {
+      "kind": "detection",
+      "path": "detections/splunk/invalid-authorization-audience.spl",
+      "profile": "splunk",
+      "sha256": "100d7a15008b1a8c473907882c6c194c9389b6439f582345133c7b4784b1602e",
+      "size": 284
+    },
+    {
+      "kind": "detection",
+      "path": "detections/splunk/memory-provenance-failure.spl",
+      "profile": "splunk",
+      "sha256": "dc16a8a2186b35c73d97d226fa1654e8894fc3120ac320e690df028adb693867",
+      "size": 279
+    },
+    {
+      "kind": "detection",
+      "path": "detections/splunk/untrusted-high-risk-tool.spl",
+      "profile": "splunk",
+      "sha256": "eba873a3d60229ecc146df3db0dea9b858859aed3138a3dfe3a1d7014ba3dec3",
+      "size": 292
+    },
+    {
+      "kind": "telemetry",
+      "path": "telemetry/benign.jsonl",
+      "profile": "generic",
+      "sha256": "3c39012423320790e1d4b0a945e73bcc14356628789257c5f8597cad5b2cae8c",
+      "size": 1991
+    },
+    {
+      "kind": "telemetry",
+      "path": "telemetry/malicious.jsonl",
+      "profile": "generic",
+      "sha256": "e49b18ce9ab8ac8a3eeef4c470f18cc59c0c9072bae091b36adfd57e93b51bbe",
+      "size": 2034
+    }
+  ],
+  "kind": "detection-sample-export",
+  "sample_count": 6,
+  "schema_version": "1.0",
+  "synthetic": true
+}

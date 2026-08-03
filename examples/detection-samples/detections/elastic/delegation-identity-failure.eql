@@ -1,0 +1,2 @@
+// AGENTSIM STATUS: SAMPLE - TUNING AND HUMAN REVIEW REQUIRED
+any where event_type == "agent.delegation.accepted" and identity_binding_valid == false

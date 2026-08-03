@@ -82,6 +82,8 @@ class DetectionAlert:
     trace_id: str | None = None
     source_record_ids: tuple[str, ...] = ()
     agent_id: str | None = None
+    synthetic: bool = False
+    content_values_recorded: bool = False
 
     def __post_init__(self) -> None:
         _text(self.alert_id, "alert_id")
@@ -91,6 +93,10 @@ class DetectionAlert:
             raise ValueError("alert severity must be low, medium, high, or critical")
         _text(self.trace_id, "trace_id", required=False)
         _text(self.agent_id, "agent_id", required=False)
+        if not isinstance(self.synthetic, bool):
+            raise ValueError("alert synthetic must be a boolean")
+        if self.content_values_recorded is not False:
+            raise ValueError("detection alerts may not record content values")
         object.__setattr__(
             self, "source_record_ids", _strings(self.source_record_ids, "source_record_ids")
         )
@@ -197,6 +203,8 @@ def detection_alert_from_mapping(value: Mapping[str, object]) -> DetectionAlert:
         "trace_id",
         "source_record_ids",
         "agent_id",
+        "synthetic",
+        "content_values_recorded",
     }
     unknown = sorted(set(value) - allowed)
     if unknown:
@@ -209,6 +217,8 @@ def detection_alert_from_mapping(value: Mapping[str, object]) -> DetectionAlert:
         trace_id=_text(value.get("trace_id"), "trace_id", required=False),
         source_record_ids=_strings(value.get("source_record_ids"), "source_record_ids"),
         agent_id=_text(value.get("agent_id"), "agent_id", required=False),
+        synthetic=value.get("synthetic", False),
+        content_values_recorded=value.get("content_values_recorded", False),
     )
 
 

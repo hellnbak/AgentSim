@@ -1,0 +1,21 @@
+title: "High-risk agent tool request received an allow decision"
+id: 0a7cd1fd-e8f0-598a-8b7d-5fec99f8cf5a
+status: test
+description: "[TUNING REQUIRED] Detects an allow policy decision attached to a high-risk agent tool request for environment-specific review."
+author: AgentSim contributors
+date: 2026-08-02
+tags:
+  - "OWASP ASI02 Tool Misuse"
+  - "OWASP LLM06 Excessive Agency"
+logsource:
+  category: application
+  product: agentsim
+detection:
+  selection:
+    event_type: "agent.policy.decision"
+    tool_risk: "high"
+    policy_decision: "allow"
+  condition: selection
+falsepositives:
+  - Authorized synthetic AgentSim control validation
+level: high

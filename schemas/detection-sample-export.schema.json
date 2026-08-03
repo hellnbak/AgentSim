@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/detection-sample-export.schema.json",
+  "title": "AgentSim detection sample export manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "catalog_id", "catalog_version",
+    "deployment_status", "synthetic", "content_values_recorded",
+    "execution_performed", "sample_count", "detection_file_count",
+    "alert_record_count", "file_count", "detection_formats",
+    "alert_profiles", "files"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "detection-sample-export"},
+    "catalog_id": {"const": "agentsim.detection-samples"},
+    "catalog_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "deployment_status": {"const": "tuning_required"},
+    "synthetic": {"const": true},
+    "content_values_recorded": {"const": false},
+    "execution_performed": {"const": false},
+    "sample_count": {"type": "integer", "minimum": 1, "maximum": 100},
+    "detection_file_count": {"type": "integer", "minimum": 1},
+    "alert_record_count": {"type": "integer", "minimum": 1},
+    "file_count": {"type": "integer", "minimum": 1},
+    "detection_formats": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "alert_profiles": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "files": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["path", "kind", "profile", "size", "sha256"],
+        "properties": {
+          "path": {"type": "string", "pattern": "^(detections|alerts|telemetry)/[A-Za-z0-9._/-]+$|^README\\.md$"},
+          "kind": {"enum": ["detection", "alert", "telemetry", "documentation"]},
+          "profile": {"type": "string", "minLength": 1, "maxLength": 64},
+          "size": {"type": "integer", "minimum": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    }
+  }
+}

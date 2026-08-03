@@ -145,6 +145,15 @@ security fields and include a benign event test.
 Detection examples must use obvious placeholders for environment-specific
 indexes and tables.
 
+Changes to the generated sample library belong in
+`agentsim/detection/sample_content/catalog.json` or its renderer, not directly
+in checked-in generated files. Regenerate `examples/detection-samples`, verify
+its manifest matches a fresh export, and add a malicious match plus a closely
+matched benign rejection. Alert examples must stay synthetic, trace-linked,
+collector-normalizable, and free of prompts, messages, arguments, results,
+responses, credentials, secrets, tokens, and payload values. Vendor samples
+must remain disabled or visibly marked tuning/human-review required.
+
 Reusable detection packs belong under `agentsim/detection/pack_content/` or in
 a separately reviewed JSON file. Each packed rule must declare all
 `required_fields` used by its expression/grouping and the acceptable source

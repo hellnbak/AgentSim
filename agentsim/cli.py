@@ -28,9 +28,13 @@ from agentsim.defense import (
     run_regression,
 )
 from agentsim.detection import (
+    ALERT_SAMPLE_PROFILES,
+    DETECTION_SAMPLE_FORMATS,
     analyze_coverage,
+    detection_sample_catalog,
     evaluate_live_registry,
     evaluate_rule,
+    export_detection_sample_library,
     generate_candidate,
     load_detection_pack,
     load_rule,
@@ -265,6 +269,20 @@ def build_foundation_parser() -> argparse.ArgumentParser:
     detection_ci.add_argument("--sarif-output")
     detection_ci.add_argument(
         "--fail-on", choices=("never", "review", "block"), default="block"
+    )
+    detection_samples = detection_commands.add_parser(
+        "samples", help="List packaged cross-SIEM detection and synthetic alert samples."
+    )
+    detection_samples.add_argument("--output")
+    detection_export = detection_commands.add_parser(
+        "sample-export", help="Export detection queries, alert examples, and test telemetry."
+    )
+    detection_export.add_argument("destination", metavar="DIRECTORY")
+    detection_export.add_argument(
+        "--format", action="append", choices=DETECTION_SAMPLE_FORMATS, default=[]
+    )
+    detection_export.add_argument(
+        "--alert-profile", action="append", choices=ALERT_SAMPLE_PROFILES, default=[]
     )
 
     defense = commands.add_parser(
@@ -661,6 +679,17 @@ def _run_v1(args: argparse.Namespace) -> int | None:
         if args.fail_on == "review":
             return 0 if report.status == "pass" else 1
         return 1 if report.status == "block" else 0
+    if args.command == "detection" and args.detection_command == "samples":
+        _emit_json(detection_sample_catalog(), args.output)
+        return 0
+    if args.command == "detection" and args.detection_command == "sample-export":
+        output = export_detection_sample_library(
+            args.destination,
+            formats=args.format,
+            alert_profiles=args.alert_profile,
+        )
+        print(output)
+        return 0
     if args.command == "defense" and args.defense_command == "analyze":
         abilities = load_ability_registry(args.ability_pack)
         if args.ability_id not in abilities:

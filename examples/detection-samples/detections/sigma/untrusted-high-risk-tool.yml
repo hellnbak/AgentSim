@@ -1,0 +1,21 @@
+title: "Untrusted input reached a high-risk tool request"
+id: edc5b331-501c-565e-8f45-f322b2b587b3
+status: test
+description: "[TUNING REQUIRED] Detects a high-risk tool request whose causal input was explicitly classified as untrusted."
+author: AgentSim contributors
+date: 2026-08-02
+tags:
+  - "OWASP LLM01 Prompt Injection"
+  - "OWASP LLM06 Excessive Agency"
+logsource:
+  category: application
+  product: agentsim
+detection:
+  selection:
+    event_type: "agent.tool.requested"
+    input_trust: "untrusted"
+    tool_risk: "high"
+  condition: selection
+falsepositives:
+  - Authorized synthetic AgentSim control validation
+level: high

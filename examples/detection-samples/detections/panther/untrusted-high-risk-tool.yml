@@ -1,0 +1,14 @@
+AnalysisType: rule
+DisplayName: "Untrusted input reached a high-risk tool request"
+Enabled: false
+Filename: untrusted-high-risk-tool.py
+RuleID: agentsim.sample.untrusted-high-risk-tool
+Severity: High
+LogTypes:
+  - AgentSim.AgentEvent
+Tags:
+  - AgentSim
+  - Sample
+Description: "[TUNING REQUIRED] Detects a high-risk tool request whose causal input was explicitly classified as untrusted."
+Runbook: Validate the trace, policy decision, identity binding, and synthetic status before response.
+Threshold: 1

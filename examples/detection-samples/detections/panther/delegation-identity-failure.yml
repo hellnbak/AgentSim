@@ -1,0 +1,14 @@
+AnalysisType: rule
+DisplayName: "Delegated agent identity binding failed"
+Enabled: false
+Filename: delegation-identity-failure.py
+RuleID: agentsim.sample.delegation-identity-failure
+Severity: Critical
+LogTypes:
+  - AgentSim.AgentEvent
+Tags:
+  - AgentSim
+  - Sample
+Description: "[TUNING REQUIRED] Detects an inter-agent delegation checkpoint with an invalid identity binding."
+Runbook: Validate the trace, policy decision, identity binding, and synthetic status before response.
+Threshold: 1

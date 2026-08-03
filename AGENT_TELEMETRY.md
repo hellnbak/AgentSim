@@ -67,6 +67,12 @@ general certification for the target standard. Mapping details, version
 references, review boundaries, APIs, and schemas are in
 [`PORTABILITY_AND_TRUST.md`](PORTABILITY_AND_TRUST.md).
 
+Synthetic alert records and the exact malicious/benign telemetry used to
+exercise representative rules can be exported for generic, Splunk, Elastic,
+CrowdStrike, Sentinel, Panther, and Graylog profiles. These are content-safe
+parser and mapping examples—not universal vendor export schemas. See
+[`DETECTION_SAMPLES.md`](DETECTION_SAMPLES.md).
+
 The complete machine-readable shape is
 [`schemas/agent-trace-event.schema.json`](schemas/agent-trace-event.schema.json).
 

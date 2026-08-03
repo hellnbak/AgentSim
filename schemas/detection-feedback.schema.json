@@ -35,7 +35,9 @@
           "maxItems": 50,
           "items": {"$ref": "#/$defs/identifier"}
         },
-        "agent_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 512}
+        "agent_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+        "synthetic": {"type": "boolean"},
+        "content_values_recorded": {"const": false}
       }
     },
     "annotation": {

@@ -1,0 +1,2 @@
+// AGENTSIM STATUS: SAMPLE - TUNING AND HUMAN REVIEW REQUIRED
+streams:<agent-runtime-stream-id> AND event_type:"agent.policy.decision" AND tool_risk:"high" AND policy_decision:"allow"

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hellnbak/AgentSim/schemas/detection-alert-sample.schema.json",
+  "title": "AgentSim generic synthetic detection alert sample",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "alert_id", "rule_id", "detected_at", "severity", "synthetic",
+    "content_values_recorded"
+  ],
+  "properties": {
+    "alert_id": {"type": "string", "minLength": 1, "maxLength": 512},
+    "rule_id": {"type": "string", "minLength": 1, "maxLength": 512},
+    "detected_at": {"type": "string", "format": "date-time"},
+    "severity": {"enum": ["low", "medium", "high", "critical"]},
+    "trace_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+    "source_record_ids": {
+      "type": "array", "maxItems": 50,
+      "items": {"type": "string", "minLength": 1, "maxLength": 512}
+    },
+    "agent_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+    "synthetic": {"const": true},
+    "content_values_recorded": {"const": false}
+  }
+}

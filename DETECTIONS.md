@@ -17,6 +17,16 @@ analytics below remain fully supported. See
 [`DETECTION_ENGINE.md`](DETECTION_ENGINE.md) for the vendor-neutral rule format
 and CLI workflow.
 
+For a generated, hashed corpus containing six malicious/benign detection
+families across generic AST, Sigma, Sentinel KQL, Splunk, CrowdStrike,
+Elastic, Panther, and Graylog—plus synthetic alert examples for every live
+connector—see [`DETECTION_SAMPLES.md`](DETECTION_SAMPLES.md).
+
+```bash
+agentsim detection samples
+agentsim detection sample-export detection-samples
+```
+
 ## Reusable v1.5 detection pack
 
 The packaged `agentsim.agent-security-core` pack provides fifteen

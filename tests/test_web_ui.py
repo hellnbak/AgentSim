@@ -116,7 +116,7 @@ class WebUiTests(unittest.TestCase):
             result = subprocess.run(
                 [shutil.which("node"), "--check", "-"],
                 input=script,
-                text=True,
+                encoding="utf-8",
                 capture_output=True,
                 check=False,
             )
